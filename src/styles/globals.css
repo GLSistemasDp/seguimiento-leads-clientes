@@ -1,0 +1,17 @@
+/* Limita la deteccion de clases al codigo de esta aplicacion. */
+@import "tailwindcss" source("../");
+
+/* Inter para el texto y una monoespaciada para fechas, CUIT y mails. */
+@theme inline {
+  --font-sans: var(--fuente-sans), system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-mono: var(--fuente-mono), ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+/*
+  El panel es una herramienta interna que se usa de dia y en escritorio:
+  fijamos el esquema claro en vez de seguir al sistema, asi la vista previa
+  del mail (que siempre es clara) no queda descolgada del resto.
+*/
+:root {
+  color-scheme: light;
+}

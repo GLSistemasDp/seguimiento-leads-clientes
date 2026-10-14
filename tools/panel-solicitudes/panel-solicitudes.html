@@ -1,0 +1,827 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Panel de Solicitudes</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  /* Layout: single dashboard — filter chips + table as the main surface, import and mail-generator as slide-over drawers */
+  :root{
+    --bg:#eef0f4; --panel:#ffffff; --border:#d7dbe3; --ink:#1b2030; --ink-soft:#5b6172;
+    --accent:#3452eb; --accent-ink:#ffffff; --accent-soft:#e8ebfd;
+    --ok:#1a8a52; --ok-bg:#e4f6ec; --ok-border:#b8e6cc;
+    --bad:#c23a3a; --bad-bg:#fbe9e9; --bad-border:#f0bcbc;
+    --warn:#a06a12; --warn-bg:#fbf1de; --warn-border:#eed7ab;
+    --field-bg:#f7f8fb; --shadow: 0 1px 2px rgba(20,24,40,.06), 0 8px 20px -12px rgba(20,24,40,.15);
+    --backdrop: rgba(20,22,30,.45);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#14161f; --panel:#1b1e2a; --border:#2c2f3d; --ink:#e8e9f0; --ink-soft:#9498a8;
+      --accent:#5d78ff; --accent-ink:#0c0e16; --accent-soft:#1c2340;
+      --ok:#4bd189; --ok-bg:#122a1f; --ok-border:#1f4a34;
+      --bad:#f0716b; --bad-bg:#301818; --bad-border:#4a2626;
+      --warn:#e0b357; --warn-bg:#2e2510; --warn-border:#4d3d1a;
+      --field-bg:#12141d; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 28px -16px rgba(0,0,0,.6);
+      --backdrop: rgba(4,5,10,.6);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#14161f; --panel:#1b1e2a; --border:#2c2f3d; --ink:#e8e9f0; --ink-soft:#9498a8;
+    --accent:#5d78ff; --accent-ink:#0c0e16; --accent-soft:#1c2340;
+    --ok:#4bd189; --ok-bg:#122a1f; --ok-border:#1f4a34;
+    --bad:#f0716b; --bad-bg:#301818; --bad-border:#4a2626;
+    --warn:#e0b357; --warn-bg:#2e2510; --warn-border:#4d3d1a;
+    --field-bg:#12141d; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 28px -16px rgba(0,0,0,.6);
+    --backdrop: rgba(4,5,10,.6);
+    color-scheme: dark;
+  }
+
+  *{box-sizing:border-box;}
+  body{background:var(--bg); color:var(--ink); font-family:'Inter',system-ui,sans-serif; padding-inline:16px; padding-block:28px;}
+  .app{max-width:1180px; margin-inline:auto;}
+
+  .topbar{display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:22px;}
+  h1{font-family:'Space Grotesk',system-ui,sans-serif; font-size:1.5rem; margin:0 0 4px; letter-spacing:-.01em; text-wrap:balance;}
+  .lede{color:var(--ink-soft); font-size:.9rem; margin:0; max-width:60ch;}
+
+  .btn{
+    border:none; border-radius:9px; padding:10px 16px; font:600 .88rem 'Inter',sans-serif; cursor:pointer;
+    display:inline-flex; align-items:center; gap:8px; white-space:nowrap; transition:opacity .15s, transform .1s;
+  }
+  .btn:active{transform:scale(.98);}
+  .btn-accent{background:var(--accent); color:var(--accent-ink);}
+  .btn-ghost{background:var(--panel); color:var(--ink); border:1.5px solid var(--border);}
+  .btn-ghost:hover{border-color:var(--accent);}
+  .btn-ok{background:var(--ok); color:#fff;}
+  .btn-bad{background:var(--bad); color:#fff;}
+  .btn-sm{padding:6px 11px; font-size:.78rem; border-radius:7px;}
+  .btn svg{width:15px; height:15px; flex:none;}
+  .link-sm{background:none; border:none; color:var(--ink-soft); font:500 .76rem 'Inter',sans-serif; cursor:pointer; text-decoration:underline; padding:0;}
+  .link-sm:hover{color:var(--ink);}
+
+  .chips{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px;}
+  .chip{
+    border:1.5px solid var(--border); background:var(--panel); color:var(--ink-soft); border-radius:999px;
+    padding:7px 14px; font:600 .82rem 'Inter',sans-serif; cursor:pointer; display:flex; align-items:center; gap:7px;
+  }
+  .chip .n{font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums; background:var(--field-bg); border-radius:999px; padding:1px 7px; font-size:.74rem;}
+  .chip[aria-pressed="true"]{border-color:var(--accent); color:var(--accent); background:var(--accent-soft);}
+  .chip[aria-pressed="true"] .n{background:var(--accent); color:var(--accent-ink);}
+
+  .panel{background:var(--panel); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); overflow:hidden;}
+
+  table{width:100%; border-collapse:collapse; font-size:.88rem;}
+  thead th{
+    text-align:left; font:600 .72rem 'Inter',sans-serif; text-transform:uppercase; letter-spacing:.05em;
+    color:var(--ink-soft); padding:12px 16px; border-bottom:1px solid var(--border); background:var(--field-bg);
+  }
+  tbody td{padding:13px 16px; border-bottom:1px solid var(--border); vertical-align:middle;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:var(--field-bg);}
+  .cell-empresa{font-weight:600;}
+  .cell-sub{color:var(--ink-soft); font-size:.8rem; margin-top:2px;}
+  .cell-fecha{font-family:'JetBrains Mono',monospace; font-size:.8rem; color:var(--ink-soft); white-space:nowrap;}
+
+  .badge{
+    display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:4px 11px; font:600 .76rem 'Inter',sans-serif;
+    border:1px solid transparent;
+  }
+  .badge .dot{width:7px; height:7px; border-radius:50%; background:currentColor;}
+  .badge-pendiente{background:var(--warn-bg); color:var(--warn); border-color:var(--warn-border);}
+  .badge-aprobado{background:var(--ok-bg); color:var(--ok); border-color:var(--ok-border);}
+  .badge-rechazado{background:var(--bad-bg); color:var(--bad); border-color:var(--bad-border);}
+
+  .actions{display:flex; gap:6px; flex-wrap:wrap; align-items:center;}
+
+  .empty-state{padding:56px 24px; text-align:center; color:var(--ink-soft);}
+  .empty-state svg{width:40px; height:40px; margin-bottom:12px; opacity:.5;}
+  .empty-state p{margin:4px 0 0; font-size:.9rem;}
+
+  /* Drawers */
+  .backdrop{position:fixed; inset:0; background:var(--backdrop); z-index:40;}
+  .drawer{
+    position:fixed; top:0; right:0; height:100%; width:min(480px, 100vw); background:var(--panel);
+    border-left:1px solid var(--border); z-index:41; display:flex; flex-direction:column;
+    padding-top:env(safe-area-inset-top,0px); box-shadow:-12px 0 32px -12px rgba(0,0,0,.3);
+  }
+  .drawer-head{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:20px 20px 16px; border-bottom:1px solid var(--border);}
+  .drawer-head h2{font-family:'Space Grotesk',system-ui,sans-serif; font-size:1.15rem; margin:0 0 3px;}
+  .drawer-head p{margin:0; color:var(--ink-soft); font-size:.82rem;}
+  .drawer-close{background:none; border:none; color:var(--ink-soft); cursor:pointer; padding:6px; border-radius:8px; flex:none;}
+  .drawer-close:hover{background:var(--field-bg); color:var(--ink);}
+  .drawer-body{padding:20px; overflow-y:auto; flex:1; min-height:0;}
+
+  label{display:block; font:500 .8rem 'Inter',sans-serif; color:var(--ink-soft); margin-bottom:5px;}
+  .field{margin-bottom:14px;}
+  input[type="text"], input[type="email"], input[type="file"], textarea{
+    width:100%; background:var(--field-bg); border:1.5px solid var(--border); border-radius:8px;
+    padding:9px 11px; font:500 .9rem 'Inter',sans-serif; color:var(--ink); outline:none;
+  }
+  input:focus, textarea:focus{border-color:var(--accent);}
+  textarea{resize:vertical; min-height:80px; line-height:1.45;}
+  .mono{font-family:'JetBrains Mono',monospace; font-size:.84rem;}
+  .pwd-row{display:flex; gap:8px;}
+  .pwd-row input{flex:1; min-width:0;}
+
+  .dropzone{
+    border:1.5px dashed var(--border); border-radius:10px; padding:26px 16px; text-align:center; color:var(--ink-soft);
+    font-size:.85rem; cursor:pointer; background:var(--field-bg);
+  }
+  .dropzone:hover{border-color:var(--accent); color:var(--accent);}
+  .dropzone svg{width:26px; height:26px; margin-bottom:8px; opacity:.7;}
+  .import-summary{margin-top:16px; padding:14px 16px; border-radius:10px; background:var(--field-bg); border:1px solid var(--border); font-size:.85rem;}
+  .import-summary .row{display:flex; justify-content:space-between; padding:3px 0;}
+  .import-summary .row b{font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums;}
+  .howto{font-size:.8rem; color:var(--ink-soft); line-height:1.55; margin-top:16px; padding-top:16px; border-top:1px solid var(--border);}
+  .howto ol{margin:6px 0 0; padding-left:18px;}
+  .howto li{margin-bottom:4px;}
+
+  .preview-shell{border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-top:6px;}
+  .preview-bar{display:flex; align-items:center; gap:6px; padding:8px 12px; border-bottom:1px solid var(--border); background:var(--field-bg);}
+  .preview-bar span{width:8px; height:8px; border-radius:50%; background:var(--border);}
+  iframe{display:block; width:100%; height:360px; border:none; background:#f2f2f2;}
+
+  .copy-btn{
+    width:100%; margin-top:14px; padding:12px 16px; border:none; border-radius:10px;
+    background:var(--accent); color:var(--accent-ink); font:700 .92rem 'Inter',sans-serif; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:9px;
+  }
+  .copy-btn.done{background:var(--ok); color:#fff;}
+  .copy-btn svg{width:16px; height:16px;}
+
+  .banner{
+    display:flex; gap:10px; align-items:flex-start; padding:12px 14px; border-radius:10px; margin-bottom:18px;
+    font-size:.84rem; border:1px solid var(--warn-border); background:var(--warn-bg); color:var(--warn);
+  }
+  .banner svg{width:17px; height:17px; flex:none; margin-top:1px;}
+
+  @media (max-width:640px){
+    .drawer{width:100vw;}
+    table, thead, tbody, tr{display:block;}
+    thead{display:none;}
+    tbody tr{padding:14px 16px; display:block;}
+    tbody td{display:flex; justify-content:space-between; gap:12px; padding:6px 0; border:none; text-align:right;}
+    tbody td::before{content:attr(data-label); font-weight:600; color:var(--ink-soft); text-align:left;}
+    tbody tr{border-bottom:1px solid var(--border);}
+  }
+</style>
+
+<div class="app">
+  <div class="topbar">
+    <div>
+      <h1>Panel de Solicitudes</h1>
+      <p class="lede">Marcá el estado de cada solicitud y generá el mail correspondiente. Los datos se comparten en vivo con todo el equipo que abra este link.</p>
+    </div>
+    <button class="btn btn-accent" id="btn-open-import">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Importar Excel
+    </button>
+  </div>
+
+  <div id="banner-nodb" class="banner" hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <div>No se pudo conectar el panel a la base de datos compartida. Puede ser que necesites abrir este link con tu cuenta y que te hayan dado acceso de edición. Mientras tanto, los cambios no se van a guardar.</div>
+  </div>
+
+  <div class="chips" id="chips"></div>
+
+  <div class="panel">
+    <table>
+      <thead>
+        <tr>
+          <th>Solicitante</th>
+          <th>Contacto</th>
+          <th>Fecha</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="empty-state" id="empty-state" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      <div>Todavía no hay solicitudes cargadas.</div>
+      <p>Importá el Excel de solicitudes para empezar.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Drawer: importar -->
+<div class="backdrop" id="import-backdrop" hidden></div>
+<div class="drawer" id="import-drawer" hidden>
+  <div class="drawer-head">
+    <div>
+      <h2>Importar solicitudes</h2>
+      <p>Subí el Excel exportado. Las filas repetidas (mismo ID de solicitud) se saltean.</p>
+    </div>
+    <button class="drawer-close" id="btn-close-import" aria-label="Cerrar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body">
+    <label for="file-input">Archivo (.xlsx, .xls o .csv)</label>
+    <div class="dropzone" id="dropzone">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      <div>Hacé clic para elegir el archivo</div>
+    </div>
+    <input type="file" id="file-input" accept=".xlsx,.xls,.csv" hidden>
+
+    <div id="import-progress" class="import-summary" hidden>
+      <div class="row"><span>Procesando…</span><b id="progress-count">0 / 0</b></div>
+    </div>
+    <div id="import-summary" class="import-summary" hidden>
+      <div class="row"><span>Nuevas solicitudes cargadas</span><b id="sum-nuevas">0</b></div>
+      <div class="row"><span>Saltadas (ya existían)</span><b id="sum-duplicadas">0</b></div>
+      <div class="row"><span>Descartadas (sin ID o sin email)</span><b id="sum-error">0</b></div>
+    </div>
+
+    <div class="howto">
+      <b>Cómo funciona la carga:</b>
+      <ol>
+        <li>Cada solicitud se identifica por su ID único (columna <code>agreementId</code>).</li>
+        <li>Si ese ID ya está cargado en el panel, la fila se saltea automáticamente y sigue con la siguiente.</li>
+        <li>Podés volver a subir el mismo archivo exportado sin miedo a duplicar nada.</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<!-- Drawer: generador de mail -->
+<div class="backdrop" id="mail-backdrop" hidden></div>
+<div class="drawer" id="mail-drawer" hidden>
+  <div class="drawer-head">
+    <div>
+      <h2 id="mail-title">Generar mail</h2>
+      <p id="mail-subtitle"></p>
+    </div>
+    <button class="drawer-close" id="btn-close-mail" aria-label="Cerrar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body">
+    <div class="field">
+      <label for="f-nombre">Nombre</label>
+      <input type="text" id="f-nombre">
+    </div>
+    <div class="field">
+      <label for="f-email">Email</label>
+      <input type="email" id="f-email">
+    </div>
+
+    <div id="creds-fields">
+      <div class="field">
+        <label for="f-usuario">Usuario de la plataforma</label>
+        <input type="text" id="f-usuario" class="mono">
+      </div>
+      <div class="field">
+        <label for="f-password">Contraseña</label>
+        <div class="pwd-row">
+          <input type="text" id="f-password" class="mono">
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-gen-pwd">Generar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="f-texto" id="texto-label">Texto para el cliente</label>
+      <textarea id="f-texto"></textarea>
+    </div>
+    <div class="field">
+      <label for="f-link">URL de login</label>
+      <input type="text" id="f-link" class="mono" value="https://tu-dominio.com/login">
+    </div>
+    <div class="field">
+      <label for="f-header-img">URL imagen de encabezado (opcional)</label>
+      <input type="text" id="f-header-img" class="mono" placeholder="https://tu-dominio.com/header.png">
+    </div>
+    <div class="field">
+      <label for="f-footer-img">URL imagen de pie de página (opcional)</label>
+      <input type="text" id="f-footer-img" class="mono" placeholder="https://tu-dominio.com/footer.png">
+    </div>
+
+    <div class="preview-shell">
+      <div class="preview-bar"><span></span><span></span><span></span></div>
+      <iframe id="preview" title="Vista previa del mail"></iframe>
+    </div>
+
+    <button class="copy-btn" id="btn-copy">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      Copiar mail para pegar
+    </button>
+    <p class="howto" style="border-top:none; padding-top:0; margin-top:10px;">Pegalo con Ctrl+V (o Cmd+V) directo en el cuerpo de un mail nuevo — se pega ya formateado.</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- helpers ----------
+  function esc(s){
+    return String(s || "").replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+  function nl2br(s){ return esc(s).replace(/\n/g, "<br>"); }
+  function pick(row, keys){
+    for (var i=0;i<keys.length;i++){
+      var v = row[keys[i]];
+      if (v !== undefined && v !== null && String(v).trim() !== "") return String(v).trim();
+    }
+    return "";
+  }
+  function sanitizeId(raw){
+    var s = String(raw || "").replace(/[^A-Za-z0-9_\-.~:@+]/g, "_");
+    return s.slice(0, 180);
+  }
+  function fmtFecha(iso){
+    if (!iso) return "—";
+    try {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return String(iso).slice(0,10);
+      return d.toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit', year:'numeric'});
+    } catch(e){ return String(iso); }
+  }
+
+  // ---------- email templates (mismo motor bulletproof que ya usábamos) ----------
+  var TEXT_DEFAULTS = {
+    aprobado: "Para arrancar, ingresá con tus datos de acceso y completá tu perfil. Cualquier duda, respondé este mismo mail y te acompañamos en el proceso.",
+    rechazado: "En esta oportunidad tu solicitud no pudo ser aprobada. Esto no descarta una futura instancia: podés volver a postularte más adelante o escribirnos si querés más detalle sobre los motivos."
+  };
+
+  function buildEmail(kind, data){
+    var head =
+      '<!doctype html><html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">' +
+      '<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+      '<!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->' +
+      '<title>' + (kind === 'aprobado' ? 'Bienvenido a la plataforma' : 'Novedades sobre tu solicitud') + '</title>' +
+      '<style>body,table,td,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;}table,td{mso-table-lspace:0pt;mso-table-rspace:0pt;}img{-ms-interpolation-mode:bicubic;border:0;height:auto;line-height:100%;outline:none;text-decoration:none;}body{margin:0;padding:0;width:100% !important;height:100% !important;}a{color:#1a73e8;}@media screen and (max-width:600px){.email-container{width:100% !important;}.fluid-padding{padding-left:20px !important;padding-right:20px !important;}}</style>' +
+      '</head><body style="margin:0;padding:0;background-color:#f2f2f2;">';
+
+    var headline = kind === 'aprobado' ? ('¡Bienvenido/a, ' + esc(data.nombre) + '!') : ('Hola, ' + esc(data.nombre));
+    var preheader = kind === 'aprobado'
+      ? '¡Tu cuenta fue aprobada! Ya podés acceder a la plataforma con tus datos de acceso.'
+      : 'Novedades sobre tu solicitud de alta.';
+    var intro = kind === 'aprobado'
+      ? 'Tu solicitud fue <strong>aprobada</strong>. A partir de ahora ya podés ingresar a la plataforma con los siguientes datos de acceso:'
+      : 'Gracias por tu interés. Te escribimos para contarte que, luego de revisar tu solicitud, en esta oportunidad <strong>no pudimos avanzar</strong> con el alta.';
+
+    var headerBlock;
+    if (data.headerImg) {
+      headerBlock = '<tr><td align="center" style="background-color:#111827;padding:0;">' +
+        '<img src="' + esc(data.headerImg) + '" width="600" height="120" alt="Nombre de la Empresa" style="display:block;width:100%;max-width:600px;height:auto;border:0;">' +
+        '</td></tr>';
+    } else {
+      headerBlock = '<tr><td align="center" style="background-color:#111827;padding:28px 20px;"><span style="font-family:Arial,Helvetica,sans-serif;font-size:20px;font-weight:bold;color:#ffffff;">Nombre de la Empresa</span></td></tr>';
+    }
+
+    var footerBlock;
+    if (data.footerImg) {
+      footerBlock = '<img src="' + esc(data.footerImg) + '" width="600" height="80" alt="Nombre de la Empresa" style="display:block;width:100%;max-width:600px;height:auto;border:0;margin:0 auto 12px;">Este es un mensaje automático, por favor no respondas a este email.';
+    } else {
+      footerBlock = 'Este es un mensaje automático, por favor no respondas a este email.<br>Nombre de la Empresa · Buenos Aires, Argentina';
+    }
+
+    var credsBlock = '';
+    if (kind === 'aprobado') {
+      credsBlock =
+        '<tr><td class="fluid-padding" style="padding:0 40px 20px 40px;">' +
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;">' +
+        '<tr><td style="padding:20px 24px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#111827;">' +
+        '<strong>Usuario:</strong> ' + esc(data.usuario) + '<br>' +
+        '<strong>Contraseña:</strong> ' + esc(data.password) + '<br>' +
+        '<strong>Email registrado:</strong> ' + esc(data.email) +
+        '</td></tr></table></td></tr>';
+    }
+
+    var buttonBlock = '';
+    if (kind === 'aprobado') {
+      buttonBlock =
+        '<tr><td class="fluid-padding" align="center" style="padding:10px 40px 30px 40px;">' +
+        '<!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="' + esc(data.link) + '" style="height:44px;v-text-anchor:middle;width:220px;" arcsize="8%" strokecolor="#1a8a52" fillcolor="#1a8a52"><w:anchorlock/><center style="color:#ffffff;font-family:Arial,sans-serif;font-size:15px;font-weight:bold;">Ingresar a la plataforma</center></v:roundrect><![endif]-->' +
+        '<!--[if !mso]><!-->' +
+        '<a href="' + esc(data.link) + '" target="_blank" style="background-color:#1a8a52;border-radius:6px;color:#ffffff;display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;line-height:44px;text-align:center;text-decoration:none;width:220px;-webkit-text-size-adjust:none;">Ingresar a la plataforma</a>' +
+        '<!--<![endif]-->' +
+        '</td></tr>';
+    }
+
+    var body =
+      '<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">' + esc(preheader) + '</div>' +
+      '<center style="width:100%;background-color:#f2f2f2;">' +
+      '<!--[if mso]><table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->' +
+      '<table role="presentation" class="email-container" align="center" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;margin:0 auto;background-color:#ffffff;">' +
+      headerBlock +
+      '<tr><td class="fluid-padding" style="padding:40px 40px 20px 40px;font-family:Arial,Helvetica,sans-serif;">' +
+      '<p style="margin:0 0 16px 0;font-size:22px;line-height:28px;color:#111827;font-weight:bold;">' + headline + '</p>' +
+      '<p style="margin:0 0 16px 0;font-size:15px;line-height:22px;color:#374151;">' + intro + '</p>' +
+      '</td></tr>' +
+      credsBlock +
+      buttonBlock +
+      '<tr><td class="fluid-padding" style="padding:0 40px 40px 40px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:21px;color:#374151;">' + nl2br(data.texto) + '</td></tr>' +
+      '<tr><td align="center" style="background-color:#f9fafb;padding:20px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#9ca3af;border-top:1px solid #e5e7eb;">' + footerBlock + '</td></tr>' +
+      '</table>' +
+      '<!--[if mso]></td></tr></table><![endif]-->' +
+      '</center>';
+
+    return head + body + '</body></html>';
+  }
+
+  // ---------- state ----------
+  var db = null, userCap = null;
+  var solicitudes = []; // {id, ...data}
+  var currentFilter = 'todas';
+  var unsubscribe = null;
+  var currentMailDoc = null;
+
+  var els = {
+    bannerNoDb: document.getElementById('banner-nodb'),
+    chips: document.getElementById('chips'),
+    tbody: document.getElementById('tbody'),
+    emptyState: document.getElementById('empty-state'),
+
+    btnOpenImport: document.getElementById('btn-open-import'),
+    importBackdrop: document.getElementById('import-backdrop'),
+    importDrawer: document.getElementById('import-drawer'),
+    btnCloseImport: document.getElementById('btn-close-import'),
+    dropzone: document.getElementById('dropzone'),
+    fileInput: document.getElementById('file-input'),
+    importProgress: document.getElementById('import-progress'),
+    progressCount: document.getElementById('progress-count'),
+    importSummary: document.getElementById('import-summary'),
+    sumNuevas: document.getElementById('sum-nuevas'),
+    sumDuplicadas: document.getElementById('sum-duplicadas'),
+    sumError: document.getElementById('sum-error'),
+
+    mailBackdrop: document.getElementById('mail-backdrop'),
+    mailDrawer: document.getElementById('mail-drawer'),
+    btnCloseMail: document.getElementById('btn-close-mail'),
+    mailTitle: document.getElementById('mail-title'),
+    mailSubtitle: document.getElementById('mail-subtitle'),
+    creds: document.getElementById('creds-fields'),
+    fNombre: document.getElementById('f-nombre'),
+    fEmail: document.getElementById('f-email'),
+    fUsuario: document.getElementById('f-usuario'),
+    fPassword: document.getElementById('f-password'),
+    fTexto: document.getElementById('f-texto'),
+    fLink: document.getElementById('f-link'),
+    fHeaderImg: document.getElementById('f-header-img'),
+    fFooterImg: document.getElementById('f-footer-img'),
+    textoLabel: document.getElementById('texto-label'),
+    preview: document.getElementById('preview'),
+    btnGenPwd: document.getElementById('btn-gen-pwd'),
+    btnCopy: document.getElementById('btn-copy')
+  };
+
+  var FILTERS = [
+    {key:'todas', label:'Todas'},
+    {key:'pendiente', label:'Pendientes'},
+    {key:'aprobado', label:'Aprobadas'},
+    {key:'rechazado', label:'Rechazadas'}
+  ];
+
+  function counts(){
+    var c = {todas: solicitudes.length, pendiente:0, aprobado:0, rechazado:0};
+    solicitudes.forEach(function(s){ if (c[s.estado] !== undefined) c[s.estado]++; });
+    return c;
+  }
+
+  function renderChips(){
+    var c = counts();
+    els.chips.innerHTML = '';
+    FILTERS.forEach(function(f){
+      var btn = document.createElement('button');
+      btn.className = 'chip';
+      btn.type = 'button';
+      btn.setAttribute('aria-pressed', String(currentFilter === f.key));
+      btn.innerHTML = f.label + ' <span class="n">' + c[f.key] + '</span>';
+      btn.addEventListener('click', function(){ currentFilter = f.key; renderAll(); });
+      els.chips.appendChild(btn);
+    });
+  }
+
+  function badge(estado){
+    var label = estado === 'pendiente' ? 'Pendiente' : estado === 'aprobado' ? 'Aprobado' : 'Rechazado';
+    return '<span class="badge badge-' + estado + '"><span class="dot"></span>' + label + '</span>';
+  }
+
+  function renderTable(){
+    var list = solicitudes.filter(function(s){ return currentFilter === 'todas' || s.estado === currentFilter; });
+    // ordenar: pendientes primero, luego por fecha de importación desc
+    list.sort(function(a,b){
+      if (a.estado === 'pendiente' && b.estado !== 'pendiente') return -1;
+      if (b.estado === 'pendiente' && a.estado !== 'pendiente') return 1;
+      return (b.fechaImportacion || '').localeCompare(a.fechaImportacion || '');
+    });
+
+    els.emptyState.hidden = list.length > 0;
+    els.tbody.innerHTML = '';
+
+    list.forEach(function(s){
+      var tr = document.createElement('tr');
+
+      var tdSolicitante = document.createElement('td');
+      tdSolicitante.setAttribute('data-label', 'Solicitante');
+      tdSolicitante.innerHTML = '<div class="cell-empresa">' + esc(s.empresa || s.nombre || '(sin nombre)') + '</div>' +
+        (s.empresa && s.nombre ? '<div class="cell-sub">' + esc(s.nombre) + '</div>' : '');
+      tr.appendChild(tdSolicitante);
+
+      var tdContacto = document.createElement('td');
+      tdContacto.setAttribute('data-label', 'Contacto');
+      tdContacto.innerHTML = '<div>' + esc(s.email || '—') + '</div>' + (s.telefono ? '<div class="cell-sub">' + esc(s.telefono) + '</div>' : '');
+      tr.appendChild(tdContacto);
+
+      var tdFecha = document.createElement('td');
+      tdFecha.setAttribute('data-label', 'Fecha');
+      tdFecha.className = 'cell-fecha';
+      tdFecha.textContent = fmtFecha(s.fechaFormulario || s.fechaImportacion);
+      tr.appendChild(tdFecha);
+
+      var tdEstado = document.createElement('td');
+      tdEstado.setAttribute('data-label', 'Estado');
+      tdEstado.innerHTML = badge(s.estado);
+      tr.appendChild(tdEstado);
+
+      var tdAcciones = document.createElement('td');
+      tdAcciones.setAttribute('data-label', 'Acciones');
+      var actionsDiv = document.createElement('div');
+      actionsDiv.className = 'actions';
+
+      if (s.estado === 'pendiente') {
+        actionsDiv.appendChild(makeBtn('Aprobar', 'btn-ok', function(){ setEstado(s.id, 'aprobado'); }));
+        actionsDiv.appendChild(makeBtn('Rechazar', 'btn-bad', function(){ setEstado(s.id, 'rechazado'); }));
+      } else {
+        actionsDiv.appendChild(makeBtn('Generar mail', 'btn-accent', function(){ openMailDrawer(s); }));
+        var revertLink = document.createElement('button');
+        revertLink.className = 'link-sm';
+        revertLink.type = 'button';
+        revertLink.textContent = 'Volver a pendiente';
+        revertLink.addEventListener('click', function(){ setEstado(s.id, 'pendiente'); });
+        actionsDiv.appendChild(revertLink);
+      }
+      tdAcciones.appendChild(actionsDiv);
+      tr.appendChild(tdAcciones);
+
+      els.tbody.appendChild(tr);
+    });
+  }
+
+  function makeBtn(label, cls, onClick){
+    var b = document.createElement('button');
+    b.className = 'btn btn-sm ' + cls;
+    b.type = 'button';
+    b.textContent = label;
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+  function renderAll(){ renderChips(); renderTable(); }
+
+  function setEstado(id, estado){
+    if (!db) return;
+    var patch = { estado: estado, fechaDecision: (estado === 'pendiente') ? null : new Date().toISOString() };
+    db.doc('solicitudes/' + id).update(patch).catch(function(e){
+      console.error('No se pudo actualizar el estado', e);
+    });
+  }
+
+  // ---------- import ----------
+  function openImport(){
+    els.importBackdrop.hidden = false;
+    els.importDrawer.hidden = false;
+    els.importProgress.hidden = true;
+    els.importSummary.hidden = true;
+    els.fileInput.value = '';
+  }
+  function closeImport(){
+    els.importBackdrop.hidden = true;
+    els.importDrawer.hidden = true;
+  }
+
+  var EMPRESA_KEYS = ['Datos Cliente ( Razon Social )', 'Datos Cliente ( Nombre Fantasia )', 'company'];
+  var TELEFONO_KEYS = ['Datos Cliente ( Telefono )'];
+
+  function parseRow(row){
+    var id = pick(row, ['agreementId']);
+    var email = pick(row, ['email']);
+    var first = pick(row, ['first']);
+    var last = pick(row, ['last']);
+    var nombre = (first + ' ' + last).trim();
+    var empresa = pick(row, EMPRESA_KEYS);
+    var telefono = pick(row, TELEFONO_KEYS);
+    var completed = pick(row, ['completed']);
+    return { id: id, email: email, nombre: nombre, empresa: empresa, telefono: telefono, completed: completed };
+  }
+
+  async function importRows(rows){
+    var nuevas = 0, duplicadas = 0, errores = 0;
+    var seenInBatch = {};
+    els.importProgress.hidden = false;
+    els.importSummary.hidden = true;
+
+    for (var i = 0; i < rows.length; i++) {
+      els.progressCount.textContent = (i+1) + ' / ' + rows.length;
+      var parsed = parseRow(rows[i]);
+      if (!parsed.id || !parsed.email) { errores++; continue; }
+
+      var docId = sanitizeId(parsed.id);
+      if (seenInBatch[docId]) { duplicadas++; continue; }
+      seenInBatch[docId] = true;
+
+      if (!db) { errores++; continue; }
+
+      try {
+        var snap = await db.doc('solicitudes/' + docId).get();
+        if (snap.exists) { duplicadas++; continue; }
+        await db.doc('solicitudes/' + docId).set({
+          nombre: parsed.nombre || '(sin nombre)',
+          empresa: parsed.empresa || '',
+          email: parsed.email,
+          telefono: parsed.telefono || '',
+          fechaFormulario: parsed.completed || '',
+          estado: 'pendiente',
+          fechaImportacion: new Date().toISOString(),
+          fechaDecision: null
+        });
+        nuevas++;
+      } catch (e) {
+        console.error('Error importando fila', parsed.id, e);
+        errores++;
+      }
+    }
+
+    els.importProgress.hidden = true;
+    els.importSummary.hidden = false;
+    els.sumNuevas.textContent = nuevas;
+    els.sumDuplicadas.textContent = duplicadas;
+    els.sumError.textContent = errores;
+  }
+
+  function handleFile(file){
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(e){
+      try {
+        var data = new Uint8Array(e.target.result);
+        var wb = XLSX.read(data, {type:'array'});
+        var ws = wb.Sheets[wb.SheetNames[0]];
+        var rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+        importRows(rows);
+      } catch (err) {
+        console.error(err);
+        alert('No se pudo leer el archivo. Verificá que sea un Excel o CSV válido.');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  els.btnOpenImport.addEventListener('click', openImport);
+  els.btnCloseImport.addEventListener('click', closeImport);
+  els.importBackdrop.addEventListener('click', closeImport);
+  els.dropzone.addEventListener('click', function(){ els.fileInput.click(); });
+  els.fileInput.addEventListener('change', function(){ handleFile(els.fileInput.files[0]); });
+
+  // ---------- mail drawer ----------
+  function openMailDrawer(doc){
+    currentMailDoc = doc;
+    var kind = doc.estado === 'aprobado' ? 'aprobado' : 'rechazado';
+
+    els.mailTitle.textContent = kind === 'aprobado' ? 'Generar mail de aprobación' : 'Generar mail de rechazo';
+    els.mailSubtitle.textContent = doc.empresa || doc.nombre || '';
+    els.creds.style.display = kind === 'aprobado' ? '' : 'none';
+    els.textoLabel.textContent = kind === 'aprobado' ? 'Texto para el cliente' : 'Motivo / mensaje para el cliente';
+
+    els.fNombre.value = doc.nombre || '';
+    els.fEmail.value = doc.email || '';
+    els.fUsuario.value = doc.usuarioPlataforma || (doc.email ? doc.email.split('@')[0] : '');
+    els.fPassword.value = genPassword();
+    els.fTexto.value = TEXT_DEFAULTS[kind];
+    els.fLink.value = 'https://tu-dominio.com/login';
+    els.fHeaderImg.value = '';
+    els.fFooterImg.value = '';
+
+    els.mailBackdrop.hidden = false;
+    els.mailDrawer.hidden = false;
+    renderPreview();
+  }
+  function closeMailDrawer(){
+    els.mailBackdrop.hidden = true;
+    els.mailDrawer.hidden = true;
+    currentMailDoc = null;
+  }
+
+  function genPassword(){
+    var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    var out = '';
+    for (var i = 0; i < 10; i++) out += chars[Math.floor(Math.random() * chars.length)];
+    return out;
+  }
+
+  function currentMailData(){
+    var kind = currentMailDoc && currentMailDoc.estado === 'aprobado' ? 'aprobado' : 'rechazado';
+    return {
+      kind: kind,
+      nombre: els.fNombre.value || 'Nombre Apellido',
+      email: els.fEmail.value || 'cliente@ejemplo.com',
+      usuario: els.fUsuario.value || 'usuario',
+      password: els.fPassword.value || '********',
+      texto: els.fTexto.value,
+      link: els.fLink.value || 'https://tu-dominio.com/login',
+      headerImg: els.fHeaderImg.value.trim(),
+      footerImg: els.fFooterImg.value.trim()
+    };
+  }
+
+  function renderPreview(){
+    var data = currentMailData();
+    els.preview.srcdoc = buildEmail(data.kind, data);
+  }
+
+  [els.fNombre, els.fEmail, els.fUsuario, els.fPassword, els.fTexto, els.fLink, els.fHeaderImg, els.fFooterImg].forEach(function(el){
+    el.addEventListener('input', renderPreview);
+  });
+  els.btnGenPwd.addEventListener('click', function(){ els.fPassword.value = genPassword(); renderPreview(); });
+  els.btnCloseMail.addEventListener('click', closeMailDrawer);
+  els.mailBackdrop.addEventListener('click', closeMailDrawer);
+
+  els.btnCopy.addEventListener('click', function(){
+    var data = currentMailData();
+    var html = buildEmail(data.kind, data);
+    var plain = els.preview.contentDocument ? els.preview.contentDocument.body.innerText : html;
+
+    var done = function(){
+      var original = els.btnCopy.innerHTML;
+      els.btnCopy.classList.add('done');
+      els.btnCopy.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Copiado — pegalo en el mail';
+      setTimeout(function(){ els.btnCopy.classList.remove('done'); els.btnCopy.innerHTML = original; }, 2200);
+
+      // guardar el usuario/contraseña usados, para referencia futura
+      if (db && currentMailDoc && data.kind === 'aprobado') {
+        db.doc('solicitudes/' + currentMailDoc.id).update({ usuarioPlataforma: data.usuario }).catch(function(){});
+      }
+    };
+    var fail = function(){
+      try{
+        var doc = els.preview.contentDocument;
+        var range = doc.createRange();
+        range.selectNodeContents(doc.body);
+        var sel = doc.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        doc.execCommand('copy');
+        done();
+      }catch(e){
+        alert('No se pudo copiar automáticamente. Abrí la vista previa, seleccioná todo (Ctrl+A) y copiá (Ctrl+C) manualmente.');
+      }
+    };
+
+    if (navigator.clipboard && window.ClipboardItem) {
+      try {
+        var item = new ClipboardItem({
+          'text/html': new Blob([html], {type: 'text/html'}),
+          'text/plain': new Blob([plain], {type: 'text/plain'})
+        });
+        navigator.clipboard.write([item]).then(done, fail);
+      } catch(e){ fail(); }
+    } else {
+      fail();
+    }
+  });
+
+  // ---------- init ----------
+  async function init(){
+    if (!window.claude || !window.claude.use) {
+      els.bannerNoDb.hidden = false;
+      renderAll();
+      return;
+    }
+    try {
+      db = await window.claude.use('db');
+      userCap = await window.claude.use('user');
+    } catch(e){ db = null; }
+
+    if (!db) {
+      els.bannerNoDb.hidden = false;
+      renderAll();
+      return;
+    }
+
+    unsubscribe = db.collection('solicitudes').onSnapshot(function(snap){
+      solicitudes = snap.docs.map(function(d){
+        var data = d.data() || {};
+        data.id = d.id;
+        return data;
+      });
+      renderAll();
+    }, function(err){
+      console.error('db onSnapshot error', err);
+      els.bannerNoDb.hidden = false;
+    });
+  }
+
+  renderAll();
+  init();
+})();
+</script>
+
+</body></html>

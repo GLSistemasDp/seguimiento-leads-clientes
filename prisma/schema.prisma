@@ -1,0 +1,38 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Solicitud {
+  id               String    @id @default(cuid())
+  nombre           String
+  email            String    @unique
+  datos            Json      // resto de los campos crudos del formulario, sin tipar estricto
+  estado           Estado    @default(PENDIENTE)
+  fechaImportacion DateTime  @default(now())
+  fechaDecision    DateTime?
+  usuarioDecisor   String? // opcional en este MVP, para cuando haya mas de un login
+
+  @@index([estado])
+}
+
+enum Estado {
+  PENDIENTE
+  APROBADO
+  RECHAZADO
+}
+
+model PlantillaEmail {
+  id         String  @id @default(cuid())
+  tipo       String  @unique // "aprobado" | "rechazado"
+  asunto     String
+  cuerpoHtml String  @db.Text
+  headerImg  String?
+  headerAlt  String?
+  footerImg  String?
+  footerAlt  String?
+}
