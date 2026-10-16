@@ -30,6 +30,7 @@ export const NAVEGACION: readonly Item[] = [
     incluye: ["/generador"],
   },
   { href: "/reclamos", etiqueta: "Reclamos", corta: "Reclamos", icono: "alerta", clave: "reclamos" },
+  { href: "/mailing", etiqueta: "Mailing", corta: "Mailing", icono: "mail" },
 ];
 
 function activa(pathname: string, item: Item): boolean {

@@ -1,4 +1,4 @@
-import { escapeAttr, escapeHtml, urlSegura } from "@/lib/utils/html";
+import { escapeAttr, escapeHtml, srcImagenSegura, urlSegura } from "@/lib/utils/html";
 
 export const ANCHO_EMAIL = 600;
 
@@ -59,7 +59,7 @@ export function botonBulletproof(boton: BotonEmail): string {
 }
 
 function bloqueHeader(datos: DatosLayout): string {
-  const img = urlSegura(datos.headerImg);
+  const img = srcImagenSegura(datos.headerImg);
   if (img) {
     return `<img src="${escapeAttr(img)}" alt="${escapeAttr(datos.headerAlt ?? "")}" width="${ANCHO_EMAIL}" style="display:block;width:100%;max-width:${ANCHO_EMAIL}px;height:auto;border:0;outline:none;text-decoration:none;" />`;
   }
@@ -69,7 +69,7 @@ function bloqueHeader(datos: DatosLayout): string {
 }
 
 function bloqueFooter(datos: DatosLayout): string {
-  const img = urlSegura(datos.footerImg);
+  const img = srcImagenSegura(datos.footerImg);
   if (img) {
     return `<img src="${escapeAttr(img)}" alt="${escapeAttr(datos.footerAlt ?? "")}" width="${ANCHO_EMAIL}" style="display:block;width:100%;max-width:${ANCHO_EMAIL}px;height:auto;border:0;outline:none;text-decoration:none;" />`;
   }

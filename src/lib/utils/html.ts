@@ -49,3 +49,14 @@ export function urlSegura(valor: string | null | undefined): string | null {
   if (!/^https?:\/\//i.test(limpia)) return null;
   return limpia;
 }
+
+/**
+ * Para el `src` de una imagen: URLs http(s) o una imagen subida embebida
+ * (data:image en base64). Nada mas.
+ */
+export function srcImagenSegura(valor: string | null | undefined): string | null {
+  const url = urlSegura(valor);
+  if (url) return url;
+  const limpia = valor?.trim() ?? "";
+  return /^data:image\/(png|jpe?g|gif|webp);base64,[a-z0-9+/=]+$/i.test(limpia) ? limpia : null;
+}
