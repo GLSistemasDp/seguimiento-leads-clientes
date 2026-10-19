@@ -41,9 +41,55 @@ export type Indicacion = {
   fecha: string;
 };
 
+/** Clasificacion que hace el Asegurador de Calidad (pagina 2 del FOR-03). */
+export const CLASIFICACIONES_CALIDAD = [
+  "Error de Facturación",
+  "Error de Cliente",
+  "Error de Expedición",
+  "Diferencia contra Factura",
+  "Diferencia de Precio",
+  "Falla de Calidad",
+  "Plazo de Entrega",
+] as const;
+
+/** Campos del "Cierre del reclamo", en el orden del formulario. */
+export const CAMPOS_CIERRE = [
+  "Fecha de devolución",
+  "Devolución recepcionada por",
+  "Conforme a la devolución por",
+  "Nota de crédito N°",
+  "Responsable de nota de crédito",
+  "Nota de débito N°",
+  "Responsable de nota de débito",
+  "Nueva factura N°",
+  "Responsable de nueva factura",
+  "N° de ajuste",
+  "Responsable de ajuste",
+  "N° de transferencia",
+  "Acciones correctivas preventivas iniciadas",
+  "Número de pedido de acción",
+  "Respuesta al cliente",
+  "Contacto con",
+] as const;
+
+export const MAX_PRODUCTOS = 10;
+
+export type ProductoReclamo = { codigo: string; descripcion: string; cantidadFacturada: number; cantidadReclamo: number };
+export type AccionCorrectiva = { fecha: string; accion: string; responsable: string; tiempo: string; resultado: string };
+export type Adjunto = { id: string; nombre: string; tipo: string; tamano: number };
+
+export type Calidad = {
+  clasificacion: string | null;
+  causa: string | null;
+  procedente: boolean | null;
+  acciones: AccionCorrectiva[];
+};
+
 /** Formulario FOR-03 Rev04 de reclamo de cliente. */
 export type Reclamo = {
+  /** Numero de reclamo que asigna De Pascale. */
   id: string;
+  /** AAAA-MM-DD. */
   fecha: string;
   razonSocial: string;
   numeroCliente: string;
@@ -59,16 +105,37 @@ export type Reclamo = {
   remito: string;
   clasificacion: typeof CLASIFICACIONES[number];
   detalle: string;
-  productos: { codigo: string; descripcion: string; cantidadFacturada: number; cantidadReclamo: number }[];
-  calidad: {
-    clasificacion: string | null;
-    causa: string | null;
-    procedente: boolean | null;
-    acciones: { fecha: string; accion: string; responsable: string; tiempo: string; resultado: string }[];
-  };
+  productos: ProductoReclamo[];
+  /** Remito, factura, orden de compra, pedido del cliente. */
+  adjuntos: Adjunto[];
+  calidad: Calidad;
   cierre: Record<string, string | null>;
   indicacion: Indicacion | null;
+  /** Si se cargo a partir de un reclamo de WhatsApp: el id de esa consulta. */
+  consultaId: string | null;
 };
+
+/** Lo que se carga al dar de alta un formulario (la parte "A completar por el Cliente"). */
+export type NuevoReclamo = Pick<
+  Reclamo,
+  | "fecha"
+  | "razonSocial"
+  | "numeroCliente"
+  | "sucursal"
+  | "transporte"
+  | "contacto"
+  | "cargo"
+  | "telefono"
+  | "email"
+  | "ordenCompra"
+  | "pedido"
+  | "factura"
+  | "remito"
+  | "clasificacion"
+  | "detalle"
+  | "productos"
+  | "consultaId"
+>;
 
 export const ESTADOS_RECLAMO = {
   SIN_DEFINIR: "Esperando gerencia",
@@ -89,6 +156,8 @@ export type ReclamoPanel = {
   fecha: string | null;
   cliente: string;
   codigo: string;
+  /** Clasificacion de venta del cliente (A, B, C) si se conoce. */
+  clasificacionCliente: string;
   /** Lo que reclama el cliente. */
   detalle: string;
   /** Clasificacion del formulario o "WhatsApp". */
@@ -96,14 +165,20 @@ export type ReclamoPanel = {
   encargado: string;
   grupoWhatsapp: string;
   grupoVendedor: string;
-  /** Deuda, "NO RESPONDER", etc. del maestro de clientes. */
-  alertas: string[];
+  /**
+   * Situacion de la cuenta del cliente segun el maestro: "OK", "TIENE DEUDA",
+   * "NO RESPONDER", "JUDICIALIZADO" y la marca "REVISAR DEUDORA". Vacio si no
+   * se encontro el cliente. Sirve para decidir que reclamo priorizar.
+   */
+  estadoCliente: string[];
   respondido: boolean;
   /** Dias desde que entro el reclamo. */
   dias: number | null;
   observaciones: string;
   indicacion: Indicacion | null;
   estado: EstadoReclamo;
-  /** Ficha completa (solo formularios). */
-  enlace: string | null;
+  /** Formulario FOR-03 (propio o cargado a partir de este reclamo de WhatsApp). */
+  formulario: string | null;
+  /** Para cargar el formulario a partir de un reclamo de WhatsApp. */
+  consultaId: string | null;
 };

@@ -14,12 +14,12 @@ export function InsigniaAptitud({ evaluacion, detalle = false }: { evaluacion: E
   const categoria = CATEGORIAS[evaluacion.categoria];
   return (
     <div className="flex flex-col gap-1" title={`${evaluacion.resumen}\n${evaluacion.fuente === "ia" ? "Evaluado con IA" : "Puntaje por reglas"}`}>
-      <span className={`inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-semibold whitespace-nowrap ${categoria.estilo}`}>
+      <span className={`inline-flex w-fit flex-wrap items-center gap-x-1.5 rounded-xl px-2.5 py-1 text-sm font-semibold ${categoria.estilo}`}>
         {evaluacion.fuente === "ia" ? <Icono nombre="chispa" className="size-3.5" /> : null}
         <span className="tabular-nums">{evaluacion.puntaje}</span>
         <span className="font-medium">· {categoria.etiqueta}</span>
       </span>
-      {detalle ? <span className="line-clamp-2 max-w-56 text-xs text-slate-500">{evaluacion.resumen}</span> : null}
+      {detalle ? <span className="line-clamp-2 text-xs text-slate-500">{evaluacion.resumen}</span> : null}
     </div>
   );
 }

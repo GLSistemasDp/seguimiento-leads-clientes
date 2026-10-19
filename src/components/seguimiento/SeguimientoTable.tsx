@@ -43,23 +43,8 @@ const ESTILO_RELACION: Record<Relacion, string> = {
   EN_RIESGO: "border-red-300 bg-red-50 text-red-700",
 };
 
-/** En el orden de la planilla de atencion al cliente. */
-const COLUMNAS = [
-  "Fecha",
-  "Encargado",
-  "Cliente",
-  "Lista de precio",
-  "Clasif.",
-  "Grupo vendedor",
-  "Estado",
-  "Grupo WhatsApp",
-  "Consulta del cliente",
-  "Hito",
-  "Respondido",
-  "Demora",
-  "Observacion",
-  "Recomendacion de respuesta",
-] as const;
+/** Lo secundario (lista, vendedor, fecha, encargado) va dentro de estas columnas, en chico. */
+const COLUMNAS = ["Cliente", "Consulta", "Demora", "Seguimiento", "Respondido"] as const;
 
 const PRIORIDADES: Record<Prioridad, { etiqueta: string; estilo: string; borde: string }> = {
   ALTA: { etiqueta: "Alta", estilo: "bg-red-600 text-white", borde: "border-l-red-600" },
@@ -223,254 +208,223 @@ export function SeguimientoTable({
 
   return (
     <>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[1500px] border-collapse">
-          <thead>
-            <tr className="border-b border-slate-200 bg-blue-50/50 text-left">
-              {COLUMNAS.map((columna) => (
-                <th
-                  key={columna}
-                  className="px-3 py-3.5 text-xs font-semibold tracking-wider whitespace-nowrap text-slate-700 uppercase first:pl-5 last:pr-5"
-                >
-                  {columna}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {consultas.map((consulta, indice) => {
-              const respondida = respondidas[consulta.id] ?? consulta.respondida;
-              const ocupada = guardando.has(consulta.id);
-              const { codigo, nombre } = separarCliente(consulta.cliente);
-              const prioridad = PRIORIDADES[respondida ? "RESUELTA" : consulta.prioridad];
-              const tachado = respondida ? "text-slate-400 line-through" : "";
-              const chat = claveChat(consulta);
-              const nuevoChat = agrupado && (indice === 0 || chat !== claveChat(consultas[indice - 1]));
-              const resumen = chats[chat];
+      <table className="w-full table-fixed border-collapse">
+        <colgroup>
+          <col className="w-[24%]" />
+          <col />
+          <col className="w-20" />
+          <col className="w-[22%]" />
+          <col className="w-24" />
+        </colgroup>
+        <thead>
+          <tr className="border-b border-slate-200 bg-blue-50/50 text-left">
+            {COLUMNAS.map((columna) => (
+              <th
+                key={columna}
+                className="px-3 py-3 text-xs font-semibold tracking-wide text-slate-600 uppercase first:pl-5 last:pr-4 last:text-center"
+              >
+                {columna}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {consultas.map((consulta, indice) => {
+            const respondida = respondidas[consulta.id] ?? consulta.respondida;
+            const ocupada = guardando.has(consulta.id);
+            const { codigo, nombre } = separarCliente(consulta.cliente);
+            const prioridad = PRIORIDADES[respondida ? "RESUELTA" : consulta.prioridad];
+            const tachado = respondida ? "text-slate-400 line-through" : "";
+            const chat = claveChat(consulta);
+            const nuevoChat = agrupado && (indice === 0 || chat !== claveChat(consultas[indice - 1]));
+            const resumen = chats[chat];
+            const vendedor = consulta.grupoVendedor.replace(/^FILTRO GRUPO\s*/i, "");
+            const alertas = respondida ? [] : alertasCliente(consulta);
 
-              return (
-                <Fragment key={consulta.id}>
-                  {nuevoChat ? (
-                    <tr className="border-b border-slate-200 bg-slate-100/80">
-                      <td colSpan={COLUMNAS.length} className="px-5 py-2">
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                          <Icono nombre="chat" className="size-4 text-emerald-700" />
-                          <span className="font-semibold text-slate-900">{nombre}</span>
-                          {codigo ? (
-                            <span className="font-mono text-xs text-slate-500">#{codigo}</span>
-                          ) : null}
-                          <span className="text-xs text-slate-600">
-                            {consulta.grupoWhatsapp || "Sin grupo de WhatsApp"}
+            return (
+              <Fragment key={consulta.id}>
+                {nuevoChat ? (
+                  <tr className="border-b border-slate-200 bg-slate-100/80">
+                    <td colSpan={COLUMNAS.length} className="px-5 py-2">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                        <Icono nombre="chat" className="size-4 text-emerald-700" />
+                        <span className="font-semibold text-slate-900">{nombre}</span>
+                        {codigo ? <span className="text-xs text-slate-500">#{codigo}</span> : null}
+                        <span className="truncate text-xs text-slate-500">{consulta.grupoWhatsapp || "Sin grupo de WhatsApp"}</span>
+                        {resumen ? (
+                          <span
+                            className={`ml-auto rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                              resumen.sinResponder > 0 ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"
+                            }`}
+                          >
+                            {resumen.sinResponder > 0
+                              ? `${resumen.sinResponder} sin responder de ${resumen.total}`
+                              : `${resumen.total} respondida${resumen.total === 1 ? "" : "s"}`}
                           </span>
-                          {resumen ? (
-                            <span
-                              className={`ml-auto rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                                resumen.sinResponder > 0
-                                  ? "bg-red-100 text-red-700"
-                                  : "bg-emerald-100 text-emerald-700"
-                              }`}
-                            >
-                              {resumen.sinResponder > 0
-                                ? `${resumen.sinResponder} sin responder de ${resumen.total}`
-                                : `${resumen.total} respondida${resumen.total === 1 ? "" : "s"}`}
-                            </span>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  ) : null}
-                  <tr
-                    className={`border-b border-slate-100 align-top last:border-0 ${
-                      respondida ? "bg-slate-50" : "hover:bg-blue-50/30"
-                    }`}
-                  >
-                    <td className={`border-l-4 py-3 pr-3 pl-4 whitespace-nowrap ${prioridad.borde}`}>
-                      <p className={`font-mono text-sm ${tachado}`}>{formatearDiaCorto(consulta.fecha)}</p>
-                      {/* La planilla carga solo el dia: la medianoche es "sin hora". */}
-                      {formatearHora(consulta.fecha) !== "00:00 hs" ? (
-                        <p className={`text-xs text-slate-500 ${tachado}`}>{formatearHora(consulta.fecha)}</p>
-                      ) : null}
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ) : null}
+                <tr
+                  className={`border-b border-slate-100 align-top last:border-0 ${
+                    respondida ? "bg-slate-50" : "hover:bg-blue-50/30"
+                  }`}
+                >
+                  {/* Cliente: lo importante arriba, el resto en gris chico. */}
+                  <td className={`border-l-4 py-3 pr-3 pl-4 ${prioridad.borde}`}>
+                    <button
+                      type="button"
+                      onClick={() => setFichaAbierta(consulta)}
+                      title="Ver ficha e historial del cliente"
+                      className="group -m-1 flex max-w-full flex-col items-start rounded-md p-1 text-left hover:bg-blue-50"
+                    >
                       <span
-                        className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${prioridad.estilo}`}
+                        className={`line-clamp-2 text-sm font-semibold group-hover:text-blue-800 ${
+                          respondida ? tachado : "text-slate-900"
+                        }`}
                       >
-                        {prioridad.etiqueta}
+                        {nombre}
                       </span>
-                    </td>
-                    <td className="px-3 py-3">
-                      {consulta.encargado ? (
-                        <span className="inline-flex rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-medium text-rose-700">
-                          {consulta.encargado}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-slate-400">Sin asignar</span>
-                      )}
-                    </td>
-                    <td className="max-w-56 px-3 py-3">
-                      <button
-                        type="button"
-                        onClick={() => setFichaAbierta(consulta)}
-                        title="Ver ficha del cliente"
-                        className="group -m-1 flex flex-col items-start rounded-md p-1 text-left hover:bg-blue-50"
-                      >
-                        <span
-                          className={`text-sm font-semibold group-hover:text-blue-800 ${
-                            respondida ? tachado : "text-slate-900"
-                          }`}
-                        >
-                          {nombre}
-                        </span>
-                        <span className="flex items-center gap-1 font-mono text-xs text-slate-500">
-                          {codigo ? `#${codigo}` : null}
-                          <Icono nombre="ojo" className="size-3.5 text-slate-400 group-hover:text-blue-700" />
-                        </span>
-                      </button>
-                      {!respondida
-                        ? alertasCliente(consulta)
-                            .filter((alerta) => alerta !== consulta.estadoCuenta)
-                            .map((alerta) => (
-                              <span
-                                key={alerta}
-                                className="mt-1 inline-flex items-center gap-1 rounded bg-orange-100 px-1.5 py-0.5 text-[11px] font-semibold text-orange-800"
-                              >
-                                <Icono nombre="alerta" className="size-3" />
-                                {alerta}
-                              </span>
-                            ))
-                        : null}
-                    </td>
-                    <td className="px-3 py-3 font-mono text-xs text-slate-600">
-                      {consulta.listaPrecio || "—"}
-                    </td>
-                    <td className="px-3 py-3">
-                      {consulta.clasificacion ? (
-                        <span
-                          className={`inline-flex rounded px-1.5 text-xs font-semibold ${
-                            CLASIFICACIONES[consulta.clasificacion.toUpperCase()] ??
-                            "bg-slate-100 text-slate-600"
-                          }`}
-                        >
-                          {consulta.clasificacion}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-slate-400">—</span>
-                      )}
-                    </td>
-                    <td className={`max-w-40 px-3 py-3 text-xs text-slate-700 ${tachado}`}>
-                      {consulta.grupoVendedor.replace(/^FILTRO GRUPO\s*/i, "") || "—"}
-                    </td>
-                    <td className="px-3 py-3">
-                      {consulta.estadoCuenta ? (
-                        <span
-                          className={`inline-flex rounded px-1.5 py-0.5 text-xs font-semibold whitespace-nowrap ${estiloEstado(
-                            consulta.estadoCuenta,
-                          )}`}
-                        >
-                          {consulta.estadoCuenta}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-slate-400">—</span>
-                      )}
-                    </td>
-                    <td className={`max-w-48 px-3 py-3 text-xs text-slate-500 ${tachado}`}>
-                      {consulta.grupoWhatsapp || "—"}
-                    </td>
-                    <td className="min-w-64 px-3 py-3">
-                      <p
-                        title={consulta.consulta}
-                        className={`line-clamp-3 text-sm ${respondida ? tachado : "text-slate-800"}`}
-                      >
-                        {consulta.consulta}
+                      <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                        {codigo ? <span>#{codigo}</span> : null}
+                        {consulta.clasificacion ? (
+                          <span
+                            className={`rounded px-1.5 font-semibold ${
+                              CLASIFICACIONES[consulta.clasificacion.toUpperCase()] ?? "bg-slate-100 text-slate-600"
+                            }`}
+                            title="Clasificacion de venta"
+                          >
+                            {consulta.clasificacion}
+                          </span>
+                        ) : null}
+                        {consulta.listaPrecio ? <span title="Lista de precio">{consulta.listaPrecio}</span> : null}
+                        <Icono nombre="ojo" className="size-3.5 text-slate-400 group-hover:text-blue-700" />
+                      </span>
+                    </button>
+                    {vendedor ? (
+                      <p className="mt-1 truncate text-xs text-slate-500" title={consulta.grupoWhatsapp}>
+                        {vendedor}
                       </p>
-                      {consulta.indicacion ? (
-                        <p className="mt-1.5 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-xs text-blue-900">
-                          <span className="font-semibold">Gerencia:</span> {ACCIONES[consulta.indicacion.accion]}
-                          {consulta.indicacion.sustitutos.length > 0
-                            ? ` → ${consulta.indicacion.sustitutos.map((sustituto) => sustituto.producto).join(", ")}`
-                            : ""}
-                          {consulta.indicacion.comentario ? ` · ${consulta.indicacion.comentario}` : ""}
-                        </p>
-                      ) : null}
-                    </td>
-                    <td className="px-3 py-3">
+                    ) : null}
+                    {alertas.length > 0 ? (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {alertas.map((alerta) => (
+                          <span key={alerta} className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${estiloEstado(alerta)}`}>
+                            {alerta}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                  </td>
+
+                  {/* Consulta: hito y prioridad, el mensaje y lo que indico gerencia. */}
+                  <td className="px-3 py-3">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       {consulta.hito ? (
                         <span
-                          className={`inline-flex rounded-md px-2 py-0.5 text-xs whitespace-nowrap ${
+                          className={`inline-flex rounded-md px-2 py-0.5 text-xs ${
                             respondida ? "bg-slate-100 text-slate-400" : estiloHito(consulta.hito)
                           }`}
                         >
                           {consulta.hito}
                         </span>
                       ) : null}
-                    </td>
-                    <td className="px-3 py-3 text-center">
-                      <input
-                        type="checkbox"
-                        checked={respondida}
-                        disabled={ocupada}
-                        onChange={() => pedirCambio(consulta)}
-                        aria-label={`Finalizar la conversacion con ${nombre}`}
-                        title={respondida ? "Finalizada · destildar para volver a la cola" : "Finalizar conversacion"}
-                        className="mt-1 size-4 cursor-pointer accent-emerald-600 disabled:cursor-wait"
-                      />
-                    </td>
-                    <td className="px-3 py-3 text-center whitespace-nowrap">
-                      {!respondida && consulta.diasAbierta !== null ? (
-                        <span
-                          className={`inline-flex rounded-md px-2 py-0.5 text-xs font-semibold ${
-                            consulta.vencida ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-700"
-                          }`}
-                        >
-                          {consulta.diasAbierta === 0
-                            ? "Hoy"
-                            : `${consulta.diasAbierta} ${consulta.diasAbierta === 1 ? "dia" : "dias"}`}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-slate-400">—</span>
-                      )}
-                    </td>
-                    <td className="max-w-48 px-3 py-3">
-                      <button
-                        type="button"
-                        disabled={ocupada}
-                        onClick={() => {
-                          setBorrador(consulta.observaciones);
-                          setEditando(consulta);
-                        }}
-                        className="group flex w-full items-start gap-1.5 rounded-md p-1 text-left text-xs text-slate-600 hover:bg-slate-100"
+                      <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${prioridad.estilo}`}>
+                        {prioridad.etiqueta}
+                      </span>
+                    </div>
+                    <p
+                      title={consulta.consulta}
+                      className={`mt-1 line-clamp-3 text-sm ${respondida ? tachado : "text-slate-800"}`}
+                    >
+                      {consulta.consulta}
+                    </p>
+                    {consulta.indicacion ? (
+                      <p className="mt-1.5 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-xs text-blue-900">
+                        <span className="font-semibold">Gerencia:</span> {ACCIONES[consulta.indicacion.accion]}
+                        {consulta.indicacion.sustitutos.length > 0
+                          ? ` → ${consulta.indicacion.sustitutos.map((sustituto) => sustituto.producto).join(", ")}`
+                          : ""}
+                        {consulta.indicacion.comentario ? ` · ${consulta.indicacion.comentario}` : ""}
+                      </p>
+                    ) : null}
+                    <p className="mt-1 text-xs text-slate-400">
+                      {formatearDiaCorto(consulta.fecha)}
+                      {formatearHora(consulta.fecha) !== "00:00 hs" ? ` · ${formatearHora(consulta.fecha)}` : ""}
+                      {` · ${consulta.encargado || "sin encargado"}`}
+                    </p>
+                  </td>
+
+                  <td className="px-2 py-3 text-center">
+                    {!respondida && consulta.diasAbierta !== null ? (
+                      <span
+                        className={`inline-flex rounded-md px-2 py-0.5 text-xs font-semibold ${
+                          consulta.vencida ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-700"
+                        }`}
                       >
-                        <span className="line-clamp-4 flex-1">
-                          {consulta.cierre?.resultado && respondida ? (
-                            <span className="mb-1 flex flex-wrap gap-1">
-                              <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-800">
-                                {consulta.cierre.resultado}
+                        {consulta.diasAbierta === 0
+                          ? "Hoy"
+                          : `${consulta.diasAbierta} ${consulta.diasAbierta === 1 ? "dia" : "dias"}`}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-400">—</span>
+                    )}
+                  </td>
+
+                  {/* Seguimiento: como quedo / nota y la respuesta sugerida. */}
+                  <td className="px-3 py-3">
+                    <button
+                      type="button"
+                      disabled={ocupada}
+                      onClick={() => {
+                        setBorrador(consulta.observaciones);
+                        setEditando(consulta);
+                      }}
+                      className="group flex w-full items-start rounded-md p-1 text-left text-xs text-slate-600 hover:bg-slate-100"
+                    >
+                      <span className="line-clamp-3 flex-1">
+                        {consulta.cierre?.resultado && respondida ? (
+                          <span className="mb-1 flex flex-wrap gap-1">
+                            <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-800">
+                              {consulta.cierre.resultado}
+                            </span>
+                            {consulta.cierre.relacion ? (
+                              <span
+                                className={`rounded border px-1.5 py-0.5 text-[11px] font-medium ${ESTILO_RELACION[consulta.cierre.relacion]}`}
+                              >
+                                {RELACIONES[consulta.cierre.relacion]}
                               </span>
-                              {consulta.cierre.relacion ? (
-                                <span
-                                  className={`rounded border px-1.5 py-0.5 text-[11px] font-medium ${ESTILO_RELACION[consulta.cierre.relacion]}`}
-                                >
-                                  {RELACIONES[consulta.cierre.relacion]}
-                                </span>
-                              ) : null}
-                            </span>
-                          ) : null}
-                          {consulta.observaciones || (
-                            <span className="text-slate-400 group-hover:text-blue-700">
-                              + Agregar nota
-                            </span>
-                          )}
-                        </span>
-                      </button>
-                    </td>
-                    <td className="max-w-48 py-3 pr-5 pl-3">
+                            ) : null}
+                          </span>
+                        ) : null}
+                        {consulta.observaciones || (
+                          <span className="text-slate-400 group-hover:text-blue-700">+ Agregar nota</span>
+                        )}
+                      </span>
+                    </button>
+                    <div className="mt-1">
                       <RecomendacionRespuesta consulta={consulta} apagada={respondida} catalogo={catalogo} />
-                    </td>
-                  </tr>
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                    </div>
+                  </td>
+
+                  <td className="py-3 pr-4 pl-2 text-center">
+                    <input
+                      type="checkbox"
+                      checked={respondida}
+                      disabled={ocupada}
+                      onChange={() => pedirCambio(consulta)}
+                      aria-label={`Finalizar la conversacion con ${nombre}`}
+                      title={respondida ? "Finalizada · destildar para volver a la cola" : "Finalizar conversacion"}
+                      className="mt-1 size-5 cursor-pointer accent-emerald-600 disabled:cursor-wait"
+                    />
+                  </td>
+                </tr>
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
 
       <Modal
         abierto={editando !== null}

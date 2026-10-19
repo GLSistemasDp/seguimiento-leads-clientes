@@ -75,28 +75,22 @@ export function SolicitudRow({
 
   return (
     <tr
-      className={`cursor-pointer border-b border-slate-100 transition-colors last:border-0 ${
+      className={`cursor-pointer border-b border-slate-100 align-top transition-colors last:border-0 ${
         seleccionada ? "bg-blue-50/60" : "hover:bg-slate-50"
       }`}
       onClick={() => router.push(`/solicitudes/${solicitud.id}`)}
     >
-      <td className="py-4 pr-2 pl-5" onClick={(evento) => evento.stopPropagation()}>
+      <td className="py-3.5 pr-2 pl-5" onClick={(evento) => evento.stopPropagation()}>
         <input
           type="checkbox"
           checked={seleccionada}
           onChange={() => onSeleccionar(solicitud.id)}
           aria-label={`Seleccionar ${solicitud.nombre}`}
-          className="size-4 cursor-pointer rounded border-slate-300 accent-blue-700"
+          className="mt-2.5 size-4 cursor-pointer rounded border-slate-300 accent-blue-700"
         />
       </td>
-      <td className="px-3 py-4 whitespace-nowrap">
-        <p className={`font-mono text-sm ${descartada ? "text-red-600" : "text-slate-900"}`}>
-          {formatearDiaCorto(solicitud.fechaImportacion)}
-        </p>
-        <p className="text-sm text-slate-500">{formatearHora(solicitud.fechaImportacion)}</p>
-      </td>
-      <td className="px-3 py-4">
-        <div className="flex items-center gap-3">
+      <td className="px-3 py-3.5">
+        <div className="flex items-start gap-3">
           <span
             className={`flex size-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold ${
               descartada ? "bg-red-50 text-red-600" : colorAvatar(solicitud.nombre)
@@ -104,76 +98,44 @@ export function SolicitudRow({
           >
             {iniciales(solicitud.nombre)}
           </span>
-          <div className="whitespace-nowrap">
-            <p
-              className={`text-sm font-semibold ${
-                descartada ? "text-red-600 line-through" : "text-slate-900"
-              }`}
-            >
+          <div className="min-w-0">
+            <p className={`truncate text-sm font-semibold ${descartada ? "text-red-600 line-through" : "text-slate-900"}`}>
               {solicitud.nombre}
             </p>
-            {solicitud.cuitValido ? (
-              <p className="font-mono text-sm text-slate-600">CUIT {solicitud.cuit}</p>
-            ) : (
-              <p className={`font-mono text-sm ${descartada ? "text-red-600" : "text-amber-700"}`}>
-                {solicitud.cuit ? `CUIT invalido • ${solicitud.cuit}` : "Sin CUIT valido"}
-              </p>
-            )}
+            <p className="truncate text-xs text-blue-700">{solicitud.email}</p>
+            <p className={`text-xs ${solicitud.cuitValido ? "text-slate-500" : "text-amber-700"}`}>
+              {solicitud.cuitValido ? `CUIT ${solicitud.cuit}` : solicitud.cuit ? `CUIT inválido · ${solicitud.cuit}` : "Sin CUIT válido"}
+            </p>
           </div>
         </div>
       </td>
-      <td className="px-3 py-4">
+      <td className="px-3 py-3.5">
         <InsigniaAptitud evaluacion={solicitud.evaluacion} detalle />
       </td>
-      <td className="px-3 py-4">
-        {solicitud.rubro ? (
-          <span
-            className={`inline-block max-w-40 rounded-md px-2 py-1 text-sm ${
-              descartada ? "bg-blue-50/60 text-slate-500" : "bg-blue-50 text-slate-700"
-            }`}
-          >
-            {solicitud.rubro}
-          </span>
-        ) : (
-          <span className="text-sm text-slate-400">N/D</span>
-        )}
-      </td>
-      <td className="px-3 py-4">
-        <span
-          className={`font-mono text-sm ${descartada ? "text-red-600" : "text-blue-700"}`}
-        >
-          {solicitud.email}
-        </span>
-      </td>
-      <td className="px-3 py-4 text-sm whitespace-nowrap text-slate-900">
-        {solicitud.provincia || <span className="text-slate-400">N/D</span>}
-      </td>
-      <td className="px-3 py-4">
-        <span
-          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium whitespace-nowrap ${completitud.estilo}`}
-        >
+      <td className="px-3 py-3.5 text-sm">
+        <p className="line-clamp-2 text-slate-800">{solicitud.rubro || <span className="text-slate-400">Rubro sin informar</span>}</p>
+        <p className="text-xs text-slate-500">{solicitud.provincia || "Provincia sin informar"}</p>
+        <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500" title={completitud.etiqueta}>
           <Icono nombre={completitud.icono} className="size-3.5" />
-          {completitud.etiqueta}
-        </span>
+          {completitud.etiqueta} · {solicitud.documentos} adj.
+        </p>
       </td>
-      <td className="px-3 py-4">
+      <td className="px-3 py-3.5">
         <EstadoBadge estado={solicitud.estado} />
+        <p className="mt-1 text-xs text-slate-400">
+          {formatearDiaCorto(solicitud.fechaImportacion)} · {formatearHora(solicitud.fechaImportacion)}
+        </p>
       </td>
-      <td className="py-4 pr-5 pl-3" onClick={(evento) => evento.stopPropagation()}>
-        <div className="flex items-center gap-1">
+      <td className="py-3.5 pr-5 pl-3" onClick={(evento) => evento.stopPropagation()}>
+        <div className="flex flex-wrap items-center gap-1">
           <button
             type="button"
             title={`Ver documentacion (${solicitud.documentos} adjunto${solicitud.documentos === 1 ? "" : "s"})`}
             aria-label={`Ver documentacion de ${solicitud.nombre}`}
             onClick={() => onVerDocumentacion(solicitud)}
-            className={`${ACCION} relative text-slate-700 hover:bg-slate-100`}
+            className={`${ACCION} text-slate-700 hover:bg-slate-100`}
           >
             <Icono nombre="ojo" />
-            {solicitud.documentos > 0 ? (
-              <span className="absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-blue-700 text-[10px] font-semibold text-white">
-                {solicitud.documentos}
-              </span>
-            ) : null}
           </button>
           <button
             type="button"

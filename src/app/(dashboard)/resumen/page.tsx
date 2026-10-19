@@ -9,13 +9,13 @@ import { Icono } from "@/components/ui/Icono";
 import type { NombreIcono } from "@/components/ui/Icono";
 import { delDia } from "@/lib/db/historial";
 import { getPanel } from "@/lib/db/reclamos";
-import { getAll, origenSeguimiento } from "@/lib/db/seguimiento";
+import { getAll } from "@/lib/db/seguimiento";
 import { getAll as getSolicitudes } from "@/lib/db/solicitudes";
 import { CATEGORIAS } from "@/lib/solicitudes/evaluacion";
 import { evaluacionVigente, getEvaluaciones } from "@/lib/solicitudes/evaluacion-ia";
 import { opciones } from "@/lib/seguimiento/presentacion";
 import { armarResumenDiario } from "@/lib/seguimiento/resumen-diario";
-import { numeroResumen } from "@/lib/seguimiento/resumen-servidor";
+import { telegramConfigurado } from "@/lib/notificaciones/telegram";
 import { PERIODOS, calcularTablero, diaLocal, esPeriodo, vendedorCorto } from "@/lib/seguimiento/tablero";
 import { formatearDiaCorto } from "@/lib/utils/dates";
 import { ACCIONES } from "@/types/reclamo";
@@ -142,7 +142,6 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
     getEvaluaciones(),
     delDia(diaLocal(ahora), diaLocal),
   ]);
-  const origen = origenSeguimiento();
 
   // --- Para resolver hoy (no dependen de los filtros) ---
   const reclamosGerencia = panel.reclamos.filter((reclamo) => reclamo.estado === "SIN_DEFINIR");
@@ -170,19 +169,15 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
         etiqueta="GERENCIA Y ENCARGADOS"
         descripcion={
           <>
-            Todo lo que quedó pendiente con clientes en un solo lugar: chats de WhatsApp sin responder, reclamos
-            que esperan una indicación y solicitudes de alta para resolver. Última consulta cargada por el bot:{" "}
-            <span className="font-medium">
+            Lo pendiente con clientes en un solo lugar: chats sin responder, reclamos sin indicación y altas por
+            resolver.
+            <span className="mt-1 block text-xs text-slate-400">
+              Última consulta cargada por el bot:{" "}
               {tablero.ultimaCarga ? formatearDiaCorto(`${tablero.ultimaCarga}T12:00:00Z`) : "—"}
             </span>
-            .
           </>
         }
       />
-
-      {origen.aviso ? (
-        <p className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-900">{origen.aviso}</p>
-      ) : null}
 
       <section className="flex flex-col gap-3">
         <h2 className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Para resolver hoy</h2>
@@ -300,7 +295,7 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
 
         <ResumenDiario
           texto={resumen.texto}
-          numero={numeroResumen()}
+          telegramListo={telegramConfigurado()}
           datos={[
             { etiqueta: "Finalizadas hoy", valor: resumen.finalizadasHoy, color: "text-emerald-700" },
             { etiqueta: "Sin responder", valor: resumen.sinResponder, color: "text-slate-900" },

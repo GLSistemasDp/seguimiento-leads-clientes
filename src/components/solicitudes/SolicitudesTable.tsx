@@ -19,17 +19,7 @@ type Pendiente = {
   nuevoEstado: Estado;
 };
 
-const COLUMNAS = [
-  "Fecha de solicitud",
-  "Razon social",
-  "Aptitud",
-  "Rubro",
-  "Mail",
-  "Provincia",
-  "Datos",
-  "Estado",
-  "Acciones",
-] as const;
+const COLUMNAS = ["Empresa", "Aptitud", "Rubro y datos", "Estado", "Acciones"] as const;
 
 /** Escapa un valor para CSV con `;`, que es lo que Excel en es-AR abre directo. */
 function celdaCsv(valor: string): string {
@@ -163,11 +153,19 @@ export function SolicitudesTable({ solicitudes }: { solicitudes: readonly FilaSo
 
   return (
     <>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[1250px] border-collapse">
+      <div>
+        <table className="w-full table-fixed border-collapse">
+          <colgroup>
+            <col className="w-12" />
+            <col className="w-[30%]" />
+            <col className="w-[24%]" />
+            <col />
+            <col className="w-32" />
+            <col className="w-24" />
+          </colgroup>
           <thead>
             <tr className="border-b border-slate-200 bg-blue-50/50 text-left">
-              <th className="w-10 py-3.5 pr-2 pl-5">
+              <th className="py-3 pr-2 pl-5">
                 <input
                   ref={casillaTodas}
                   type="checkbox"
@@ -180,7 +178,7 @@ export function SolicitudesTable({ solicitudes }: { solicitudes: readonly FilaSo
               {COLUMNAS.map((columna) => (
                 <th
                   key={columna}
-                  className="px-3 py-3.5 text-xs font-semibold tracking-wider whitespace-nowrap text-slate-700 uppercase last:pr-5"
+                  className="px-3 py-3 text-xs font-semibold tracking-wide text-slate-600 uppercase last:pr-5"
                 >
                   {columna}
                 </th>

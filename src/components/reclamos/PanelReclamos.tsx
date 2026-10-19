@@ -7,7 +7,7 @@ import { FormularioIndicacion } from "@/components/reclamos/FormularioIndicacion
 import { Icono } from "@/components/ui/Icono";
 import { Modal } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
-import { formatearDiaCorto, formatearFechaHora } from "@/lib/utils/dates";
+import { formatearDiaCorto } from "@/lib/utils/dates";
 import { ACCIONES, ESTADOS_RECLAMO, type EstadoReclamo, type ReclamoPanel } from "@/types/reclamo";
 
 const ESTILO_ESTADO: Record<EstadoReclamo, string> = {
@@ -21,6 +21,22 @@ const BORDE_ESTADO: Record<EstadoReclamo, string> = {
   EN_GESTION: "border-l-blue-500",
   RESUELTO: "border-l-emerald-300",
 };
+
+const ESTILO_CLASIFICACION: Record<string, string> = {
+  A: "bg-emerald-600 text-white",
+  B: "bg-sky-100 text-sky-800",
+  C: "bg-slate-100 text-slate-600",
+};
+
+/** Como en la planilla maestra: OK verde, deuda naranja, no responder violeta, judicial rojo. */
+function estiloEstadoCliente(estado: string): string {
+  const texto = estado.toUpperCase();
+  if (texto === "OK") return "bg-emerald-600 text-white";
+  if (texto.includes("JUDICIAL")) return "bg-red-600 text-white";
+  if (texto.includes("NO RESPONDER")) return "bg-violet-100 text-violet-700";
+  if (texto.includes("DEUD")) return "bg-orange-500 text-white";
+  return "bg-amber-100 text-amber-800";
+}
 
 type Filtro = EstadoReclamo | "TODOS";
 
@@ -64,7 +80,7 @@ export function PanelReclamos({ reclamos, estadoInicial }: { reclamos: ReclamoPa
       (filtro === "TODOS" || reclamo.estado === filtro) &&
       (!origen || reclamo.origen === origen) &&
       (!texto ||
-        `${reclamo.cliente} ${reclamo.codigo} ${reclamo.detalle} ${reclamo.encargado} ${reclamo.grupoWhatsapp}`
+        `${reclamo.cliente} ${reclamo.codigo} ${reclamo.detalle} ${reclamo.encargado} ${reclamo.grupoWhatsapp} ${reclamo.formulario ?? ""}`
           .toLocaleLowerCase("es")
           .includes(texto)),
   );
@@ -109,7 +125,7 @@ export function PanelReclamos({ reclamos, estadoInicial }: { reclamos: ReclamoPa
             <input
               value={busqueda}
               onChange={(evento) => setBusqueda(evento.target.value)}
-              placeholder="Cliente, detalle, encargado…"
+              placeholder="Cliente, N°, detalle, encargado…"
               className="w-60 rounded-lg border border-slate-200 py-2 pr-3 pl-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </label>
@@ -133,111 +149,138 @@ export function PanelReclamos({ reclamos, estadoInicial }: { reclamos: ReclamoPa
           {filtro === "SIN_DEFINIR" ? "No hay reclamos esperando una indicación. 👏" : "No hay reclamos con estos filtros."}
         </div>
       ) : (
-        <ul className="flex flex-col gap-3">
-          {visibles.map((reclamo) => (
-            <li
-              key={reclamo.id}
-              className={`rounded-2xl border border-l-4 border-slate-200 bg-white p-4 shadow-sm sm:p-5 ${BORDE_ESTADO[reclamo.estado]}`}
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${ESTILO_ESTADO[reclamo.estado]}`}>
-                      {ESTADOS_RECLAMO[reclamo.estado]}
-                    </span>
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs ${
-                        reclamo.origen === "whatsapp" ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"
-                      }`}
-                    >
-                      <Icono nombre={reclamo.origen === "whatsapp" ? "chat" : "documento"} className="size-3" />
-                      {reclamo.origen === "whatsapp" ? "WhatsApp" : `FOR-03 · ${reclamo.tipo}`}
-                    </span>
-                    <Dias dias={reclamo.dias} />
-                    <span className="text-xs text-slate-500">{formatearDiaCorto(reclamo.fecha)}</span>
-                  </div>
-                  <p className="mt-2 font-semibold text-slate-900">
-                    {reclamo.cliente}
-                    {reclamo.codigo ? <span className="ml-2 font-mono text-xs font-normal text-slate-500">#{reclamo.codigo}</span> : null}
-                  </p>
-                  {reclamo.alertas.length > 0 ? (
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {reclamo.alertas.map((alerta) => (
-                        <span
-                          key={alerta}
-                          className="inline-flex items-center gap-1 rounded bg-orange-100 px-1.5 py-0.5 text-[11px] font-semibold text-orange-800"
-                        >
-                          <Icono nombre="alerta" className="size-3" />
-                          {alerta}
-                        </span>
-                      ))}
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <table className="w-full table-fixed border-collapse">
+            <colgroup>
+              <col className="w-[22%]" />
+              <col className="w-16" />
+              <col />
+              <col className="w-36" />
+              <col className="w-44" />
+            </colgroup>
+            <thead>
+              <tr className="border-b border-slate-200 bg-blue-50/50 text-left text-xs font-semibold tracking-wide text-slate-600 uppercase">
+                <th className="py-3 pr-3 pl-5">Cliente</th>
+                <th className="px-2 py-3 text-center">Clasif.</th>
+                <th className="px-3 py-3">Reclamo</th>
+                <th className="px-3 py-3">Estado cliente</th>
+                <th className="py-3 pr-5 pl-3">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibles.map((reclamo) => (
+                <tr key={reclamo.id} className="border-b border-slate-100 align-top last:border-0 hover:bg-slate-50/60">
+                  <td className={`border-l-4 py-3 pr-3 pl-4 ${BORDE_ESTADO[reclamo.estado]}`}>
+                    <p className="text-xs text-slate-500">{reclamo.codigo ? `N° ${reclamo.codigo}` : "Sin N° de cliente"}</p>
+                    <p className="line-clamp-2 text-sm font-semibold text-slate-900">{reclamo.cliente}</p>
+                  </td>
+                  <td className="px-2 py-3 text-center">
+                    {reclamo.clasificacionCliente ? (
+                      <span
+                        className={`inline-flex rounded px-2 py-0.5 text-xs font-semibold ${
+                          ESTILO_CLASIFICACION[reclamo.clasificacionCliente] ?? "bg-slate-100 text-slate-600"
+                        }`}
+                      >
+                        {reclamo.clasificacionCliente}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-400">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs ${
+                          reclamo.origen === "whatsapp" ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"
+                        }`}
+                      >
+                        <Icono nombre={reclamo.origen === "whatsapp" ? "chat" : "documento"} className="size-3" />
+                        {reclamo.origen === "whatsapp" ? "WhatsApp" : `${reclamo.formulario} · ${reclamo.tipo}`}
+                      </span>
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${ESTILO_ESTADO[reclamo.estado]}`}>
+                        {ESTADOS_RECLAMO[reclamo.estado]}
+                      </span>
+                      <Dias dias={reclamo.dias} />
                     </div>
-                  ) : null}
-                  <p className="mt-2 text-sm text-slate-800">{reclamo.detalle}</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {[
-                      reclamo.encargado && `${reclamo.origen === "whatsapp" ? "Encargado" : "Contacto"}: ${reclamo.encargado}`,
-                      reclamo.grupoWhatsapp && `Grupo: ${reclamo.grupoWhatsapp}`,
-                      reclamo.grupoVendedor && `Vendedor: ${reclamo.grupoVendedor}`,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                  {reclamo.observaciones ? (
-                    <p className="mt-1 text-xs text-slate-600">Obs. del equipo: {reclamo.observaciones}</p>
-                  ) : null}
-                </div>
-
-                <div className="flex shrink-0 flex-col items-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditandoId(reclamo.id)}
-                    className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium ${
-                      reclamo.indicacion
-                        ? "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                        : "bg-blue-700 text-white hover:bg-blue-800"
-                    }`}
-                  >
-                    <Icono nombre={reclamo.indicacion ? "lista" : "flecha"} className="size-4" />
-                    {reclamo.indicacion ? "Cambiar indicación" : "Indicar acción"}
-                  </button>
-                  {reclamo.enlace ? (
-                    <Link href={reclamo.enlace} className="text-xs font-medium text-blue-700 hover:underline">
-                      Ver formulario completo →
-                    </Link>
-                  ) : (
-                    <Link
-                      href={`/seguimiento?vista=todas&hito=Reclamo&q=${encodeURIComponent(reclamo.cliente)}`}
-                      className="text-xs font-medium text-blue-700 hover:underline"
-                    >
-                      Ver en el seguimiento →
-                    </Link>
-                  )}
-                </div>
-              </div>
-
-              {reclamo.indicacion ? (
-                <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50/70 px-4 py-3 text-sm text-blue-950">
-                  <p>
-                    <span className="font-semibold">Indicación:</span> {ACCIONES[reclamo.indicacion.accion]}
-                    <span className="ml-2 text-xs text-blue-800/80">{formatearFechaHora(reclamo.indicacion.fecha)}</span>
-                  </p>
-                  {reclamo.indicacion.sustitutos.length > 0 ? (
-                    <ul className="mt-1 list-inside list-disc">
-                      {reclamo.indicacion.sustitutos.map((sustituto, indice) => (
-                        <li key={indice}>
-                          <span className="font-medium">{sustituto.producto}</span>
-                          {sustituto.observacion ? ` — ${sustituto.observacion}` : ""}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                  {reclamo.indicacion.comentario ? <p className="mt-1">{reclamo.indicacion.comentario}</p> : null}
-                </div>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+                    <p className="mt-1 line-clamp-2 text-sm text-slate-800" title={reclamo.detalle}>
+                      {reclamo.detalle}
+                    </p>
+                    {reclamo.indicacion ? (
+                      <p className="mt-1.5 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-xs text-blue-900">
+                        <span className="font-semibold">Gerencia:</span> {ACCIONES[reclamo.indicacion.accion]}
+                        {reclamo.indicacion.sustitutos.length > 0
+                          ? ` → ${reclamo.indicacion.sustitutos.map((sustituto) => sustituto.producto).join(", ")}`
+                          : ""}
+                        {reclamo.indicacion.comentario ? ` · ${reclamo.indicacion.comentario}` : ""}
+                      </p>
+                    ) : null}
+                    <p className="mt-1 truncate text-xs text-slate-400">
+                      {[
+                        formatearDiaCorto(reclamo.fecha),
+                        reclamo.encargado,
+                        reclamo.grupoVendedor,
+                        reclamo.observaciones && `Obs.: ${reclamo.observaciones}`,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  </td>
+                  <td className="px-3 py-3">
+                    {reclamo.estadoCliente.length > 0 ? (
+                      <div className="flex flex-col items-start gap-1">
+                        {reclamo.estadoCliente.map((estadoCliente) => (
+                          <span
+                            key={estadoCliente}
+                            className={`rounded px-2 py-0.5 text-xs font-semibold ${estiloEstadoCliente(estadoCliente)}`}
+                          >
+                            {estadoCliente}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-400">Sin datos</span>
+                    )}
+                  </td>
+                  <td className="py-3 pr-5 pl-3">
+                    <div className="flex flex-col items-start gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setEditandoId(reclamo.id)}
+                        className={`inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium ${
+                          reclamo.indicacion
+                            ? "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                            : "bg-blue-700 text-white hover:bg-blue-800"
+                        }`}
+                      >
+                        {reclamo.indicacion ? "Cambiar indicación" : "Indicar acción"}
+                      </button>
+                      {reclamo.formulario ? (
+                        <Link href={`/reclamos/${reclamo.formulario}`} className="text-xs font-medium text-blue-700 hover:underline">
+                          Ver formulario {reclamo.formulario}
+                        </Link>
+                      ) : reclamo.consultaId ? (
+                        <Link
+                          href={`/reclamos/nuevo?consulta=${encodeURIComponent(reclamo.consultaId)}`}
+                          className="text-xs font-medium text-blue-700 hover:underline"
+                        >
+                          Cargar formulario FOR-03
+                        </Link>
+                      ) : null}
+                      {reclamo.origen === "whatsapp" ? (
+                        <Link
+                          href={`/seguimiento?vista=todas&hito=Reclamo&q=${encodeURIComponent(reclamo.cliente)}`}
+                          className="text-xs font-medium text-slate-600 hover:underline"
+                        >
+                          Ver en el seguimiento
+                        </Link>
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       <Modal

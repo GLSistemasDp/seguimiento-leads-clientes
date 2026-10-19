@@ -39,3 +39,17 @@ compartir una demo con terceros, usar una planilla de prueba y/o configurar
 proteccion de acceso al despliegue.
 
 No subir `.env.local`, credenciales, `.data/` ni `node_modules/` al repositorio.
+
+## Resumen diario por Telegram
+
+1. En Telegram, hablarle a **@BotFather**, enviar `/newbot` y copiar el token.
+2. Agregar el bot al grupo de gerencia y escribir cualquier mensaje en el grupo.
+3. Abrir `https://api.telegram.org/bot<TOKEN>/getUpdates` y copiar el
+   `chat.id` del grupo (empieza con `-100`).
+4. En Vercel configurar `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` y
+   `CRON_SECRET` (cualquier texto largo y aleatorio) y volver a desplegar.
+
+`vercel.json` programa `/api/cron/resumen-diario` de lunes a viernes a las
+21:30 UTC (18:30 de Argentina). Desde el Resumen tambien se puede enviar a mano.
+Ojo: en esta demo el historial de "finalizadas hoy" vive en archivos temporales,
+asi que ese numero puede salir incompleto hasta tener almacenamiento persistente.
