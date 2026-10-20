@@ -12,6 +12,13 @@ const nextConfig: NextConfig = {
       { source: "/plantillas", destination: "/solicitudes/plantillas", permanent: false },
     ];
   },
+  // Los formularios que completan los clientes son HTML estatico (public/formularios).
+  async rewrites() {
+    return [
+      { source: "/formularios/reclamo", destination: "/formularios/reclamo.html" },
+      { source: "/formularios/alta", destination: "/formularios/alta.html" },
+    ];
+  },
 };
 
 export default nextConfig;

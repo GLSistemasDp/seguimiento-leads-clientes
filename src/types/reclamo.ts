@@ -108,6 +108,8 @@ export type Reclamo = {
   productos: ProductoReclamo[];
   /** Remito, factura, orden de compra, pedido del cliente. */
   adjuntos: Adjunto[];
+  /** Quien lo cargo: el equipo (intranet) o el cliente desde el link publico. */
+  canal: "intranet" | "cliente";
   calidad: Calidad;
   cierre: Record<string, string | null>;
   indicacion: Indicacion | null;

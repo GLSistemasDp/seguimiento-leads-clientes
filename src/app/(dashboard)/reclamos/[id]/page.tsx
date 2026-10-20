@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { AccionReclamo } from "@/components/reclamos/AccionReclamo";
 import { FormularioCalidad } from "@/components/reclamos/FormularioCalidad";
 import { Icono } from "@/components/ui/Icono";
+import { urlAdjunto } from "@/lib/db/adjuntos";
 import { getFormulario } from "@/lib/db/reclamos";
 
 export const metadata = { title: "Formulario de reclamo · CRM De Pascale" };
@@ -56,6 +57,9 @@ export default async function ReclamoPage({ params }: { params: Promise<{ id: st
         </div>
         <div className="flex flex-col items-end gap-2">
           <span className="rounded-lg bg-amber-50 px-3 py-1 text-sm text-amber-900">{r.clasificacion}</span>
+          {r.canal === "cliente" ? (
+            <span className="rounded-lg bg-blue-50 px-3 py-1 text-xs font-medium text-blue-800">Cargado por el cliente</span>
+          ) : null}
           {r.consultaId ? (
             <Link
               href={`/seguimiento?vista=todas&hito=Reclamo&q=${encodeURIComponent(r.razonSocial)}`}
@@ -135,7 +139,7 @@ export default async function ReclamoPage({ params }: { params: Promise<{ id: st
                 {r.adjuntos.map((adjunto) => (
                   <li key={adjunto.id}>
                     <a
-                      href={`/api/reclamos/adjuntos/${adjunto.id}`}
+                      href={urlAdjunto(adjunto)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-blue-800 hover:bg-blue-50"

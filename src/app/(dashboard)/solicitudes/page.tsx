@@ -6,6 +6,7 @@ import { FiltrosSolicitudes } from "@/components/solicitudes/FiltrosSolicitudes"
 import { MetricasAlta } from "@/components/solicitudes/MetricasAlta";
 import { Paginacion } from "@/components/solicitudes/Paginacion";
 import { SolicitudesTable } from "@/components/solicitudes/SolicitudesTable";
+import { CopiarLink } from "@/components/ui/CopiarLink";
 import { Icono } from "@/components/ui/Icono";
 import { contarLista } from "@/lib/db/repositorio";
 import { getAll } from "@/lib/db/solicitudes";
@@ -99,6 +100,7 @@ export default async function SolicitudesPage({ searchParams }: PageProps<"/soli
         }
         acciones={
           <>
+            <CopiarLink ruta="/formularios/alta" etiqueta="Link del formulario de alta" />
             <EvaluarPendientes sinEvaluar={sinEvaluarIA} />
             <Link
               href="/solicitudes/importar"

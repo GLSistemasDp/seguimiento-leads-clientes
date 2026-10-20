@@ -1,8 +1,11 @@
-import { getAdjunto } from "@/lib/db/reclamos";
+import { getAdjunto } from "@/lib/db/adjuntos";
 
 export const runtime = "nodejs";
 
-/** GET /api/reclamos/adjuntos/:id — abre un adjunto del formulario (PDF o imagen). */
+/**
+ * GET /api/adjuntos/:id/:nombre — abre un archivo enviado por un cliente.
+ * Es de la intranet: el proxy lo protege igual que el resto del panel.
+ */
 export const GET = async (_request: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
   const adjunto = await getAdjunto(id);

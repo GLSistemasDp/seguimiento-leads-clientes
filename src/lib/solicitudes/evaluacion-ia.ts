@@ -67,7 +67,7 @@ function describirSolicitud(solicitud: Solicitud): string {
     .map(([campo, valor]) => {
       const texto = String(valor);
       // De los adjuntos alcanza con saber que estan: el link no aporta.
-      return /^(https?:\/\/|\/api\/documentos-demo\/)/.test(texto) ? `- ${campo}: [archivo adjunto]` : `- ${campo}: ${texto}`;
+      return /^(https?:\/\/|\/api\/(documentos-demo|adjuntos)\/)/.test(texto) ? `- ${campo}: [archivo adjunto]` : `- ${campo}: ${texto}`;
     });
   return [
     `Razón social: ${solicitud.nombre}`,

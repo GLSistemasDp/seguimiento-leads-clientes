@@ -1,4 +1,6 @@
 import "server-only";
+import { guardarAdjuntos } from "@/lib/db/adjuntos";
+import type { ArchivoAdjunto } from "@/lib/db/adjuntos";
 import { leer, modificar } from "@/lib/db/local/almacen";
 import { backendActivo } from "@/lib/db/repositorio";
 import { getAll as getConsultas } from "@/lib/db/seguimiento";
@@ -7,7 +9,6 @@ import { diasAbierta, esReclamo, separarCliente } from "@/lib/seguimiento/presen
 import {
   CAMPOS_CIERRE,
   CLASIFICACIONES,
-  type Adjunto,
   type Calidad,
   type EstadoReclamo,
   type Indicacion,
@@ -29,7 +30,6 @@ import type { Consulta } from "@/types/seguimiento";
 
 const INDICACIONES = "reclamos-indicaciones";
 const FORMULARIOS = "reclamos-formularios";
-const ADJUNTOS = "reclamos-adjuntos";
 const PREFIJO_WHATSAPP = "wa-";
 
 // --- Formularios FOR-03 --------------------------------------------------------
@@ -61,6 +61,7 @@ function ejemplos(): Reclamo[] {
       "Recibimos menos unidades que las indicadas en el remito. Solicitamos el envío de las faltantes.",
     ][i],
     productos: [{ codigo: PRODUCTOS_DEMO[i].id, descripcion: PRODUCTOS_DEMO[i].nombre, cantidadFacturada: 50, cantidadReclamo: 10 }],
+    canal: "intranet",
     adjuntos: [],
     calidad: calidadVacia(),
     cierre: cierreVacio(),
@@ -78,7 +79,12 @@ async function formularios(): Promise<Reclamo[]> {
   const porId = new Map<string, Reclamo>();
   for (const reclamo of [...demo, ...Object.values(guardados)]) {
     // Los creados antes de sumar adjuntos/consulta no traen esos campos.
-    porId.set(reclamo.id, { ...reclamo, adjuntos: reclamo.adjuntos ?? [], consultaId: reclamo.consultaId ?? null });
+    porId.set(reclamo.id, {
+      ...reclamo,
+      canal: reclamo.canal ?? "intranet",
+      adjuntos: reclamo.adjuntos ?? [],
+      consultaId: reclamo.consultaId ?? null,
+    });
   }
   return [...porId.values()];
 }
@@ -89,33 +95,25 @@ function siguienteNumero(existentes: readonly Reclamo[]): string {
   return `REC-${String(maximo + 1).padStart(4, "0")}`;
 }
 
-export type ArchivoAdjunto = { nombre: string; tipo: string; datos: Buffer };
+export type { ArchivoAdjunto } from "@/lib/db/adjuntos";
 
-/** Da de alta un formulario con sus adjuntos y devuelve el numero asignado. */
-export async function crearFormulario(datos: NuevoReclamo, archivos: ArchivoAdjunto[]): Promise<Reclamo> {
+/**
+ * Da de alta un formulario con sus adjuntos y devuelve el numero asignado.
+ * `canal` dice quien lo cargo: el equipo desde la intranet o el cliente desde
+ * el link publico.
+ */
+export async function crearFormulario(
+  datos: NuevoReclamo,
+  archivos: ArchivoAdjunto[],
+  canal: Reclamo["canal"] = "intranet",
+): Promise<Reclamo> {
   const existentes = await formularios();
   const id = siguienteNumero(existentes);
-  const adjuntos: Adjunto[] = archivos.map((archivo) => ({
-    id: crypto.randomUUID(),
-    nombre: archivo.nombre,
-    tipo: archivo.tipo,
-    tamano: archivo.datos.length,
-  }));
-  if (archivos.length > 0) {
-    await modificar<{ reclamoId: string; nombre: string; tipo: string; base64: string }, void>(ADJUNTOS, (guardados) => {
-      archivos.forEach((archivo, indice) => {
-        guardados[adjuntos[indice].id] = {
-          reclamoId: id,
-          nombre: archivo.nombre,
-          tipo: archivo.tipo,
-          base64: archivo.datos.toString("base64"),
-        };
-      });
-    });
-  }
+  const adjuntos = await guardarAdjuntos(archivos, `reclamo:${id}`);
   const reclamo: Reclamo = {
     ...datos,
     id,
+    canal,
     adjuntos,
     calidad: calidadVacia(),
     cierre: cierreVacio(),
@@ -140,11 +138,6 @@ export async function actualizarCalidad(
     guardados[id] = actualizado;
   });
   return actualizado;
-}
-
-export async function getAdjunto(id: string): Promise<{ nombre: string; tipo: string; datos: Buffer } | null> {
-  const adjunto = (await leer<{ nombre: string; tipo: string; base64: string }>(ADJUNTOS))[id];
-  return adjunto ? { nombre: adjunto.nombre, tipo: adjunto.tipo, datos: Buffer.from(adjunto.base64, "base64") } : null;
 }
 
 // --- Indicaciones del gerente ------------------------------------------------
@@ -261,7 +254,7 @@ function desdeFormulario(
     codigo: reclamo.numeroCliente,
     clasificacionCliente: cliente?.clasificacion ?? "",
     detalle: reclamo.detalle,
-    tipo: reclamo.clasificacion,
+    tipo: reclamo.canal === "cliente" ? `${reclamo.clasificacion} · cargado por el cliente` : reclamo.clasificacion,
     encargado: reclamo.contacto,
     grupoWhatsapp: "",
     grupoVendedor: "",

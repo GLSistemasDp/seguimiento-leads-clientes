@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { FormularioIndicacion } from "@/components/reclamos/FormularioIndicacion";
+import { CopiarLink } from "@/components/ui/CopiarLink";
 import { Icono } from "@/components/ui/Icono";
 import { Modal } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
@@ -259,12 +260,23 @@ export function PanelReclamos({ reclamos, estadoInicial }: { reclamos: ReclamoPa
                           Ver formulario {reclamo.formulario}
                         </Link>
                       ) : reclamo.consultaId ? (
-                        <Link
-                          href={`/reclamos/nuevo?consulta=${encodeURIComponent(reclamo.consultaId)}`}
-                          className="text-xs font-medium text-blue-700 hover:underline"
-                        >
-                          Cargar formulario FOR-03
-                        </Link>
+                        <>
+                          <CopiarLink
+                            variante="enlace"
+                            etiqueta="Copiar link del formulario para el cliente"
+                            ruta={`/formularios/reclamo?${new URLSearchParams({
+                              razon: reclamo.cliente,
+                              cliente: reclamo.codigo,
+                              ref: reclamo.consultaId,
+                            }).toString()}`}
+                          />
+                          <Link
+                            href={`/reclamos/nuevo?consulta=${encodeURIComponent(reclamo.consultaId)}`}
+                            className="text-xs font-medium text-blue-700 hover:underline"
+                          >
+                            Cargar el formulario nosotros
+                          </Link>
+                        </>
                       ) : null}
                       {reclamo.origen === "whatsapp" ? (
                         <Link

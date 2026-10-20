@@ -67,3 +67,33 @@ codigo); los puentes turisticos cuentan como dias habiles.
   (en feriado o fin de semana responde `{"status":"skipped"}`).
 - El numero de "finalizadas hoy" sale del historial, que en esta demo vive en
   archivos temporales: puede salir incompleto hasta tener almacenamiento persistente.
+
+## Formularios para clientes (reclamo y alta)
+
+Son HTML + Tailwind + JS (`public/formularios/`) que se comparten por link:
+
+- Reclamo: `https://<dominio>/formularios/reclamo`
+- Alta de clientes: `https://<dominio>/formularios/alta`
+
+Desde la intranet hay botones para copiar el link (Reclamos y Solicitudes de
+alta). En cada reclamo de WhatsApp, "Copiar link del formulario para el
+cliente" lo manda precargado con razón social y N° de cliente, y lo que el
+cliente cargue queda unido a ese reclamo.
+
+Los formularios solo envían datos a `/api/publico/*`, que responde "recibido"
+(y el N° de reclamo). No muestran nada de la intranet.
+
+**Antes de mandar los links a clientes reales:**
+
+1. Configurar `INTRANET_USUARIO` e `INTRANET_PASSWORD`: sin eso la intranet
+   abre sin login en el mismo dominio que los formularios.
+2. Pasar a almacenamiento persistente. En Vercel lo que mandan los clientes
+   (formularios, adjuntos, firma) hoy se guarda en archivos temporales y se
+   puede perder. Hace falta Postgres + un almacenamiento de archivos
+   (Vercel Blob, S3 o Google Drive).
+3. Los adjuntos de un envío no pueden superar ~4 MB en total (límite de
+   Vercel por request).
+
+Para publicar los HTML en otro sitio (ej. la web de De Pascale): copiar la
+carpeta `public/formularios`, completar `<meta name="dp-api" content="https://<dominio-del-crm>">`
+en cada HTML y agregar ese sitio en `FORMULARIOS_ORIGENES`.

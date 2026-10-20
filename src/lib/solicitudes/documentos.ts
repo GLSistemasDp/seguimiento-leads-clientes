@@ -21,8 +21,8 @@ export type Documento = {
 
 export type DatoTexto = { campo: string; valor: string };
 
-/** Links absolutos, o los archivos de ejemplo que sirve la app en modo demo. */
-const URL_REGEX = /(?:https?:\/\/|\/api\/documentos-demo\/)[^\s,;]+/g;
+/** Links absolutos, los archivos que mandan los clientes o los de ejemplo de la demo. */
+const URL_REGEX = /(?:https?:\/\/|\/api\/(?:documentos-demo|adjuntos)\/)[^\s,;]+/g;
 
 function idDrive(url: string): string | null {
   const porRuta = url.match(/drive\.google\.com\/file\/d\/([\w-]+)/);
@@ -45,7 +45,7 @@ function describir(campo: string, url: string, indice: number, total: number): D
 
   let archivo = "";
   try {
-    archivo = decodeURIComponent(new URL(url).pathname.split("/").pop() ?? "");
+    archivo = decodeURIComponent(new URL(url, "http://local").pathname.split("/").pop() ?? "");
   } catch {
     archivo = "";
   }

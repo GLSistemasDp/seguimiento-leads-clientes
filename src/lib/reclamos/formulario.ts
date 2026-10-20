@@ -14,6 +14,9 @@ import {
  * antes de enviar) y el servidor (para no confiar en lo que llega).
  */
 
+/** Error de datos del formulario: su mensaje se le puede mostrar a quien lo completo. */
+export class ErrorValidacion extends Error {}
+
 export const ADJUNTOS = {
   maximo: 4,
   /** Total de todos los archivos: el limite de un request en Vercel ronda los 4,5 MB. */
@@ -31,7 +34,7 @@ function cantidad(valor: unknown): number {
 }
 
 export function validarNuevoReclamo(valor: unknown): NuevoReclamo {
-  if (!valor || typeof valor !== "object") throw new Error("Formulario inválido.");
+  if (!valor || typeof valor !== "object") throw new ErrorValidacion("Formulario inválido.");
   const datos = valor as Record<string, unknown>;
 
   const razonSocial = texto(datos.razonSocial, 200);
@@ -41,12 +44,12 @@ export function validarNuevoReclamo(valor: unknown): NuevoReclamo {
   const fecha = texto(datos.fecha, 10);
   const email = texto(datos.email, 200);
 
-  if (!razonSocial) throw new Error("Completá la razón social.");
-  if (!contacto) throw new Error("Completá nombre y apellido de quien reclama.");
-  if (!(CLASIFICACIONES as readonly string[]).includes(clasificacion)) throw new Error("Elegí la clasificación del problema.");
-  if (!detalle) throw new Error("Describí el problema en el detalle.");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) throw new Error("La fecha no es válida.");
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("El e-mail no es válido.");
+  if (!razonSocial) throw new ErrorValidacion("Completá la razón social.");
+  if (!contacto) throw new ErrorValidacion("Completá nombre y apellido de quien reclama.");
+  if (!(CLASIFICACIONES as readonly string[]).includes(clasificacion)) throw new ErrorValidacion("Elegí la clasificación del problema.");
+  if (!detalle) throw new ErrorValidacion("Describí el problema en el detalle.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) throw new ErrorValidacion("La fecha no es válida.");
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ErrorValidacion("El e-mail no es válido.");
 
   const filas = Array.isArray(datos.productos) ? datos.productos : [];
   const productos: ProductoReclamo[] = [];
@@ -62,7 +65,7 @@ export function validarNuevoReclamo(valor: unknown): NuevoReclamo {
       cantidadReclamo: cantidad(item.cantidadReclamo),
     };
     if (producto.cantidadReclamo > producto.cantidadFacturada && producto.cantidadFacturada > 0) {
-      throw new Error(`En ${codigo || descripcion} la cantidad reclamada supera la facturada.`);
+      throw new ErrorValidacion(`En ${codigo || descripcion} la cantidad reclamada supera la facturada.`);
     }
     productos.push(producto);
   }
@@ -89,12 +92,12 @@ export function validarNuevoReclamo(valor: unknown): NuevoReclamo {
 }
 
 export function validarCalidad(valor: unknown): { calidad: Calidad; cierre: Record<string, string | null> } {
-  if (!valor || typeof valor !== "object") throw new Error("Datos inválidos.");
+  if (!valor || typeof valor !== "object") throw new ErrorValidacion("Datos inválidos.");
   const datos = valor as Record<string, unknown>;
   const calidad = (datos.calidad ?? {}) as Record<string, unknown>;
   const clasificacion = texto(calidad.clasificacion, 60);
   if (clasificacion && !(CLASIFICACIONES_CALIDAD as readonly string[]).includes(clasificacion)) {
-    throw new Error("Clasificación de calidad inválida.");
+    throw new ErrorValidacion("Clasificación de calidad inválida.");
   }
   const acciones: AccionCorrectiva[] = (Array.isArray(calidad.acciones) ? calidad.acciones : [])
     .slice(0, 20)

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PanelReclamos } from "@/components/reclamos/PanelReclamos";
+import { CopiarLink } from "@/components/ui/CopiarLink";
 import { EncabezadoPagina } from "@/components/ui/EncabezadoPagina";
 import { Icono } from "@/components/ui/Icono";
 import { getPanel } from "@/lib/db/reclamos";
@@ -26,13 +27,16 @@ export default async function ReclamosPage({ searchParams }: PageProps<"/reclamo
         etiqueta="SOLO GERENCIA"
         descripcion="Reclamos de los grupos de WhatsApp y formularios FOR-03 en un solo panel. En cada uno indicá cómo sigue el vendedor; la indicación aparece en el seguimiento del chat."
         acciones={
-          <Link
-            href="/reclamos/nuevo"
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-800"
-          >
-            <Icono nombre="documento" />
-            Nuevo reclamo
-          </Link>
+          <>
+            <CopiarLink ruta="/formularios/reclamo" etiqueta="Link del formulario para el cliente" />
+            <Link
+              href="/reclamos/nuevo"
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-800"
+            >
+              <Icono nombre="documento" />
+              Nuevo reclamo
+            </Link>
+          </>
         }
       />
 
