@@ -2,8 +2,12 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
-      "path": "/api/cron/resumen-diario",
-      "schedule": "30 21 * * 1-5"
+      "path": "/api/cron/cierre-del-dia",
+      "schedule": "0 16 * * 1-5"
+    },
+    {
+      "path": "/api/cron/cierre-del-dia",
+      "schedule": "0 20 * * 1-5"
     }
   ]
 }

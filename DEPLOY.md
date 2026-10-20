@@ -40,16 +40,30 @@ proteccion de acceso al despliegue.
 
 No subir `.env.local`, credenciales, `.data/` ni `node_modules/` al repositorio.
 
-## Resumen diario por Telegram
+## Cierre del dia por Telegram
+
+El mensaje lo arma y lo envia una sola funcion (`enviarCierreDelDia`), que usan
+el boton "Enviar a Telegram" del Resumen y el cron.
 
 1. En Telegram, hablarle a **@BotFather**, enviar `/newbot` y copiar el token.
-2. Agregar el bot al grupo de gerencia y escribir cualquier mensaje en el grupo.
+2. Agregar el bot al grupo de vendedores y escribir cualquier mensaje en el grupo.
 3. Abrir `https://api.telegram.org/bot<TOKEN>/getUpdates` y copiar el
    `chat.id` del grupo (empieza con `-100`).
-4. En Vercel configurar `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` y
-   `CRON_SECRET` (cualquier texto largo y aleatorio) y volver a desplegar.
+4. En Vercel configurar `TELEGRAM_BOT_TOKEN`, `TELEGRAM_VENDEDORES_CHAT_ID` y
+   `CRON_SECRET` (texto largo y aleatorio) y volver a desplegar.
 
-`vercel.json` programa `/api/cron/resumen-diario` de lunes a viernes a las
-21:30 UTC (18:30 de Argentina). Desde el Resumen tambien se puede enviar a mano.
-Ojo: en esta demo el historial de "finalizadas hoy" vive en archivos temporales,
-asi que ese numero puede salir incompleto hasta tener almacenamiento persistente.
+`vercel.json` programa `/api/cron/cierre-del-dia` de lunes a viernes a las
+16:00 y 20:00 UTC (13:00 y 17:00 de Argentina). El endpoint saltea fines de
+semana y feriados nacionales (API argentinadatos, con respaldo 2026 en el
+codigo); los puentes turisticos cuentan como dias habiles.
+
+- **Plan Hobby:** admite estos dos crons (cada uno corre una vez por dia), pero
+  Vercel los dispara en cualquier momento dentro de la hora (13:00 a 13:59).
+  En **Pro** salen al minuto.
+- **Registro:** cada ejecucion (enviada, salteada o con error) queda en los Logs
+  de Vercel con el prefijo `[automatizacion]`. Con Postgres (`DATABASE_URL`)
+  tambien se guarda en la tabla `automation_logs` (crearla con `npm run db:push`).
+- **Probar a mano:** `curl -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/cierre-del-dia`
+  (en feriado o fin de semana responde `{"status":"skipped"}`).
+- El numero de "finalizadas hoy" sale del historial, que en esta demo vive en
+  archivos temporales: puede salir incompleto hasta tener almacenamiento persistente.

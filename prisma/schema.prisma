@@ -36,3 +36,18 @@ model PlantillaEmail {
   footerImg  String?
   footerAlt  String?
 }
+
+/// Una ejecucion de una automatizacion (ej. el envio del cierre del dia a Telegram).
+model AutomationLog {
+  id             String   @id @default(cuid())
+  automatizacion String // "cierre-del-dia"
+  origen         String // "manual" | "cron"
+  estado         String // "ok" | "error" | "omitido"
+  mensajes       Int      @default(0)
+  pendientes     Int?
+  detalle        String?  @db.Text
+  creadoEn       DateTime @default(now())
+
+  @@index([automatizacion, creadoEn])
+  @@map("automation_logs")
+}

@@ -1,20 +1,15 @@
 import { NextResponse } from "next/server";
-import { ErrorTelegram, enviarTelegram } from "@/lib/notificaciones/telegram";
-import { resumenDeHoy } from "@/lib/seguimiento/resumen-servidor";
+import { enviarCierreDelDia } from "@/lib/seguimiento/cierre-del-dia";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** POST /api/resumen-diario/telegram — manda ahora el cierre del dia al grupo de Telegram (boton del Resumen). */
+/**
+ * POST /api/resumen-diario/telegram — boton "Enviar a Telegram" del Resumen.
+ * Manda al instante, sin mirar si es feriado. Usa la misma funcion que el cron.
+ */
 export const POST = async () => {
-  try {
-    const resumen = await resumenDeHoy();
-    await enviarTelegram(resumen.texto);
-    return NextResponse.json({ ok: true });
-  } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "No se pudo enviar" },
-      { status: error instanceof ErrorTelegram ? 503 : 500 },
-    );
-  }
+  const resultado = await enviarCierreDelDia("manual");
+  if (resultado.ok) return NextResponse.json(resultado);
+  return NextResponse.json({ error: resultado.error }, { status: resultado.sinConfigurar ? 503 : 500 });
 };

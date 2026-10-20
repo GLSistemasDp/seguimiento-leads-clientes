@@ -37,6 +37,18 @@ const FECHA = new Intl.DateTimeFormat("es-AR", {
   year: "numeric",
 });
 
+const HORA = new Intl.DateTimeFormat("es-AR", {
+  timeZone: "America/Argentina/Buenos_Aires",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+/** "13:00": la hora del corte, en hora de Argentina. */
+export function horaCorte(ahora: Date): string {
+  return HORA.format(ahora);
+}
+
 function plural(cantidad: number, singular: string, varios: string): string {
   return `${cantidad} ${cantidad === 1 ? singular : varios}`;
 }
@@ -65,7 +77,7 @@ export function armarResumenDiario({ consultas, eventosHoy, reclamos, ahora = ne
 
   const fecha = FECHA.format(ahora);
   const lineas = [
-    `*Cierre del día · ${fecha.charAt(0).toUpperCase()}${fecha.slice(1)}*`,
+    `*Cierre del día · ${fecha.charAt(0).toUpperCase()}${fecha.slice(1)} · ${horaCorte(ahora)} hs*`,
     "",
     `📥 Entraron hoy: ${entraronHoy}`,
     `✅ Finalizadas hoy: ${finalizadasHoy}`,

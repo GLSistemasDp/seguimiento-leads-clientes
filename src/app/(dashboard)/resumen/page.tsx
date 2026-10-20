@@ -14,6 +14,7 @@ import { getAll as getSolicitudes } from "@/lib/db/solicitudes";
 import { CATEGORIAS } from "@/lib/solicitudes/evaluacion";
 import { evaluacionVigente, getEvaluaciones } from "@/lib/solicitudes/evaluacion-ia";
 import { opciones } from "@/lib/seguimiento/presentacion";
+import { textoCierre } from "@/lib/seguimiento/cierre-del-dia";
 import { armarResumenDiario } from "@/lib/seguimiento/resumen-diario";
 import { telegramConfigurado } from "@/lib/notificaciones/telegram";
 import { PERIODOS, calcularTablero, diaLocal, esPeriodo, vendedorCorto } from "@/lib/seguimiento/tablero";
@@ -294,7 +295,7 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
         </Tarjeta>
 
         <ResumenDiario
-          texto={resumen.texto}
+          texto={textoCierre(resumen, ahora)}
           telegramListo={telegramConfigurado()}
           datos={[
             { etiqueta: "Finalizadas hoy", valor: resumen.finalizadasHoy, color: "text-emerald-700" },

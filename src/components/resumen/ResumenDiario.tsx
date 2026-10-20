@@ -90,7 +90,7 @@ export function ResumenDiario({
       </div>
       <p className="text-xs text-slate-400">
         {telegramListo
-          ? "Además se envía solo de lunes a viernes a las 18:30."
+          ? "Además se envía solo a las 13:00 y 17:00, de lunes a viernes hábiles."
           : "Telegram todavía no está configurado: el mensaje se puede ver y copiar."}
       </p>
 
