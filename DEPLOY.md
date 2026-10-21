@@ -18,7 +18,6 @@ SEGUIMIENTO_FILA_INICIO=600
 El ID se toma de la URL de Google Sheets, entre `/d/` y `/edit`.
 La planilla debe permitir lectura con el enlace. No hace falta una clave
 privada para este modo. Altas y formularios de reclamo usan datos de ejemplo.
-`ANTHROPIC_API_KEY` es opcional para evaluar solicitudes con IA.
 `APP_URL` puede configurarse con la URL del despliegue para los enlaces del resumen.
 
 ## Almacenamiento y acceso

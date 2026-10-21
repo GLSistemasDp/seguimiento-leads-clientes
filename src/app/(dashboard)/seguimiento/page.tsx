@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { ProximoEnvio } from "@/components/resumen/ProximoEnvio";
 import { FiltrosSeguimiento } from "@/components/seguimiento/FiltrosSeguimiento";
 import { MetricasSeguimiento } from "@/components/seguimiento/MetricasSeguimiento";
 import { SeguimientoTable } from "@/components/seguimiento/SeguimientoTable";
@@ -7,10 +8,13 @@ import { EncabezadoPagina } from "@/components/ui/EncabezadoPagina";
 import { porConsulta } from "@/lib/db/historial";
 import { getIndicaciones, idWhatsapp } from "@/lib/db/reclamos";
 import { getAll, getRespuestas, origenSeguimiento } from "@/lib/db/seguimiento";
+import { telegramConfigurado } from "@/lib/notificaciones/telegram";
+import { proximoEnvioCierre } from "@/lib/seguimiento/cierre-del-dia";
 import {
   agruparPorChat,
   calcularMetricas,
   diasAbierta,
+  ORDEN_CONSULTA_POR_DEFECTO,
   esOrdenConsulta,
   esVista,
   filtrar,
@@ -37,7 +41,7 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
   // Por defecto se ve la cola de trabajo: lo que falta responder.
   const vista = esVista(vistaParam) ? vistaParam : "pendientes";
   const ordenParam = texto(params.orden);
-  const orden = esOrdenConsulta(ordenParam) ? ordenParam : "prioridad";
+  const orden = esOrdenConsulta(ordenParam) ? ordenParam : ORDEN_CONSULTA_POR_DEFECTO;
   // Agrupado: cada chat (cliente + grupo de WhatsApp) junto, para ver quien quedo sin respuesta.
   const agrupado = texto(params.agrupar) === "chat";
   const filtros = {
@@ -48,11 +52,12 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
   };
 
   const ahora = new Date();
-  const [todas, catalogo, historial, indicaciones] = await Promise.all([
+  const [todas, catalogo, historial, indicaciones, proximo] = await Promise.all([
     getAll(),
     getRespuestas(),
     porConsulta(),
     getIndicaciones(),
+    proximoEnvioCierre(ahora).catch(() => null),
   ]);
   const origen = origenSeguimiento();
 
@@ -84,14 +89,9 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
       <EncabezadoPagina
         titulo="Seguimiento de clientes"
         etiqueta="EQUIPO COMERCIAL"
-        descripcion="Lo que el bot levanta de los grupos de WhatsApp, priorizado: primero los reclamos y lo que más espera. Al marcar una consulta como respondida, indicá cómo quedó; queda en el historial del cliente."
+        descripcion="Las consultas de los grupos de WhatsApp, ordenadas por clasificación del cliente (A, B, C) y, dentro de cada una, por prioridad. Al marcar una consulta como respondida, indicá cómo quedó; queda en el historial del cliente."
+        acciones={<ProximoEnvio proximo={proximo?.toISOString() ?? null} ahora={ahora.getTime()} telegramListo={telegramConfigurado()} />}
       />
-
-      {origen.aviso ? (
-        <p className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-900">
-          {origen.aviso}
-        </p>
-      ) : null}
 
       <MetricasSeguimiento metricas={calcularMetricas(todas, ahora)} />
 

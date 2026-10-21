@@ -16,7 +16,7 @@ const DIA_MS = 24 * 60 * 60 * 1000;
  */
 const ALIAS_CAMPOS = {
   cuit: ["cuit", "cuil", "cuit cuil", "nro cuit", "numero de cuit"],
-  rubro: ["rubro", "actividad", "industria", "sector", "categoria"],
+  rubro: ["rubro", "tipo de industria", "actividad", "industria", "sector", "categoria"],
   provincia: ["provincia", "prov", "region", "jurisdiccion"],
   telefono: ["telefono", "tel", "celular", "whatsapp", "telefono de contacto"],
 } as const;
@@ -125,7 +125,7 @@ export function filtrarPorRango(
 // --- Orden -----------------------------------------------------------------
 
 export const ORDENES = {
-  aptitud: "Mas aptas primero",
+  aptitud: "Más completas primero",
   recientes: "Mas recientes primero",
   antiguas: "Mas antiguas primero",
   datos: "Datos mas completos primero",

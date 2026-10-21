@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { EncabezadoAltas } from "@/components/solicitudes/EncabezadoAltas";
-import { EvaluarPendientes } from "@/components/solicitudes/Evaluacion";
 import { FiltrosSolicitudes } from "@/components/solicitudes/FiltrosSolicitudes";
 import { MetricasAlta } from "@/components/solicitudes/MetricasAlta";
 import { Paginacion } from "@/components/solicitudes/Paginacion";
@@ -11,7 +10,7 @@ import { Icono } from "@/components/ui/Icono";
 import { contarLista } from "@/lib/db/repositorio";
 import { getAll } from "@/lib/db/solicitudes";
 import { contarDocumentos } from "@/lib/solicitudes/documentos";
-import { evaluacionVigente, getEvaluaciones } from "@/lib/solicitudes/evaluacion-ia";
+import { evaluarPorReglas } from "@/lib/solicitudes/evaluacion";
 import {
   ORDEN_POR_DEFECTO,
   RANGO_POR_DEFECTO,
@@ -48,12 +47,9 @@ export default async function SolicitudesPage({ searchParams }: PageProps<"/soli
   const orden = esOrden(ordenParam) ? ordenParam : ORDEN_POR_DEFECTO;
 
   const ahora = new Date();
-  const [todas, guardadas] = await Promise.all([getAll(), getEvaluaciones()]);
-  const evaluaciones = new Map(todas.map((solicitud) => [solicitud.id, evaluacionVigente(solicitud, guardadas)]));
+  const todas = await getAll();
+  const evaluaciones = new Map(todas.map((solicitud) => [solicitud.id, evaluarPorReglas(solicitud)]));
   const puntaje = (id: string) => evaluaciones.get(id)?.puntaje ?? 0;
-  const sinEvaluarIA = todas.filter(
-    (solicitud) => solicitud.estado === "PENDIENTE" && evaluaciones.get(solicitud.id)?.fuente !== "ia",
-  ).length;
 
   // El rango define el universo: metricas y pestanas cuentan sobre el. La
   // pestana y la busqueda solo recortan lo que se ve en la tabla.
@@ -93,15 +89,14 @@ export default async function SolicitudesPage({ searchParams }: PageProps<"/soli
       <EncabezadoAltas
         descripcion={
           <>
-            Formularios de empresas que quieren ser clientes. Cada uno tiene un puntaje de aptitud (0 a 100) para
-            resolver primero los más prometedores; con <span className="font-medium">Evaluar con IA</span> Claude
-            lee el formulario completo y justifica el puntaje. Al decidir, se arma el mail de respuesta.
+            Formularios de empresas que quieren ser clientes. La clasificación sale de cuánto completaron: datos,
+            direcciones, referencias, los 8 documentos y la firma. Cuanto más completo, más arriba. Al decidir, se
+            arma el mail de respuesta.
           </>
         }
         acciones={
           <>
             <CopiarLink ruta="/formularios/alta" etiqueta="Link del formulario de alta" />
-            <EvaluarPendientes sinEvaluar={sinEvaluarIA} />
             <Link
               href="/solicitudes/importar"
               className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-800"

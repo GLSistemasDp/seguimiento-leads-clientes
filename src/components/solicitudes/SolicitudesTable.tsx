@@ -19,7 +19,7 @@ type Pendiente = {
   nuevoEstado: Estado;
 };
 
-const COLUMNAS = ["Empresa", "Aptitud", "Rubro y datos", "Estado", "Acciones"] as const;
+const COLUMNAS = ["Empresa", "Clasificación", "Rubro y datos", "Estado", "Acciones"] as const;
 
 /** Escapa un valor para CSV con `;`, que es lo que Excel en es-AR abre directo. */
 function celdaCsv(valor: string): string {
@@ -161,7 +161,7 @@ export function SolicitudesTable({ solicitudes }: { solicitudes: readonly FilaSo
             <col className="w-[24%]" />
             <col />
             <col className="w-32" />
-            <col className="w-24" />
+            <col className="w-44" />
           </colgroup>
           <thead>
             <tr className="border-b border-slate-200 bg-blue-50/50 text-left">

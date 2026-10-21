@@ -70,7 +70,7 @@ export function DocumentacionAlta({ solicitud, guardando, onCerrar, onPedirCambi
     >
       <div className="grid gap-5 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
         <aside className="flex flex-col gap-4">
-          <PanelEvaluacion key={solicitud.id} solicitudId={solicitud.id} evaluacion={solicitud.evaluacion} />
+          <PanelEvaluacion evaluacion={solicitud.evaluacion} cuit={solicitud.cuit} />
           <div className="rounded-lg border border-slate-200 p-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Solicitud</p>

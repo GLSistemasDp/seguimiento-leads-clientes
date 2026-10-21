@@ -5,7 +5,8 @@ import { EstadoBadge } from "@/components/solicitudes/EstadoBadge";
 import { PanelEvaluacion } from "@/components/solicitudes/Evaluacion";
 import { Icono } from "@/components/ui/Icono";
 import { getById } from "@/lib/db/solicitudes";
-import { evaluacionVigente, getEvaluaciones } from "@/lib/solicitudes/evaluacion-ia";
+import { evaluarPorReglas } from "@/lib/solicitudes/evaluacion";
+import { leerCampo } from "@/lib/solicitudes/presentacion";
 import { formatearFechaHora } from "@/lib/utils/dates";
 
 export const dynamic = "force-dynamic";
@@ -23,14 +24,14 @@ export default async function SolicitudDetallePage({
   params,
 }: PageProps<"/solicitudes/[id]">) {
   const { id } = await params;
-  const [solicitud, guardadas] = await Promise.all([getById(id), getEvaluaciones()]);
+  const solicitud = await getById(id);
 
   if (!solicitud) {
     notFound();
   }
 
   const camposExtra = Object.entries(solicitud.datos);
-  const evaluacion = evaluacionVigente(solicitud, guardadas);
+  const evaluacion = evaluarPorReglas(solicitud);
 
   return (
     <div className="flex flex-col gap-5">
@@ -57,7 +58,7 @@ export default async function SolicitudDetallePage({
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         <div className="flex flex-col gap-5">
-          <PanelEvaluacion solicitudId={solicitud.id} evaluacion={evaluacion} />
+          <PanelEvaluacion evaluacion={evaluacion} cuit={leerCampo(solicitud.datos, "cuit")} />
 
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <AccionesEstado id={solicitud.id} nombre={solicitud.nombre} estado={solicitud.estado} />

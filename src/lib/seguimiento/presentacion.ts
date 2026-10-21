@@ -125,6 +125,7 @@ export function opciones(consultas: readonly Consulta[], campo: keyof FiltrosCon
 // --- Orden -----------------------------------------------------------------
 
 export const ORDENES = {
+  clasificacion: "Clasificación del cliente (A, B, C)",
   prioridad: "Mayor prioridad primero",
   antiguas: "Mas antiguas primero",
   recientes: "Mas recientes primero",
@@ -132,6 +133,15 @@ export const ORDENES = {
 } as const;
 
 export type OrdenConsulta = keyof typeof ORDENES;
+
+/** Por defecto la cola se ordena por clasificacion del cliente y, dentro, por prioridad. */
+export const ORDEN_CONSULTA_POR_DEFECTO: OrdenConsulta = "clasificacion";
+
+const RANGO_CLASIFICACION: Record<string, number> = { A: 0, B: 1, C: 2 };
+
+function rangoClasificacion(consulta: Consulta): number {
+  return RANGO_CLASIFICACION[(consulta.clasificacion || consulta.ficha?.clasificacion || "").trim().toUpperCase()] ?? 3;
+}
 
 export function esOrdenConsulta(valor: unknown): valor is OrdenConsulta {
   return typeof valor === "string" && valor in ORDENES;
@@ -151,6 +161,12 @@ export function ordenar(
         return tiempo(b) - tiempo(a);
       case "cliente":
         return a.cliente.localeCompare(b.cliente, "es");
+      case "clasificacion":
+        return (
+          rangoClasificacion(a) - rangoClasificacion(b) ||
+          puntajePrioridad(b, ahora) - puntajePrioridad(a, ahora) ||
+          tiempo(a) - tiempo(b)
+        );
       default:
         // A igual prioridad, primero la que espera hace mas tiempo.
         return puntajePrioridad(b, ahora) - puntajePrioridad(a, ahora) || tiempo(a) - tiempo(b);
@@ -222,6 +238,25 @@ export function alertasCliente(consulta: Pick<Consulta, "ficha" | "estadoCuenta"
     alertas.push(situacion);
   }
   return alertas;
+}
+
+/**
+ * Como esta la cuenta del cliente segun el maestro: la situacion ("OK",
+ * "TIENE DEUDA", "NO RESPONDER"...) y la marca de deuda ("REVISAR DEUDORA").
+ */
+export function estadoCliente(consulta: Pick<Consulta, "ficha" | "estadoCuenta">): string[] {
+  const estados: string[] = [];
+  const situacion = (consulta.ficha?.situacion || consulta.estadoCuenta).trim().toUpperCase();
+  if (situacion) estados.push(situacion);
+  const deuda = consulta.ficha?.deuda?.trim().toUpperCase();
+  if (deuda && !estados.includes(deuda)) estados.push(deuda);
+  return estados;
+}
+
+/** Solo links de invitacion de WhatsApp: cualquier otra cosa se ignora. */
+export function linkGrupoValido(link: string): string | null {
+  const limpio = link.trim();
+  return /^https:\/\/(chat\.whatsapp\.com|wa\.me)\/[\w/-]+$/i.test(limpio) ? limpio : null;
 }
 
 // --- Agrupado por cliente --------------------------------------------------

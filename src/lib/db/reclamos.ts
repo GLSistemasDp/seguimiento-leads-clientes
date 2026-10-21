@@ -5,7 +5,7 @@ import { leer, modificar } from "@/lib/db/local/almacen";
 import { backendActivo } from "@/lib/db/repositorio";
 import { getAll as getConsultas } from "@/lib/db/seguimiento";
 import { PRODUCTOS_DEMO } from "@/lib/reclamos/catalogo";
-import { diasAbierta, esReclamo, separarCliente } from "@/lib/seguimiento/presentacion";
+import { diasAbierta, esReclamo, estadoCliente, separarCliente } from "@/lib/seguimiento/presentacion";
 import {
   CAMPOS_CIERRE,
   CLASIFICACIONES,
@@ -192,16 +192,6 @@ export async function formularioDeConsulta(consultaId: string): Promise<string |
   return (await formularios()).find((reclamo) => reclamo.consultaId === consultaId)?.id ?? null;
 }
 
-/** Situacion de la cuenta + marca de deuda, como figuran en el maestro. */
-function estadoClienteDe(consulta: Consulta): string[] {
-  const estados: string[] = [];
-  const situacion = (consulta.ficha?.situacion || consulta.estadoCuenta).trim().toUpperCase();
-  if (situacion) estados.push(situacion);
-  const deuda = consulta.ficha?.deuda?.trim().toUpperCase();
-  if (deuda && !estados.includes(deuda)) estados.push(deuda);
-  return estados;
-}
-
 function estado(indicacion: Indicacion | null, respondido: boolean): EstadoReclamo {
   if (respondido) return "RESUELTO";
   return indicacion ? "EN_GESTION" : "SIN_DEFINIR";
@@ -226,7 +216,7 @@ function desdeConsulta(
     encargado: consulta.encargado,
     grupoWhatsapp: consulta.grupoWhatsapp,
     grupoVendedor: consulta.grupoVendedor.replace(/^FILTRO GRUPO\s*/i, ""),
-    estadoCliente: estadoClienteDe(consulta),
+    estadoCliente: estadoCliente(consulta),
     respondido: consulta.respondida,
     dias: consulta.respondida ? null : diasAbierta(consulta, ahora),
     observaciones: consulta.observaciones,
@@ -299,7 +289,7 @@ export async function getPanel(ahora = new Date()): Promise<PanelReclamos> {
     if (!codigo || clientes.has(codigo)) continue;
     clientes.set(codigo, {
       clasificacion: (consulta.clasificacion || consulta.ficha?.clasificacion || "").toUpperCase(),
-      estado: estadoClienteDe(consulta),
+      estado: estadoCliente(consulta),
     });
   }
 

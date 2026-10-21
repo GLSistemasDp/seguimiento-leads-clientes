@@ -17,6 +17,8 @@ export type Consulta = {
   /** Estado de la cuenta del cliente ("OK", "BLOQUEADO", ...). */
   estadoCuenta: string;
   grupoWhatsapp: string;
+  /** Link de invitacion al grupo (chat.whatsapp.com/...), si la planilla lo tiene. */
+  linkWhatsapp: string;
   consulta: string;
   /** Hito a responder: "Reclamo", "Pedido nuevo", "Consulta precio", etc. */
   hito: string;
@@ -43,6 +45,8 @@ export type FichaCliente = {
   grupoVendedor: string;
   grupoWhatsapp: string;
   grupoWhatsapp2: string;
+  /** Link de invitacion al grupo de WhatsApp (columna "Link grupo WhatsApp"). */
+  linkWhatsapp: string;
   /** SITUACION DEL CLIENTE: "OK", "TIENE DEUDA", "NO RESPONDER", "JUDICIALIZADO". */
   situacion: string;
   observacion: string;

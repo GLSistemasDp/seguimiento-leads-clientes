@@ -56,39 +56,83 @@ const EJEMPLOS: Ejemplo[] = [
   { nombre: "Atlantica Software S.A.", email: "partners@atlanticasoft.com", cuit: "30-71203344-0", rubro: "Tecnologia & SaaS", provincia: "CABA", telefono: "11 5263-4400", estado: "RECHAZADO", llego: 24.3, decidida: 24.1 },
 ];
 
+/** Cuanto completo cada ejemplo del formulario de alta, en el orden de EJEMPLOS. */
+const NIVELES: Nivel[] = [
+  "completo", "completo", "parcial", "completo", "minimo", "parcial", "vacio", "parcial",
+  "vacio", "completo", "completo", "parcial", "completo", "completo", "minimo",
+];
+
+type Nivel = "completo" | "parcial" | "minimo" | "vacio";
+
+/** Mismos nombres que el formulario de alta (lib/altas/formulario-alta.ts). */
+const DOCUMENTOS: [string, string][] = [
+  ["Legajo impositivo", "legajo"],
+  ["Formulario CM05", "cm05"],
+  ["Constancia de CUIT", "constancia-cuit"],
+  ["Declaración jurada de IVA", "ddjj-iva"],
+  ["Última DDJJ de cargas sociales", "ddjj-cargas"],
+  ["Última DDJJ de Ganancias", "ddjj-ganancias"],
+  ["Contrato social / Estatuto", "estatuto"],
+  ["Último balance", "balance"],
+];
+
+const CANALES = ["Web", "Instagram", "Referencia de otro cliente", "Cámara Argentina de Seguridad (CAS)", "Nuestras capacitaciones"];
+const COMPRAS = ["Compras mensuales", "Compras semanales", "Por licitación", "Compras anuales"];
+
 /**
- * Archivos que subio la empresa en el formulario de alta. En produccion son
- * links de Drive; en la demo los sirve /api/documentos-demo. Cuantos menos
- * datos cargo la empresa, menos adjuntos tiene.
+ * Datos del formulario de alta segun el nivel de completitud. Los adjuntos
+ * son links a /api/documentos-demo (en produccion, /api/adjuntos).
  */
-function adjuntos(ejemplo: Ejemplo): Record<string, string> {
-  if (!ejemplo.cuit) return {};
-  const link = (archivo: string) =>
-    `/api/documentos-demo/${archivo}?empresa=${encodeURIComponent(ejemplo.nombre)}`;
-  const docs: Record<string, string> = {
-    "Constancia de inscripcion AFIP": link("constancia-afip"),
+function datosDe(ejemplo: Ejemplo, nivel: Nivel, indice: number): Solicitud["datos"] {
+  const link = (archivo: string) => `/api/documentos-demo/${archivo}?empresa=${encodeURIComponent(ejemplo.nombre)}`;
+  const fantasia = ejemplo.nombre.replace(/\s+(S\.?A\.?S?\.?|S\.?R\.?L\.?)$/i, "");
+  const legal = ejemplo.provincia ? `Av. Industria ${1200 + indice * 37}, ${ejemplo.provincia}, Argentina` : "";
+  const datos: Solicitud["datos"] = {
+    Origen: nivel === "vacio" ? "Importado de Excel" : "Formulario web del cliente",
+    CUIT: ejemplo.cuit,
+    Teléfono: ejemplo.telefono,
+    Provincia: ejemplo.provincia,
   };
-  if (ejemplo.rubro) docs["Constancia IIBB / CM05"] = link("constancia-iibb");
-  if (ejemplo.provincia) docs["Estatuto / Contrato social"] = link("estatuto");
-  if (ejemplo.telefono) {
-    docs["DNI del firmante"] = link("dni-firmante");
-    docs["Referencias comerciales"] = link("referencias-comerciales");
-  }
-  return docs;
+  if (nivel === "vacio") return datos;
+
+  Object.assign(datos, {
+    "Cómo nos conoció": CANALES[indice % CANALES.length],
+    "Nombre de fantasía": fantasia,
+    Responsable: ["Laura Gómez", "Martín Ruiz", "Silvina Paz", "Diego Sosa"][indice % 4],
+    "Dirección legal": legal,
+    "Tipo de industria": ejemplo.rubro,
+  });
+  const cantidadDocs = nivel === "completo" ? 8 : nivel === "parcial" ? 5 : 2;
+  for (const [etiqueta, archivo] of DOCUMENTOS.slice(0, cantidadDocs)) datos[etiqueta] = link(archivo);
+  if (nivel === "minimo") return datos;
+
+  Object.assign(datos, {
+    "Tipo de compra": COMPRAS[indice % COMPRAS.length],
+    Envío: indice % 2 === 0 ? "Envío por transporte" : "Retira cliente",
+    "Referencias comerciales":
+      nivel === "completo"
+        ? "Proveedora Sur · compras@proveedorasur.com.ar · 11 4000-1000 | Bulonera Oeste · 11 4000-2000 | Distribuidora Norte · ventas@dnorte.com.ar"
+        : "Proveedora Sur · compras@proveedorasur.com.ar",
+  });
+  if (indice % 2 === 0) datos.Transportista = "Expreso Cruz del Sur · Bs. As.: Av. Riestra 1500 (Tel. 11 4919-0000)";
+  if (nivel === "parcial") return datos;
+
+  Object.assign(datos, {
+    "Dirección comercial": legal,
+    "Dirección de sucursal": ejemplo.provincia ? `Ruta 8 km ${40 + indice}, ${ejemplo.provincia}` : "",
+    "Antigüedad (años)": String(5 + indice),
+    "Cantidad de empleados": String(10 + indice * 4),
+    Firma: link("firma"),
+  });
+  return datos;
 }
 
 function ejemplos(): Solicitud[] {
-  return EJEMPLOS.map((ejemplo) => ({
+  return EJEMPLOS.map((ejemplo, indice) => ({
     id: crypto.randomUUID(),
     nombre: ejemplo.nombre,
     email: ejemplo.email,
-    datos: {
-      CUIT: ejemplo.cuit,
-      Rubro: ejemplo.rubro,
-      Provincia: ejemplo.provincia,
-      Telefono: ejemplo.telefono,
-      ...adjuntos(ejemplo),
-    },
+    datos: datosDe(ejemplo, NIVELES[indice] ?? "parcial", indice),
     estado: ejemplo.estado,
     fechaImportacion: haceDias(ejemplo.llego),
     fechaDecision: ejemplo.decidida === undefined ? null : haceDias(ejemplo.decidida),
@@ -96,11 +140,11 @@ function ejemplos(): Solicitud[] {
   }));
 }
 
-const almacen = globalThis as typeof globalThis & { __demoSolicitudesEppV3?: Solicitud[] };
+const almacen = globalThis as typeof globalThis & { __demoSolicitudesFormV4?: Solicitud[] };
 
 function todas(): Solicitud[] {
-  almacen.__demoSolicitudesEppV3 ??= ejemplos();
-  return almacen.__demoSolicitudesEppV3;
+  almacen.__demoSolicitudesFormV4 ??= ejemplos();
+  return almacen.__demoSolicitudesFormV4;
 }
 
 export async function getAll(filtros: FiltrosSolicitud = {}): Promise<Solicitud[]> {

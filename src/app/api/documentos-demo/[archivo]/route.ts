@@ -6,12 +6,16 @@ export const runtime = "nodejs";
 type Contexto = { params: Promise<{ archivo: string }> };
 
 const TITULOS: Record<string, string> = {
-  "constancia-afip": "Constancia de inscripción - ARCA (ex AFIP)",
-  "constancia-iibb": "Constancia de Ingresos Brutos / CM05",
-  estatuto: "Estatuto / Contrato social",
-  "dni-firmante": "DNI del firmante",
-  "referencias-comerciales": "Referencias comerciales",
-};
+  legajo: "Legajo impositivo",
+  cm05: "Formulario CM05 - Ingresos Brutos",
+  "constancia-cuit": "Constancia de CUIT - ARCA (ex AFIP)",
+  "ddjj-iva": "Declaración jurada de IVA",
+  "ddjj-cargas": "Última DDJJ de cargas sociales (F.931)",
+  "ddjj-ganancias": "Última DDJJ de Ganancias",
+  estatuto: "Contrato social / Estatuto",
+  balance: "Último balance",
+  firma: "Firma del solicitante",
+}
 
 /**
  * Documentos de ejemplo para el visor de altas en modo demo: en produccion los

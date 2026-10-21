@@ -1,0 +1,62 @@
+/* Detalles de los formularios publicos que no son clases de Tailwind. */
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+  animation: aparecer 0.6s ease both;
+}
+
+@keyframes aparecer {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: #193e76;
+  box-shadow: 0 0 0 2px #193e7630;
+}
+
+.paso-indicador {
+  display: flex;
+  height: 2rem;
+  width: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid #cbd5e1;
+  background: #e5e7eb;
+  color: #4b5563;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.paso-indicador.activo {
+  border-color: #193e76;
+  background: #193e76;
+  color: #fff;
+}
+
+.mapa {
+  height: 200px;
+  overflow: hidden;
+}
+
+.sugerencias {
+  max-height: 200px;
+}
+
+/* Leaflet no tapa las listas desplegables. */
+.leaflet-pane,
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 10 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body {
+    animation: none;
+  }
+}

@@ -11,10 +11,9 @@ import { delDia } from "@/lib/db/historial";
 import { getPanel } from "@/lib/db/reclamos";
 import { getAll } from "@/lib/db/seguimiento";
 import { getAll as getSolicitudes } from "@/lib/db/solicitudes";
-import { CATEGORIAS } from "@/lib/solicitudes/evaluacion";
-import { evaluacionVigente, getEvaluaciones } from "@/lib/solicitudes/evaluacion-ia";
+import { CATEGORIAS, evaluarPorReglas } from "@/lib/solicitudes/evaluacion";
 import { opciones } from "@/lib/seguimiento/presentacion";
-import { textoCierre } from "@/lib/seguimiento/cierre-del-dia";
+import { proximoEnvioCierre, textoCierre } from "@/lib/seguimiento/cierre-del-dia";
 import { armarResumenDiario } from "@/lib/seguimiento/resumen-diario";
 import { telegramConfigurado } from "@/lib/notificaciones/telegram";
 import { PERIODOS, calcularTablero, diaLocal, esPeriodo, vendedorCorto } from "@/lib/seguimiento/tablero";
@@ -136,19 +135,19 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
   const vendedor = texto(params.vendedor);
 
   const ahora = new Date();
-  const [todas, panel, pendientesAlta, evaluaciones, eventosHoy] = await Promise.all([
+  const [todas, panel, pendientesAlta, eventosHoy, proximo] = await Promise.all([
     getAll(),
     getPanel(ahora),
     getSolicitudes({ estado: "PENDIENTE" }).catch(() => []),
-    getEvaluaciones(),
     delDia(diaLocal(ahora), diaLocal),
+    proximoEnvioCierre(ahora).catch(() => null),
   ]);
 
   // --- Para resolver hoy (no dependen de los filtros) ---
   const reclamosGerencia = panel.reclamos.filter((reclamo) => reclamo.estado === "SIN_DEFINIR");
   const reclamosEnGestion = panel.reclamos.filter((reclamo) => reclamo.estado === "EN_GESTION");
   const altas = pendientesAlta
-    .map((solicitud) => ({ solicitud, evaluacion: evaluacionVigente(solicitud, evaluaciones) }))
+    .map((solicitud) => ({ solicitud, evaluacion: evaluarPorReglas(solicitud) }))
     .sort((a, b) => b.evaluacion.puntaje - a.evaluacion.puntaje);
   const muyAptas = altas.filter(({ evaluacion }) => evaluacion.categoria === "A").length;
   const resumen = armarResumenDiario({ consultas: todas, eventosHoy, reclamos: panel.reclamos, ahora });
@@ -211,7 +210,7 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
             href="/solicitudes?estado=PENDIENTE&orden=aptitud"
             titulo="Altas pendientes"
             valor={pendientesAlta.length}
-            detalle={`${muyAptas} muy aptas para priorizar`}
+            detalle={`${muyAptas} con el formulario completo`}
             icono="documento"
             tono="verde"
           />
@@ -283,10 +282,9 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
                     className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold tabular-nums ${
                       CATEGORIAS[evaluacion.categoria].estilo
                     }`}
-                    title={`${CATEGORIAS[evaluacion.categoria].etiqueta} · ${evaluacion.fuente === "ia" ? "evaluado con IA" : "por reglas"}`}
+                    title={`${CATEGORIAS[evaluacion.categoria].etiqueta} · completó el ${evaluacion.puntaje}%`}
                   >
-                    {evaluacion.fuente === "ia" ? <Icono nombre="chispa" className="size-3" /> : null}
-                    {evaluacion.puntaje}
+                    {evaluacion.puntaje}%
                   </span>
                 </li>
               ))}
@@ -297,6 +295,8 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
         <ResumenDiario
           texto={textoCierre(resumen, ahora)}
           telegramListo={telegramConfigurado()}
+          proximo={proximo?.toISOString() ?? null}
+          ahora={ahora.getTime()}
           datos={[
             { etiqueta: "Finalizadas hoy", valor: resumen.finalizadasHoy, color: "text-emerald-700" },
             { etiqueta: "Sin responder", valor: resumen.sinResponder, color: "text-slate-900" },

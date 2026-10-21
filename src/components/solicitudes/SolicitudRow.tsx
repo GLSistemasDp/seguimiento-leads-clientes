@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { EstadoBadge } from "@/components/solicitudes/EstadoBadge";
-import { InsigniaAptitud } from "@/components/solicitudes/Evaluacion";
+import { BotonNosis, InsigniaAptitud } from "@/components/solicitudes/Evaluacion";
 import type { Evaluacion } from "@/lib/solicitudes/evaluacion";
 import { Icono } from "@/components/ui/Icono";
 import { colorAvatar, iniciales } from "@/lib/solicitudes/presentacion";
@@ -40,24 +40,6 @@ export type SolicitudRowProps = {
   onVerDocumentacion: (solicitud: FilaSolicitud) => void;
 };
 
-const COMPLETITUD = {
-  COMPLETO: {
-    etiqueta: "Completo",
-    icono: "check",
-    estilo: "bg-emerald-700 text-white",
-  },
-  INCOMPLETO: {
-    etiqueta: "Incompleto",
-    icono: "alerta",
-    estilo: "bg-blue-50 text-slate-700 border border-blue-100",
-  },
-  SIN_DATOS: {
-    etiqueta: "Sin datos",
-    icono: "cruz",
-    estilo: "bg-red-50 text-red-600 border border-red-100",
-  },
-} as const;
-
 const ACCION =
   "flex size-8 items-center justify-center rounded-lg border border-slate-200 bg-white transition-colors disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300 disabled:hover:bg-white";
 
@@ -71,7 +53,6 @@ export function SolicitudRow({
 }: SolicitudRowProps) {
   const router = useRouter();
   const descartada = solicitud.estado === "RECHAZADO";
-  const completitud = COMPLETITUD[solicitud.completitud];
 
   return (
     <tr
@@ -103,8 +84,9 @@ export function SolicitudRow({
               {solicitud.nombre}
             </p>
             <p className="truncate text-xs text-blue-700">{solicitud.email}</p>
-            <p className={`text-xs ${solicitud.cuitValido ? "text-slate-500" : "text-amber-700"}`}>
+            <p className={`flex flex-wrap items-center gap-x-2 text-xs ${solicitud.cuitValido ? "text-slate-500" : "text-amber-700"}`}>
               {solicitud.cuitValido ? `CUIT ${solicitud.cuit}` : solicitud.cuit ? `CUIT inválido · ${solicitud.cuit}` : "Sin CUIT válido"}
+              {solicitud.cuitValido ? <BotonNosis cuit={solicitud.cuit} compacto /> : null}
             </p>
           </div>
         </div>
@@ -115,9 +97,9 @@ export function SolicitudRow({
       <td className="px-3 py-3.5 text-sm">
         <p className="line-clamp-2 text-slate-800">{solicitud.rubro || <span className="text-slate-400">Rubro sin informar</span>}</p>
         <p className="text-xs text-slate-500">{solicitud.provincia || "Provincia sin informar"}</p>
-        <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500" title={completitud.etiqueta}>
-          <Icono nombre={completitud.icono} className="size-3.5" />
-          {completitud.etiqueta} · {solicitud.documentos} adj.
+        <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500">
+          <Icono nombre="documento" className="size-3.5" />
+          {solicitud.documentos} {solicitud.documentos === 1 ? "adjunto" : "adjuntos"}
         </p>
       </td>
       <td className="px-3 py-3.5">

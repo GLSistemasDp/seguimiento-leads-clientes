@@ -4,7 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Icono } from "@/components/ui/Icono";
 import { Selector } from "@/components/ui/Selector";
-import { ORDENES, VISTAS } from "@/lib/seguimiento/presentacion";
+import { ORDENES, ORDEN_CONSULTA_POR_DEFECTO, VISTAS } from "@/lib/seguimiento/presentacion";
 import type { OrdenConsulta, Vista } from "@/lib/seguimiento/presentacion";
 
 type Filtros = {
@@ -176,7 +176,7 @@ export function FiltrosSeguimiento({
           valor={orden}
           opciones={ORDENES}
           onCambiar={(valor) =>
-            navegar({ orden: valor === "prioridad" ? null : valor })
+            navegar({ orden: valor === ORDEN_CONSULTA_POR_DEFECTO ? null : valor })
           }
         />
       </div>

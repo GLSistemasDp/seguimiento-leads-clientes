@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ProximoEnvio } from "@/components/resumen/ProximoEnvio";
 import { Button } from "@/components/ui/Button";
 import { Icono } from "@/components/ui/Icono";
 import { Modal } from "@/components/ui/Modal";
@@ -14,7 +15,12 @@ export function ResumenDiario({
   texto,
   telegramListo,
   datos,
+  proximo,
+  ahora,
 }: {
+  /** ISO del proximo envio automatico. */
+  proximo: string | null;
+  ahora: number;
   /** Formato WhatsApp/Telegram (*negrita*). */
   texto: string;
   /** Si estan TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID. */
@@ -72,7 +78,7 @@ export function ResumenDiario({
       <div className="flex flex-wrap gap-2">
         <Button
           disabled={!telegramListo || enviando}
-          title={telegramListo ? undefined : "Falta configurar TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID"}
+          title={telegramListo ? undefined : "Falta configurar TELEGRAM_BOT_TOKEN y TELEGRAM_VENDEDORES_CHAT_ID"}
           onClick={() => void enviar()}
           className="bg-sky-600 hover:bg-sky-700 disabled:bg-sky-300"
         >
@@ -88,11 +94,7 @@ export function ResumenDiario({
           Copiar
         </Button>
       </div>
-      <p className="text-xs text-slate-400">
-        {telegramListo
-          ? "Además se envía solo a las 13:00 y 17:00, de lunes a viernes hábiles."
-          : "Telegram todavía no está configurado: el mensaje se puede ver y copiar."}
-      </p>
+      <ProximoEnvio proximo={proximo} ahora={ahora} telegramListo={telegramListo} compacto />
 
       <Modal
         abierto={abierto}

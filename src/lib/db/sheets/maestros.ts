@@ -66,6 +66,7 @@ const ALIAS_DESPLEGABLE = {
   limiteDisponible: ["limite de credito disponible"],
   grupoWhatsapp: ["grupo whatsapp"],
   grupoWhatsapp2: ["grp wsp 2", "grupo whatsapp 2"],
+  linkWhatsapp: ["link grupo whatsapp", "link grupo", "link whatsapp", "link wsp"],
   situacion: ["situacion del cliente", "situacion"],
   observacion: ["observacion", "observaciones"],
 } as const;
@@ -89,6 +90,7 @@ function fichaVacia(cliente: string): FichaCliente {
     grupoVendedor: "",
     grupoWhatsapp: "",
     grupoWhatsapp2: "",
+    linkWhatsapp: "",
     situacion: "",
     observacion: "",
     actividad: "",
@@ -133,6 +135,7 @@ export function armarFichas(desplegable: FilaSheet[], maestro: FilaSheet[]): Map
       );
       completar(destino, "grupoWhatsapp", limpio(celda(fila, "grupoWhatsapp")));
       completar(destino, "grupoWhatsapp2", limpio(celda(fila, "grupoWhatsapp2")));
+      completar(destino, "linkWhatsapp", limpio(celda(fila, "linkWhatsapp")));
       completar(destino, "situacion", limpio(celda(fila, "situacion")));
       completar(destino, "observacion", limpio(celda(fila, "observacion")));
     }

@@ -3,57 +3,51 @@ import type { DatosSolicitud } from "@/types/solicitud";
 
 /**
  * Formulario de Alta de Clientes que completa el cliente desde
- * /formularios/alta. Valida lo que llega y lo convierte en una solicitud de
- * alta de la intranet (nombre, email y `datos` con etiquetas legibles).
+ * /formularios/alta (mismo formulario que pedidos-web-dp, en 4 pasos, mas la
+ * documentacion obligatoria y la firma). Valida lo que llega y lo convierte
+ * en una solicitud de alta de la intranet.
  */
 
 export class ErrorAlta extends Error {}
 
-/** Documentos obligatorios de "Informacion adicional", con el nombre del campo del formulario. */
+/**
+ * Documentos de "Informacion adicional". Los marcados `soloCuit` son
+ * impositivos de Argentina: obligatorios cuando el ID fiscal es CUIT.
+ * Las etiquetas son las que usa la clasificacion (lib/solicitudes/evaluacion.ts).
+ */
 export const DOCUMENTOS_ALTA = [
-  { campo: "doc_cm05", etiqueta: "Formulario CM05" },
-  { campo: "doc_legajo", etiqueta: "Legajo impositivo" },
-  { campo: "doc_cuit", etiqueta: "Constancia de CUIT" },
-  { campo: "doc_iva", etiqueta: "Declaración jurada de IVA" },
-  { campo: "doc_cargas", etiqueta: "Última DDJJ de cargas sociales" },
-  { campo: "doc_ganancias", etiqueta: "Última DDJJ de Ganancias" },
-  { campo: "doc_estatuto", etiqueta: "Contrato social / Estatuto" },
-  { campo: "doc_balance", etiqueta: "Último balance" },
+  { campo: "doc_legajo", etiqueta: "Legajo impositivo", soloCuit: true },
+  { campo: "doc_cm05", etiqueta: "Formulario CM05", soloCuit: true },
+  { campo: "doc_cuit", etiqueta: "Constancia de CUIT", soloCuit: false },
+  { campo: "doc_iva", etiqueta: "Declaración jurada de IVA", soloCuit: true },
+  { campo: "doc_cargas", etiqueta: "Última DDJJ de cargas sociales", soloCuit: true },
+  { campo: "doc_ganancias", etiqueta: "Última DDJJ de Ganancias", soloCuit: true },
+  { campo: "doc_estatuto", etiqueta: "Contrato social / Estatuto", soloCuit: false },
+  { campo: "doc_balance", etiqueta: "Último balance", soloCuit: false },
 ] as const;
 
-export const DIRECCIONES = [
-  { clave: "legal", etiqueta: "Dirección legal" },
-  { clave: "comercial", etiqueta: "Dirección comercial" },
-  { clave: "correspondencia", etiqueta: "Dirección de envío de correspondencia" },
-  { clave: "entrega", etiqueta: "Dirección de entrega de la mercadería" },
-  { clave: "sucursal", etiqueta: "Sucursal" },
-] as const;
+const CANALES = [
+  "Facebook", "Instagram", "YouTube", "Web", "Publicidad", "Nuestras capacitaciones",
+  "Cámara Argentina de Seguridad (CAS)", "La chica HyS (Laura Yaya)", "Rescue Training",
+  "Referencia de otro cliente", "Otro",
+];
 
-const ENVIOS = {
-  retira: "Retira cliente",
-  transporte: "Usa transporte",
-  sin_cargo: "Entrega sin cargo (logística De Pascale)",
-  con_cargo_24hs: "Entrega 24 hs con cargo (AMBA / CABA)",
-} as const;
+export const TIPOS_ID_FISCAL = [
+  "CUIT", "CNPJ", "CPF", "RUT", "RUC", "NIT", "RFC", "EIN", "BN", "RTN", "NITE", "Cédula Jurídica", "RIF", "RNC", "TRN", "BIR", "NIF", "TIN",
+];
 
-const ANTIGUEDADES = ["1 año", "2 años", "3 años", "5 años", "10 años", "20 años", "+20 años", "otros"];
-const FRECUENCIAS = ["Anual", "Mensual", "Semanal", "otros"];
-const RUBROS = ["Seguridad", "Ferretería"];
+const INDUSTRIAS = [
+  "Seguridad industrial", "Petrolera", "Construcción", "Marítima", "Retail / Distribuidora", "Salud", "Agro",
+  "Metalúrgica", "Siderúrgica", "Química", "Logística", "Automotor", "Aeronáutica", "Gastronomía", "Gráfica",
+  "Servicio de mantenimiento", "Turística", "Otros",
+];
+const PUNTOS_VENTA = ["Comercio digital", "Comercio físico", "Ambos"];
+const TIPOS_COMPRA = ["Compras semanales", "Compras mensuales", "Compras anuales", "Por licitación", "Por contrato"];
 
-type Direccion = { direccion: string; localidad: string; ciudad: string; cp: string; provincia: string; pais: string };
-type Transporte = {
-  fantasia: string;
-  razonSocial: string;
-  cuit: string;
-  direccion: string;
-  telDireccion: string;
-  destino: string;
-  telDestino: string;
-};
-type Referencia = { empresa: string; direccion: string; credito: string; contacto: string; email: string; telefono: string };
+type Direccion = { pais: string; direccion: string; provincia: string; lat: string; lng: string };
 
 function texto(valor: unknown, maximo = 200): string {
-  return typeof valor === "string" ? valor.trim().slice(0, maximo) : "";
+  return typeof valor === "string" ? valor.trim().slice(0, maximo) : typeof valor === "number" ? String(valor) : "";
 }
 
 function objeto(valor: unknown): Record<string, unknown> {
@@ -65,61 +59,48 @@ function obligatorio(valor: string, etiqueta: string): string {
   return valor;
 }
 
-/** Una opcion de la lista o, si eligio "otros", el texto que escribio. */
-function opcion(valor: unknown, otro: unknown, opciones: readonly string[], etiqueta: string): string {
-  const elegido = texto(valor, 40);
-  if (!opciones.includes(elegido)) throw new ErrorAlta(`Elegí una opción en: ${etiqueta}.`);
-  return elegido === "otros" ? obligatorio(texto(otro), `${etiqueta} (otros)`) : elegido;
+function deLista(valor: string, lista: readonly string[], etiqueta: string, requerido: boolean): string {
+  if (!valor) {
+    if (requerido) throw new ErrorAlta(`Elegí una opción en: ${etiqueta}.`);
+    return "";
+  }
+  if (!lista.includes(valor)) throw new ErrorAlta(`Opción inválida en: ${etiqueta}.`);
+  return valor;
 }
 
-function direccion(valor: unknown, etiqueta: string): Direccion {
+function direccion(valor: unknown): Direccion {
   const datos = objeto(valor);
+  const coordenada = (dato: unknown) => {
+    const numero = Number(texto(dato, 30));
+    return Number.isFinite(numero) && texto(dato, 30) ? numero.toFixed(6) : "";
+  };
   return {
-    direccion: obligatorio(texto(datos.direccion), `${etiqueta} · calle y número`),
-    localidad: obligatorio(texto(datos.localidad, 120), `${etiqueta} · localidad`),
-    ciudad: texto(datos.ciudad, 120),
-    cp: obligatorio(texto(datos.cp, 20), `${etiqueta} · código postal`),
-    provincia: obligatorio(texto(datos.provincia, 80), `${etiqueta} · provincia`),
     pais: texto(datos.pais, 80) || "Argentina",
+    direccion: texto(datos.direccion, 300),
+    provincia: texto(datos.provincia, 120),
+    lat: coordenada(datos.lat),
+    lng: coordenada(datos.lng),
   };
 }
 
 function formatoDireccion(dir: Direccion): string {
-  return `${dir.direccion}, ${[dir.localidad, dir.ciudad].filter(Boolean).join(", ")} (CP ${dir.cp}), ${dir.provincia}, ${dir.pais}`;
+  if (!dir.direccion) return "";
+  return dir.direccion.toLowerCase().includes(dir.pais.toLowerCase()) ? dir.direccion : `${dir.direccion}, ${dir.pais}`;
 }
 
-function transporte(valor: unknown, etiqueta: string, requerido: boolean): Transporte | null {
-  const datos = objeto(valor);
-  const resultado: Transporte = {
-    fantasia: texto(datos.fantasia),
-    razonSocial: texto(datos.razonSocial),
-    cuit: texto(datos.cuit, 20),
-    direccion: texto(datos.direccion),
-    telDireccion: texto(datos.telDireccion, 60),
-    destino: texto(datos.destino),
-    telDestino: texto(datos.telDestino, 60),
-  };
-  const vacio = Object.values(resultado).every((campo) => !campo);
-  if (vacio && !requerido) return null;
-  obligatorio(resultado.razonSocial || resultado.fantasia, `${etiqueta} · nombre o razón social`);
-  obligatorio(resultado.direccion, `${etiqueta} · dirección en Bs. As.`);
-  obligatorio(resultado.telDireccion || resultado.telDestino, `${etiqueta} · teléfono`);
-  return resultado;
+/** Cantidad entera razonable (antiguedad, empleados); vacio si no la cargo. */
+function entero(valor: unknown, maximo: number, etiqueta: string): string {
+  const crudo = texto(valor, 10);
+  if (!crudo) return "";
+  const numero = Number(crudo);
+  if (!Number.isInteger(numero) || numero < 0 || numero > maximo) throw new ErrorAlta(`${etiqueta} no es válido.`);
+  return String(numero);
 }
 
-function formatoTransporte(dato: Transporte): string {
-  return [
-    dato.fantasia || dato.razonSocial,
-    dato.razonSocial && dato.fantasia ? dato.razonSocial : "",
-    dato.cuit && `CUIT ${dato.cuit}`,
-    dato.direccion && `Bs. As.: ${dato.direccion}${dato.telDireccion ? ` (Tel. ${dato.telDireccion})` : ""}`,
-    dato.destino && `Destino: ${dato.destino}${dato.telDestino ? ` (Tel. ${dato.telDestino})` : ""}`,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
+const TELEFONO = /^\+?[0-9 ()-]{7,20}$/;
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export type AltaValidada = { nombre: string; email: string; datos: DatosSolicitud };
+export type AltaValidada = { nombre: string; email: string; datos: DatosSolicitud; esCuit: boolean };
 
 /**
  * Valida el JSON del formulario. Los adjuntos y la firma se agregan despues,
@@ -128,76 +109,107 @@ export type AltaValidada = { nombre: string; email: string; datos: DatosSolicitu
 export function validarAlta(valor: unknown, fecha: string): AltaValidada {
   const datos = objeto(valor);
 
-  const rubros = (Array.isArray(datos.rubro) ? datos.rubro : []).filter(
-    (item): item is string => typeof item === "string" && RUBROS.includes(item),
-  );
-  const rubroOtro = texto(datos.rubroOtro);
-  if (rubros.length === 0 && !rubroOtro) throw new ErrorAlta("Elegí al menos un rubro.");
+  // Paso 1: datos del cliente
+  let canal = deLista(texto(datos.canal, 80), CANALES, "¿Cómo nos conociste?", true);
+  if (canal === "Otro" && texto(datos.canalOtro)) canal = `Otro: ${texto(datos.canalOtro)}`;
 
+  const nombreFantasia = obligatorio(texto(datos.nombreFantasia), "Nombre de fantasía");
   const razonSocial = obligatorio(texto(datos.razonSocial), "Razón social");
-  const cuit = obligatorio(texto(datos.cuit, 20), "CUIT");
-  if (!cuitValido(cuit)) throw new ErrorAlta("El CUIT no es válido. Revisá los 11 dígitos.");
-  const email = obligatorio(texto(datos.email).toLowerCase(), "E-mail");
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ErrorAlta("El e-mail no es válido.");
-  const fechaConstitucion = obligatorio(texto(datos.fechaConstitucion, 10), "Fecha de constitución");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaConstitucion)) throw new ErrorAlta("La fecha de constitución no es válida.");
+  const tipoId = deLista(texto(datos.tipoIdFiscal, 30), TIPOS_ID_FISCAL, "Identificador fiscal", true);
+  const idFiscal = obligatorio(texto(datos.idFiscal, 30), "Número de identificador fiscal");
+  const esCuit = tipoId === "CUIT";
+  if (esCuit && !cuitValido(idFiscal)) throw new ErrorAlta("El CUIT no es válido. Revisá los 11 dígitos.");
+
+  const telefono = obligatorio(texto(datos.telefono, 30), "Teléfono");
+  if (!TELEFONO.test(telefono)) throw new ErrorAlta("El teléfono debe tener entre 7 y 15 números (podés empezar con +).");
+  const responsable = obligatorio(texto(datos.responsable, 120), "Nombre del responsable");
+  const email = obligatorio(texto(datos.email).toLowerCase(), "Email");
+  if (!EMAIL.test(email)) throw new ErrorAlta("El email no es válido.");
 
   const crudas = objeto(datos.direcciones);
-  const direcciones = Object.fromEntries(
-    DIRECCIONES.map(({ clave, etiqueta }) => [clave, direccion(crudas[clave], etiqueta)]),
-  ) as Record<(typeof DIRECCIONES)[number]["clave"], Direccion>;
+  const legal = direccion(crudas.legal);
+  obligatorio(legal.direccion, "Dirección legal");
+  const sucursal = direccion(crudas.sucursal);
+  const comercial = direccion(crudas.comercial);
 
-  const envio = texto(datos.envio, 20);
-  if (!Object.hasOwn(ENVIOS, envio)) throw new ErrorAlta("Elegí cómo se hacen los envíos.");
-  const usaTransporte = envio === "transporte";
-  const usual = transporte(datos.transporteUsual, "Transporte usual", usaTransporte);
-  const alternativo = transporte(datos.transporteAlternativo, "Transporte alternativo", false);
+  // Paso 2: empresa
+  const industria = deLista(texto(datos.industria, 60), INDUSTRIAS, "Tipo de industria", true);
+  const industriaFinal = industria === "Otros" && texto(datos.industriaOtra) ? `Otros: ${texto(datos.industriaOtra)}` : industria;
+  const puntosVenta = deLista(texto(datos.puntosVenta, 40), PUNTOS_VENTA, "Puntos de venta", industria === "Retail / Distribuidora");
+  const antiguedad = entero(datos.antiguedad, 200, "La antigüedad");
+  const empleados = entero(datos.empleados, 1_000_000, "La cantidad de empleados");
+  const tipoCompra = deLista(texto(datos.tipoCompra, 40), TIPOS_COMPRA, "Tipo de compra", false);
 
-  const referencias: Referencia[] = (Array.isArray(datos.referencias) ? datos.referencias : [])
-    .slice(0, 6)
-    .map((fila) => {
-      const item = objeto(fila);
-      return {
-        empresa: texto(item.empresa),
-        direccion: texto(item.direccion),
-        credito: texto(item.credito, 60),
-        contacto: texto(item.contacto, 120),
-        email: texto(item.email),
-        telefono: texto(item.telefono, 60),
-      };
-    })
-    .filter((ref) => ref.empresa);
-  if (referencias.length === 0) throw new ErrorAlta("Indicá al menos una referencia comercial.");
-  if (referencias.some((ref) => !ref.contacto && !ref.email && !ref.telefono)) {
-    throw new ErrorAlta("Cada referencia comercial necesita un contacto, e-mail o teléfono.");
+  // Paso 3: envio
+  const retira = datos.retiraCliente === true;
+  const usaTransporte = datos.usaTransporte === true;
+  if (!retira && !usaTransporte) throw new ErrorAlta("Indicá si retirás vos o si usás transporte.");
+  const t = objeto(datos.transportista);
+  const transportista = {
+    fantasia: texto(t.fantasia),
+    razonSocial: texto(t.razonSocial),
+    cuit: texto(t.cuit, 20),
+    direccion: texto(t.direccion),
+    telefono: texto(t.telefono, 30),
+    destino: texto(t.destino),
+  };
+  if (usaTransporte) {
+    obligatorio(transportista.fantasia || transportista.razonSocial, "Transportista · nombre o razón social");
+    obligatorio(transportista.telefono, "Transportista · teléfono");
   }
 
+  // Paso 4: referencias (tres)
+  const referencias = (Array.isArray(datos.referencias) ? datos.referencias : []).slice(0, 3).map((fila) => {
+    const item = objeto(fila);
+    return { empresa: texto(item.empresa), email: texto(item.email), telefono: texto(item.telefono, 30) };
+  });
+  if (referencias.length < 3 || referencias.some((ref) => !ref.empresa)) {
+    throw new ErrorAlta("Completá las tres referencias comerciales.");
+  }
+  if (referencias.some((ref) => !ref.email && !ref.telefono)) {
+    throw new ErrorAlta("Cada referencia comercial necesita un email o un teléfono.");
+  }
+  if (referencias.some((ref) => ref.email && !EMAIL.test(ref.email))) throw new ErrorAlta("Hay un email de referencia inválido.");
+  if (datos.aceptaTerminos !== true) throw new ErrorAlta("Para enviar tenés que aceptar los términos y condiciones.");
+
+  const ubicacion = (dir: Direccion) => (dir.lat && dir.lng ? `${dir.lat}, ${dir.lng}` : "");
   const salida: DatosSolicitud = {
     Origen: "Formulario web del cliente",
     "Fecha del formulario": fecha,
-    "Nombre de fantasía": obligatorio(texto(datos.nombreFantasia), "Nombre de fantasía"),
+    "Cómo nos conoció": canal,
+    "Nombre de fantasía": nombreFantasia,
     "Razón social": razonSocial,
-    CUIT: cuit,
-    "Fecha de constitución": fechaConstitucion,
-    Rubro: [...rubros, rubroOtro].filter(Boolean).join(", "),
-    Antigüedad: opcion(datos.antiguedad, datos.antiguedadOtro, ANTIGUEDADES, "Antigüedad"),
-    "Puntos de venta / canal de venta": obligatorio(texto(datos.puntosVenta, 300), "Puntos de venta o canal de venta"),
-    "Cantidad de empleados": obligatorio(texto(datos.empleados, 20), "Cantidad de empleados"),
-    "Frecuencia de compra": opcion(datos.frecuencia, datos.frecuenciaOtro, FRECUENCIAS, "Frecuencia de compra"),
-    Teléfono: obligatorio(texto(datos.telefono, 60), "Teléfono"),
-    Provincia: direcciones.legal.provincia,
-    ...Object.fromEntries(DIRECCIONES.map(({ clave, etiqueta }) => [etiqueta, formatoDireccion(direcciones[clave])])),
-    "Envíos / transporte": ENVIOS[envio as keyof typeof ENVIOS],
-    "Transporte usual": usual ? formatoTransporte(usual) : "",
-    "Transporte alternativo": alternativo ? formatoTransporte(alternativo) : "",
-    "Referencias comerciales": referencias
-      .map((ref) =>
-        [ref.empresa, ref.direccion, ref.credito && `crédito ${ref.credito}`, ref.contacto, ref.email, ref.telefono]
+    ...(esCuit ? { CUIT: idFiscal } : { "ID fiscal": `${tipoId} ${idFiscal}` }),
+    Responsable: responsable,
+    Teléfono: telefono,
+    "Dirección legal": formatoDireccion(legal),
+    Provincia: legal.provincia,
+    "Ubicación legal (lat, lng)": ubicacion(legal),
+    "Dirección de sucursal": formatoDireccion(sucursal),
+    "Dirección comercial": formatoDireccion(comercial),
+    "Tipo de industria": industriaFinal,
+    "Puntos de venta": puntosVenta,
+    "Antigüedad (años)": antiguedad,
+    "Cantidad de empleados": empleados,
+    "Tipo de compra": tipoCompra,
+    Envío: [retira ? "Retira cliente" : "", usaTransporte ? "Envío por transporte" : ""].filter(Boolean).join(" y "),
+    Transportista: usaTransporte
+      ? [
+          transportista.fantasia || transportista.razonSocial,
+          transportista.fantasia && transportista.razonSocial ? transportista.razonSocial : "",
+          transportista.cuit && `CUIT ${transportista.cuit}`,
+          transportista.direccion && `Bs. As.: ${transportista.direccion}`,
+          transportista.telefono && `Tel. ${transportista.telefono}`,
+          transportista.destino && `Destino: ${transportista.destino}`,
+        ]
           .filter(Boolean)
-          .join(" · "),
-      )
-      .join(" | "),
+          .join(" · ")
+      : "",
+    "Referencias comerciales": referencias.map((ref) => [ref.empresa, ref.email, ref.telefono].filter(Boolean).join(" · ")).join(" | "),
+    "Aceptó términos y condiciones": "Sí",
   };
+  // Sin campos vacios: la clasificacion cuenta lo que se completo.
+  for (const [clave, valorCampo] of Object.entries(salida)) if (valorCampo === "") delete salida[clave];
 
-  return { nombre: razonSocial, email, datos: salida };
+  return { nombre: razonSocial, email, datos: salida, esCuit };
 }

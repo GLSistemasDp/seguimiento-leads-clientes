@@ -124,6 +124,7 @@ const ALIAS = {
   grupoVendedor: ["grupo vendedor", "vendedor"],
   estadoCuenta: ["estado", "estado cuenta", "estado de cuenta", "situacion del cliente"],
   grupoWhatsapp: ["grupo whatsapp", "whatsapp", "grupo wsp"],
+  linkWhatsapp: ["link grupo whatsapp", "link grupo", "link whatsapp", "link wsp", "link del grupo", "invitacion whatsapp"],
   consulta: ["consulta", "detalle", "detalle consulta"],
   hito: ["hito a responder", "hito"],
   respondida: ["respuesta", "respondida", "respondido", "respuesta enviada"],
@@ -264,6 +265,7 @@ async function leerTodas(): Promise<{ consultas: ConsultaUbicada[]; columnas: Co
         grupoVendedor: celda(fila, "grupoVendedor"),
         estadoCuenta: celda(fila, "estadoCuenta"),
         grupoWhatsapp: celda(fila, "grupoWhatsapp"),
+        linkWhatsapp: celda(fila, "linkWhatsapp"),
         consulta,
         hito: celda(fila, "hito"),
         respondida: parsearBooleano(celda(fila, "respondida")),
@@ -291,6 +293,7 @@ function completarConFicha(consulta: Consulta, fichas: Map<string, FichaCliente>
     grupoVendedor: consulta.grupoVendedor || ficha.grupoVendedor,
     estadoCuenta: consulta.estadoCuenta || ficha.situacion,
     grupoWhatsapp: consulta.grupoWhatsapp || ficha.grupoWhatsapp,
+    linkWhatsapp: consulta.linkWhatsapp || ficha.linkWhatsapp,
     ficha,
   };
 }

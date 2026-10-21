@@ -29,16 +29,6 @@ const ESTILO_CLASIFICACION: Record<string, string> = {
   C: "bg-slate-100 text-slate-600",
 };
 
-/** Como en la planilla maestra: OK verde, deuda naranja, no responder violeta, judicial rojo. */
-function estiloEstadoCliente(estado: string): string {
-  const texto = estado.toUpperCase();
-  if (texto === "OK") return "bg-emerald-600 text-white";
-  if (texto.includes("JUDICIAL")) return "bg-red-600 text-white";
-  if (texto.includes("NO RESPONDER")) return "bg-violet-100 text-violet-700";
-  if (texto.includes("DEUD")) return "bg-orange-500 text-white";
-  return "bg-amber-100 text-amber-800";
-}
-
 type Filtro = EstadoReclamo | "TODOS";
 
 function Dias({ dias }: { dias: number | null }) {
@@ -153,55 +143,58 @@ export function PanelReclamos({ reclamos, estadoInicial }: { reclamos: ReclamoPa
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <table className="w-full table-fixed border-collapse">
             <colgroup>
-              <col className="w-[22%]" />
-              <col className="w-16" />
+              <col className="w-[28%]" />
               <col />
-              <col className="w-36" />
-              <col className="w-44" />
+              <col className="w-52" />
             </colgroup>
             <thead>
               <tr className="border-b border-slate-200 bg-blue-50/50 text-left text-xs font-semibold tracking-wide text-slate-600 uppercase">
                 <th className="py-3 pr-3 pl-5">Cliente</th>
-                <th className="px-2 py-3 text-center">Clasif.</th>
                 <th className="px-3 py-3">Reclamo</th>
-                <th className="px-3 py-3">Estado cliente</th>
                 <th className="py-3 pr-5 pl-3">Acciones</th>
               </tr>
             </thead>
             <tbody>
               {visibles.map((reclamo) => (
                 <tr key={reclamo.id} className="border-b border-slate-100 align-top last:border-0 hover:bg-slate-50/60">
+                  {/* Columna 1: fecha, cliente y su clasificacion */}
                   <td className={`border-l-4 py-3 pr-3 pl-4 ${BORDE_ESTADO[reclamo.estado]}`}>
-                    <p className="text-xs text-slate-500">{reclamo.codigo ? `N° ${reclamo.codigo}` : "Sin N° de cliente"}</p>
-                    <p className="line-clamp-2 text-sm font-semibold text-slate-900">{reclamo.cliente}</p>
+                    <p className="text-xs text-slate-400">{formatearDiaCorto(reclamo.fecha)}</p>
+                    <p className="mt-0.5 line-clamp-2 text-sm font-semibold text-slate-900">{reclamo.cliente}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                      {reclamo.codigo ? <span>N° {reclamo.codigo}</span> : <span>Sin N° de cliente</span>}
+                      {reclamo.clasificacionCliente ? (
+                        <span
+                          className={`rounded px-1.5 font-semibold ${
+                            ESTILO_CLASIFICACION[reclamo.clasificacionCliente] ?? "bg-slate-100 text-slate-600"
+                          }`}
+                          title="Clasificación del cliente"
+                        >
+                          {reclamo.clasificacionCliente}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">Sin clasificación</span>
+                      )}
+                    </div>
                   </td>
-                  <td className="px-2 py-3 text-center">
-                    {reclamo.clasificacionCliente ? (
-                      <span
-                        className={`inline-flex rounded px-2 py-0.5 text-xs font-semibold ${
-                          ESTILO_CLASIFICACION[reclamo.clasificacionCliente] ?? "bg-slate-100 text-slate-600"
-                        }`}
-                      >
-                        {reclamo.clasificacionCliente}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-slate-400">—</span>
-                    )}
-                  </td>
+
+                  {/* Columna 2: codigo, descripcion y dias de espera */}
                   <td className="px-3 py-3">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span
-                        className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs ${
-                          reclamo.origen === "whatsapp" ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"
+                        className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ${
+                          reclamo.origen === "whatsapp" && !reclamo.formulario
+                            ? "bg-emerald-50 text-emerald-800"
+                            : "bg-amber-50 text-amber-900"
                         }`}
                       >
-                        <Icono nombre={reclamo.origen === "whatsapp" ? "chat" : "documento"} className="size-3" />
-                        {reclamo.origen === "whatsapp" ? "WhatsApp" : `${reclamo.formulario} · ${reclamo.tipo}`}
+                        <Icono nombre={reclamo.formulario ? "documento" : "chat"} className="size-3" />
+                        {reclamo.formulario ?? "WhatsApp"}
                       </span>
+                      <Dias dias={reclamo.dias} />
                       <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${ESTILO_ESTADO[reclamo.estado]}`}>
                         {ESTADOS_RECLAMO[reclamo.estado]}
                       </span>
-                      <Dias dias={reclamo.dias} />
                     </div>
                     <p className="mt-1 line-clamp-2 text-sm text-slate-800" title={reclamo.detalle}>
                       {reclamo.detalle}
@@ -215,39 +208,33 @@ export function PanelReclamos({ reclamos, estadoInicial }: { reclamos: ReclamoPa
                         {reclamo.indicacion.comentario ? ` · ${reclamo.indicacion.comentario}` : ""}
                       </p>
                     ) : null}
-                    <p className="mt-1 truncate text-xs text-slate-400">
-                      {[
-                        formatearDiaCorto(reclamo.fecha),
-                        reclamo.encargado,
-                        reclamo.grupoVendedor,
-                        reclamo.observaciones && `Obs.: ${reclamo.observaciones}`,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
                   </td>
-                  <td className="px-3 py-3">
-                    {reclamo.estadoCliente.length > 0 ? (
-                      <div className="flex flex-col items-start gap-1">
-                        {reclamo.estadoCliente.map((estadoCliente) => (
-                          <span
-                            key={estadoCliente}
-                            className={`rounded px-2 py-0.5 text-xs font-semibold ${estiloEstadoCliente(estadoCliente)}`}
-                          >
-                            {estadoCliente}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <span className="text-xs text-slate-400">Sin datos</span>
-                    )}
-                  </td>
+
+                  {/* Columna 3: acciones */}
                   <td className="py-3 pr-5 pl-3">
-                    <div className="flex flex-col items-start gap-1.5">
+                    <div className="flex flex-col items-stretch gap-1.5">
+                      {reclamo.formulario ? (
+                        <Link
+                          href={`/reclamos/${reclamo.formulario}`}
+                          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                          <Icono nombre="ojo" className="size-4" />
+                          Ver formulario
+                        </Link>
+                      ) : reclamo.consultaId ? (
+                        <CopiarLink
+                          etiqueta="Enviar formulario"
+                          ruta={`/formularios/reclamo?${new URLSearchParams({
+                            razon: reclamo.cliente,
+                            cliente: reclamo.codigo,
+                            ref: reclamo.consultaId,
+                          }).toString()}`}
+                        />
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => setEditandoId(reclamo.id)}
-                        className={`inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium ${
+                        className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium ${
                           reclamo.indicacion
                             ? "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
                             : "bg-blue-700 text-white hover:bg-blue-800"
@@ -255,37 +242,6 @@ export function PanelReclamos({ reclamos, estadoInicial }: { reclamos: ReclamoPa
                       >
                         {reclamo.indicacion ? "Cambiar indicación" : "Indicar acción"}
                       </button>
-                      {reclamo.formulario ? (
-                        <Link href={`/reclamos/${reclamo.formulario}`} className="text-xs font-medium text-blue-700 hover:underline">
-                          Ver formulario {reclamo.formulario}
-                        </Link>
-                      ) : reclamo.consultaId ? (
-                        <>
-                          <CopiarLink
-                            variante="enlace"
-                            etiqueta="Copiar link del formulario para el cliente"
-                            ruta={`/formularios/reclamo?${new URLSearchParams({
-                              razon: reclamo.cliente,
-                              cliente: reclamo.codigo,
-                              ref: reclamo.consultaId,
-                            }).toString()}`}
-                          />
-                          <Link
-                            href={`/reclamos/nuevo?consulta=${encodeURIComponent(reclamo.consultaId)}`}
-                            className="text-xs font-medium text-blue-700 hover:underline"
-                          >
-                            Cargar el formulario nosotros
-                          </Link>
-                        </>
-                      ) : null}
-                      {reclamo.origen === "whatsapp" ? (
-                        <Link
-                          href={`/seguimiento?vista=todas&hito=Reclamo&q=${encodeURIComponent(reclamo.cliente)}`}
-                          className="text-xs font-medium text-slate-600 hover:underline"
-                        >
-                          Ver en el seguimiento
-                        </Link>
-                      ) : null}
                     </div>
                   </td>
                 </tr>

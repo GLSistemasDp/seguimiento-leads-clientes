@@ -78,6 +78,7 @@ function ejemplos(): Consulta[] {
       grupoVendedor,
       estadoCuenta,
       grupoWhatsapp,
+      linkWhatsapp: "",
       consulta,
       hito,
       respondida,

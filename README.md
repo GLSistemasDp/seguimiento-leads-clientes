@@ -16,7 +16,7 @@ entre mensajes; las altas se evaluan a mano y sin prioridad.
 | --- | --- |
 | Resumen | Inicio + tablero en uno: chats sin responder, demoras, reclamos que esperan a gerencia, altas para priorizar, cierre del dia por WhatsApp y graficos por hito / encargado / vendedor. |
 | Seguimiento de clientes | La cola priorizada que lee la planilla del bot. Al marcar "respondido" hay que elegir **como quedo** (resuelto, derivado, escalado, espera al cliente…) y opcionalmente la **relacion** (buena / regular / en riesgo) y una observacion. Todo queda en el **historial del cliente** (ficha del cliente). Si gerencia indico algo sobre un reclamo, se ve en la fila. |
-| Solicitudes de alta | Listado con **puntaje de aptitud 0-100** (A muy apto, B apto con revision, C dudoso, D no apto), ordenado por las mas aptas. Puntaje por reglas al instante; **Evaluar con IA** (Claude) lee el formulario y justifica fortalezas, riesgos y proximo paso. Aprobar / rechazar y armar el mail de respuesta. **Importar Excel** y **Plantillas de mail** son subsecciones. |
+| Solicitudes de alta | Formulario publico de 4 pasos (`/formularios/alta`) con 8 documentos y firma. Cada solicitud se clasifica por **cuanto completo** el formulario (A completa, B casi completa, C incompleta, D muy incompleta) y se ordena por las mas completas. Link a **Nosis** con el CUIT. Aprobar / rechazar y armar el mail de respuesta. **Importar Excel** y **Plantillas de mail** son subsecciones. |
 | Reclamos | Panel de gerencia que reemplaza Telegram: reclamos de WhatsApp (hito "Reclamo") y formularios FOR-03. En **cada reclamo** se indica la accion para el vendedor; con "Ofrecer producto sustituto" se escribe que producto ofrecer. Estados: esperando gerencia → indicado/en gestion → respondido al cliente. |
 
 **Resumen diario.** `GET /api/resumen-diario` devuelve el mensaje de cierre del
@@ -35,7 +35,7 @@ catalogo real para los sustitutos y escritura en la planilla de produccion
 1. **Resumen**: "esto es lo que hoy no ve nadie" — chats demorados, reclamos sin indicacion, altas pendientes.
 2. **Reclamos** → *Indicar accion* → "Ofrecer producto sustituto" → escribir el producto → guardar.
 3. **Seguimiento** → filtrar hito Reclamo: se ve la indicacion de gerencia en la fila. Tildar *respondido* → elegir resultado y relacion → abrir la ficha del cliente y mostrar el historial.
-4. **Solicitudes de alta**: las mas aptas arriba; abrir una y *Evaluar con IA*; aprobar y *Comunicar resultado por mail*.
+4. **Solicitudes de alta**: las mas completas arriba; abrir una, ver que falta y el informe en Nosis; aprobar y *Comunicar resultado por mail*.
 5. **Resumen** → *Ver mensaje* / *Enviar por WhatsApp* del cierre del dia.
 
 ### Datos de la demo
@@ -43,7 +43,8 @@ catalogo real para los sustitutos y escritura en la planilla de produccion
 - Seguimiento: planilla de **test** leida por su link publico (`SEGUIMIENTO_ACCESO="publico"`, desde la fila 600).
 - Altas y formularios de reclamo: datos de ejemplo en memoria (`DB_BACKEND="demo"`).
 - Lo que genera la app (historial, indicaciones de gerencia, evaluaciones de IA, tildes) queda en `.data/*.json`. Borrar esa carpeta deja la demo como nueva.
-- Variables nuevas en `.env.example`: `ANTHROPIC_API_KEY` (IA), `RESUMEN_WHATSAPP_NUMERO`, `APP_URL`, `PORTAL_USUARIO`.
+- Variables nuevas en `.env.example`: `RESUMEN_WHATSAPP_NUMERO`, `APP_URL`, `PORTAL_USUARIO`.
+- Link a los grupos de WhatsApp: agregar en la hoja `Desplegable` (o en `Seguimiento`) una columna **Link grupo WhatsApp** con el link de invitacion (`https://chat.whatsapp.com/...`). Sin link, el boton copia el nombre del grupo y abre WhatsApp Web.
 
 ## Formularios de reclamo (FOR-03)
 

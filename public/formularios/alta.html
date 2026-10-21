@@ -6,294 +6,286 @@
   <meta name="robots" content="noindex" />
   <!-- Si este HTML se publica en otro sitio, poner aca la URL del CRM: <meta name="dp-api" content="https://..."> -->
   <meta name="dp-api" content="" />
-  <title>Formulario de Alta de Clientes · De Pascale</title>
+  <title>Alta de Clientes | De Pascale</title>
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.3"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <link rel="stylesheet" href="formularios.css" />
   <style type="text/tailwindcss">
     @theme {
-      --color-dp: #1b2b5e;
-      --color-dp-verde: #8cc63f;
-      --color-campo: #fdf8e4;
+      --color-azul: #193e76;
+      --color-verde: #72bc46;
+      --color-fondo: #f5f6fa;
     }
     @layer components {
-      .campo { @apply mt-1 w-full rounded-lg border border-slate-300 bg-campo px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-dp focus:bg-white focus:outline-none focus:ring-2 focus:ring-dp/30 disabled:bg-slate-100 disabled:text-slate-500; }
-      .etiqueta { @apply block text-sm font-medium text-slate-700; }
-      .seccion { @apply overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm; }
-      .seccion-titulo { @apply flex flex-wrap items-center justify-between gap-2 bg-dp px-5 py-2.5 text-sm font-semibold text-white; }
-      .obligatorio { @apply rounded-full bg-dp-verde px-2.5 py-0.5 text-[11px] font-semibold text-white; }
-      .opcion { @apply flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50 has-[:checked]:border-dp has-[:checked]:bg-blue-50; }
+      .campo { @apply mt-1 w-full rounded-xl border border-slate-300 bg-white p-2.5 text-sm text-slate-900 placeholder:text-slate-400; }
+      .etiqueta { @apply flex items-center gap-1 text-sm font-medium text-slate-800; }
+      .titulo-paso { @apply border-b border-slate-200 pb-2 text-lg font-semibold text-azul; }
+      .subtitulo { @apply pt-1.5 font-light text-slate-700; }
+      .requerido { @apply text-red-500; }
     }
   </style>
 </head>
-<body class="min-h-screen bg-slate-100 font-sans text-slate-900 antialiased">
-  <header class="bg-dp text-white">
-    <div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-5">
+<body class="bg-fondo text-[#2d2d2d] antialiased">
+  <header class="pb-4">
+    <div class="mx-auto flex items-center justify-between gap-4 rounded-b-3xl bg-white p-5 shadow-md sm:p-6">
       <div class="flex items-center gap-3">
-        <div class="rounded-xl bg-white px-3 py-1.5 leading-none text-dp">
-          <span class="block text-2xl font-black tracking-tighter">DP</span>
-          <span class="block text-[10px] font-semibold">De Pascale</span>
-        </div>
-        <div class="leading-tight">
-          <p class="text-sm font-semibold">Industrias De Pascale</p>
-          <p class="text-xs text-blue-100">Protección Industrial</p>
-        </div>
+        <img src="logo-depascale.png" alt="De Pascale" class="h-10" />
+        <h1 class="text-base font-semibold tracking-wide sm:text-lg">Formulario: Alta de Cliente</h1>
       </div>
-      <a href="https://www.depascale.com.ar" class="text-sm font-semibold text-dp-verde hover:underline">www.depascale.com.ar</a>
+      <a href="https://www.depascale.com.ar" class="hidden rounded-xl bg-verde px-4 py-2 text-sm text-white hover:bg-green-600 sm:inline-block">depascale.com.ar</a>
     </div>
-    <div class="h-1.5 bg-dp-verde"></div>
   </header>
 
-  <main class="mx-auto max-w-5xl px-4 py-8">
-    <div id="formulario-contenedor">
-      <div class="mb-6 grid gap-4 md:grid-cols-[1fr_22rem] md:items-end">
-        <div>
-          <h1 class="text-3xl font-black tracking-tight text-dp">Formulario de Alta de Clientes</h1>
-          <p class="mt-1 text-sm text-slate-600">Completá tus datos para que nuestro equipo comercial evalúe el alta. Los campos con <span class="text-red-600">*</span> son obligatorios.</p>
-          <p class="mt-1 text-sm text-slate-500">Fecha: <span id="fecha" class="font-medium text-slate-800"></span></p>
-        </div>
-        <div class="rounded-xl border-l-4 border-dp-verde bg-white p-4 text-sm shadow-sm">
-          <p class="font-bold text-dp-verde uppercase">Importante</p>
-          <p class="mt-1 text-slate-700">El pedido mínimo inicial o a programar para compra directa debe ser de <strong>1000 USD</strong> (mil dólares) o será atendido por alguno de nuestros distribuidores especiales.</p>
-        </div>
+  <main class="mx-auto mt-6 mb-16 max-w-6xl space-y-8 rounded-2xl bg-white p-5 shadow-md sm:p-8">
+    <!-- Progreso -->
+    <ol class="flex items-center justify-between gap-2" aria-label="Pasos del formulario">
+      <li class="flex flex-1 items-center"><div class="flex flex-col items-center text-xs"><span data-indicador="1" class="paso-indicador">1</span><span class="mt-1 text-[11px] text-slate-700">Datos del cliente</span></div><div class="mx-2 h-px flex-1 bg-slate-300"></div></li>
+      <li class="flex flex-1 items-center"><div class="flex flex-col items-center text-xs"><span data-indicador="2" class="paso-indicador">2</span><span class="mt-1 text-[11px] text-slate-700">Empresa</span></div><div class="mx-2 h-px flex-1 bg-slate-300"></div></li>
+      <li class="flex flex-1 items-center"><div class="flex flex-col items-center text-xs"><span data-indicador="3" class="paso-indicador">3</span><span class="mt-1 text-[11px] text-slate-700">Envío</span></div><div class="mx-2 h-px flex-1 bg-slate-300"></div></li>
+      <li class="flex items-center"><div class="flex flex-col items-center text-xs"><span data-indicador="4" class="paso-indicador">4</span><span class="mt-1 text-[11px] text-slate-700">Referencias y documentos</span></div></li>
+    </ol>
+
+    <form id="formulario" class="space-y-8" novalidate>
+      <div aria-hidden="true" class="absolute -left-[9999px]">
+        <label>Sitio web <input type="text" name="sitio_web" tabindex="-1" autocomplete="off" /></label>
       </div>
 
-      <form id="formulario" class="flex flex-col gap-5" novalidate>
-        <div aria-hidden="true" class="absolute -left-[9999px]">
-          <label>Sitio web <input type="text" name="sitio_web" tabindex="-1" autocomplete="off" /></label>
+      <!-- PASO 1: DATOS DEL CLIENTE -->
+      <section class="space-y-6" data-paso="1">
+        <div class="flex flex-wrap items-center gap-2">
+          <label for="canal" class="font-bold">¿Cómo nos conociste?<span class="requerido">*</span></label>
+          <select id="canal" name="canal" required class="campo mt-0 w-fit">
+            <option value="">Seleccioná un canal</option>
+            <option>Facebook</option>
+            <option>Instagram</option>
+            <option>YouTube</option>
+            <option>Web</option>
+            <option>Publicidad</option>
+            <option>Nuestras capacitaciones</option>
+            <option>Cámara Argentina de Seguridad (CAS)</option>
+            <option>La chica HyS (Laura Yaya)</option>
+            <option>Rescue Training</option>
+            <option>Referencia de otro cliente</option>
+            <option>Otro</option>
+          </select>
+          <input name="canalOtro" maxlength="120" placeholder="¿Cuál?" aria-label="Otro canal" class="campo mt-0 hidden w-60" />
         </div>
 
-        <!-- 1. Informacion general -->
-        <section class="seccion">
-          <h2 class="seccion-titulo">1. Información general <span class="obligatorio">Campos obligatorios (*)</span></h2>
-          <div class="flex flex-col gap-5 p-5">
-            <fieldset>
-              <legend class="etiqueta">Rubro <span class="text-red-600">*</span></legend>
-              <div class="mt-2 grid gap-2 sm:grid-cols-[repeat(2,10rem)_1fr]">
-                <label class="opcion"><input type="checkbox" name="rubro" value="Seguridad" class="accent-dp" /> Seguridad</label>
-                <label class="opcion"><input type="checkbox" name="rubro" value="Ferretería" class="accent-dp" /> Ferretería</label>
-                <input name="rubroOtro" maxlength="200" placeholder="Otros (especificar)" aria-label="Otro rubro" class="campo mt-0" />
+        <h2 class="titulo-paso">1. Datos del cliente</h2>
+
+        <div class="grid gap-6 md:grid-cols-3">
+          <div>
+            <label class="etiqueta" for="nombreFantasia">Nombre de fantasía <span class="requerido">*</span></label>
+            <input id="nombreFantasia" name="nombreFantasia" required maxlength="200" class="campo" placeholder="Ej: Ferretería El Tornillo" />
+          </div>
+          <div>
+            <label class="etiqueta" for="razonSocial">Razón social <span class="requerido">*</span></label>
+            <input id="razonSocial" name="razonSocial" required maxlength="200" autocomplete="organization" class="campo" placeholder="Ej: El Tornillo S.A." />
+          </div>
+          <div>
+            <label class="etiqueta" for="idFiscal">Identificador fiscal <span class="requerido">*</span></label>
+            <div class="flex gap-1.5">
+              <select name="tipoIdFiscal" required aria-label="Tipo de identificador fiscal" class="campo w-32 shrink-0 self-start"></select>
+              <div class="min-w-0 flex-1">
+                <input id="idFiscal" name="idFiscal" required maxlength="30" class="campo" placeholder="Ingresá tu ID fiscal" />
+                <p class="mt-1 text-[11px] text-slate-500" id="ayuda-id">Respetá el formato de tu ID</p>
               </div>
-            </fieldset>
-
-            <fieldset>
-              <legend class="etiqueta">Antigüedad de la empresa <span class="text-red-600">*</span></legend>
-              <div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
-                <label class="opcion"><input type="radio" name="antiguedad" value="1 año" class="accent-dp" required /> 1 año</label>
-                <label class="opcion"><input type="radio" name="antiguedad" value="2 años" class="accent-dp" /> 2 años</label>
-                <label class="opcion"><input type="radio" name="antiguedad" value="3 años" class="accent-dp" /> 3 años</label>
-                <label class="opcion"><input type="radio" name="antiguedad" value="5 años" class="accent-dp" /> 5 años</label>
-                <label class="opcion"><input type="radio" name="antiguedad" value="10 años" class="accent-dp" /> 10 años</label>
-                <label class="opcion"><input type="radio" name="antiguedad" value="20 años" class="accent-dp" /> 20 años</label>
-                <label class="opcion"><input type="radio" name="antiguedad" value="+20 años" class="accent-dp" /> +20 años</label>
-                <label class="opcion"><input type="radio" name="antiguedad" value="otros" class="accent-dp" /> Otros</label>
-              </div>
-              <input name="antiguedadOtro" maxlength="200" placeholder="Si elegiste otros, especificá" aria-label="Otra antigüedad" class="campo hidden" />
-            </fieldset>
-
-            <div class="grid gap-4 sm:grid-cols-[1fr_14rem]">
-              <label class="etiqueta">Puntos de venta o canal de venta <span class="text-red-600">*</span>
-                <input name="puntosVenta" required maxlength="300" placeholder="Locaciones / sucursales" class="campo" />
-              </label>
-              <label class="etiqueta">Cantidad de empleados <span class="text-red-600">*</span>
-                <input name="empleados" required type="number" min="1" max="100000" class="campo" />
-              </label>
-            </div>
-
-            <fieldset>
-              <legend class="etiqueta">Frecuencia de compra <span class="text-red-600">*</span></legend>
-              <div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                <label class="opcion"><input type="radio" name="frecuencia" value="Anual" class="accent-dp" required /> Anual</label>
-                <label class="opcion"><input type="radio" name="frecuencia" value="Mensual" class="accent-dp" /> Mensual</label>
-                <label class="opcion"><input type="radio" name="frecuencia" value="Semanal" class="accent-dp" /> Semanal</label>
-                <label class="opcion"><input type="radio" name="frecuencia" value="otros" class="accent-dp" /> Otros</label>
-              </div>
-              <input name="frecuenciaOtro" maxlength="200" placeholder="Si elegiste otros, especificá" aria-label="Otra frecuencia" class="campo hidden" />
-            </fieldset>
-          </div>
-        </section>
-
-        <!-- 2. Datos del cliente -->
-        <section class="seccion">
-          <h2 class="seccion-titulo">2. Datos del cliente <span class="obligatorio">Campos obligatorios (*)</span></h2>
-          <div class="flex flex-col gap-5 p-5">
-            <div class="grid gap-4 sm:grid-cols-2">
-              <label class="etiqueta">Nombre de fantasía <span class="text-red-600">*</span>
-                <input name="nombreFantasia" required maxlength="200" class="campo" />
-              </label>
-              <label class="etiqueta">Razón social <span class="text-red-600">*</span>
-                <input name="razonSocial" required maxlength="200" autocomplete="organization" class="campo" />
-              </label>
-              <label class="etiqueta">CUIT <span class="text-red-600">*</span>
-                <input name="cuit" required maxlength="13" inputmode="numeric" placeholder="30-12345678-9" class="campo" />
-              </label>
-              <label class="etiqueta">Fecha de constitución <span class="text-red-600">*</span>
-                <input name="fechaConstitucion" required type="date" class="campo" />
-              </label>
-            </div>
-
-            <div id="direcciones" class="flex flex-col gap-4"></div>
-
-            <div class="grid gap-4 sm:grid-cols-2">
-              <label class="etiqueta">Teléfono <span class="text-red-600">*</span>
-                <input name="telefono" required type="tel" maxlength="60" autocomplete="tel" class="campo" />
-              </label>
-              <label class="etiqueta">E-mail <span class="text-red-600">*</span>
-                <input name="email" required type="email" maxlength="200" autocomplete="email" class="campo" />
-              </label>
             </div>
           </div>
-        </section>
-
-        <!-- 3. Envios / transporte -->
-        <section class="seccion">
-          <h2 class="seccion-titulo">3. Envíos / transporte <span class="obligatorio">Campos obligatorios (*)</span></h2>
-          <div class="grid gap-3 p-5 md:grid-cols-2">
-            <label class="opcion items-start">
-              <input type="radio" name="envio" value="retira" required class="mt-1 accent-dp" />
-              <span><strong class="text-dp">Retira cliente.</strong> Una vez facturado cuenta con 7 días de corrido para retirar el pedido; caso contrario será desarmado.</span>
-            </label>
-            <label class="opcion items-start">
-              <input type="radio" name="envio" value="transporte" class="mt-1 accent-dp" />
-              <span><strong class="text-dp">Usa transporte.</strong> Completá el punto 4.</span>
-            </label>
-            <label class="opcion items-start">
-              <input type="radio" name="envio" value="sin_cargo" class="mt-1 accent-dp" />
-              <span><strong class="text-dp">Entrega sin cargo.</strong> Logística de Industrias De Pascale al domicilio indicado. Compra mínima superior a 100 USD; demora entre 48 horas y 10 días hábiles.</span>
-            </label>
-            <label class="opcion items-start">
-              <input type="radio" name="envio" value="con_cargo_24hs" class="mt-1 accent-dp" />
-              <span><strong class="text-dp">Entrega 24 hs con cargo.</strong> AMBA / CABA (consultar tarifario por zona).</span>
-            </label>
-          </div>
-        </section>
-
-        <!-- 4. Transporte -->
-        <section class="seccion">
-          <h2 class="seccion-titulo">4. Datos del transporte <span id="aviso-transporte" class="text-xs font-normal text-blue-100">Obligatorio si usás transporte</span></h2>
-          <div class="grid gap-5 p-5 lg:grid-cols-2" id="transportes"></div>
-        </section>
-
-        <!-- 5. Referencias comerciales -->
-        <section class="seccion">
-          <h2 class="seccion-titulo">5. Referencias comerciales <span class="obligatorio">Al menos una (*)</span></h2>
-          <div class="flex flex-col gap-2 p-5">
-            <p class="text-sm text-slate-600">Indicá solo los proveedores con los que trabajás habitualmente.</p>
-            <div class="hidden grid-cols-6 gap-2 px-1 text-xs font-medium text-slate-500 lg:grid">
-              <span>Empresa</span><span>Dirección / localidad</span><span>Crédito otorgado</span><span>Contacto</span><span>E-mail</span><span>Teléfono</span>
-            </div>
-            <div id="referencias" class="flex flex-col gap-2"></div>
-          </div>
-        </section>
-
-        <!-- Documentacion -->
-        <section class="seccion">
-          <h2 class="seccion-titulo">Información adicional <span class="obligatorio">Todos obligatorios (*)</span></h2>
-          <div class="flex flex-col gap-3 p-5">
-            <p class="text-sm text-slate-600">PDF o imagen. Entre todos los archivos no pueden superar los 4 MB. <span id="total-adjuntos" class="font-medium text-slate-800"></span></p>
-            <div id="documentos" class="grid gap-2 sm:grid-cols-2"></div>
-          </div>
-        </section>
-
-        <!-- Firma -->
-        <section class="seccion">
-          <h2 class="seccion-titulo">Firma <span class="obligatorio">Obligatoria (*)</span></h2>
-          <div class="flex flex-col gap-2 p-5">
-            <p class="text-sm text-slate-600">Firmá dentro del recuadro con el mouse o con el dedo.</p>
-            <canvas id="firma" class="h-40 w-full max-w-xl touch-none rounded-xl border-2 border-dashed border-slate-300 bg-campo"></canvas>
-            <div>
-              <button type="button" id="limpiar-firma" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">Borrar firma</button>
-            </div>
-          </div>
-        </section>
-
-        <p id="error-general" role="alert" class="hidden rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"></p>
-
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <p class="text-xs text-slate-500">Declaro que los datos informados son correctos. El equipo comercial va a evaluar la solicitud.</p>
-          <button type="submit" id="enviar" class="rounded-xl bg-dp px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-950 disabled:cursor-wait disabled:opacity-60">Enviar solicitud de alta</button>
         </div>
-      </form>
-    </div>
 
-    <div id="enviado" class="hidden rounded-2xl border border-emerald-200 bg-white p-8 text-center shadow-sm">
-      <div class="mx-auto flex size-14 items-center justify-center rounded-full bg-dp-verde text-3xl text-white">✓</div>
-      <h1 class="mt-4 text-2xl font-black text-dp">¡Recibimos tu solicitud de alta!</h1>
-      <p class="mt-2 text-sm text-slate-600">Nuestro equipo comercial la va a evaluar y te va a responder por e-mail.</p>
-    </div>
+        <h3 class="subtitulo">Contacto comercial</h3>
+        <div class="grid gap-6 md:grid-cols-3">
+          <div>
+            <label class="etiqueta" for="telefono">Teléfono <span class="requerido">*</span></label>
+            <input id="telefono" name="telefono" type="tel" required pattern="^\+?[0-9 ()-]{7,20}$" maxlength="20" class="campo" placeholder="Ej: +5491123456789" />
+            <p class="mt-1 text-[11px] text-slate-500">Solo números, opcional prefijo +, entre 7 y 15 dígitos.</p>
+          </div>
+          <div>
+            <label class="etiqueta" for="responsable">Nombre del responsable <span class="requerido">*</span></label>
+            <input id="responsable" name="responsable" required maxlength="120" autocomplete="name" class="campo" placeholder="Juan Pérez" />
+          </div>
+          <div>
+            <label class="etiqueta" for="email">Email <span class="requerido">*</span></label>
+            <input id="email" name="email" type="email" required maxlength="200" autocomplete="email" class="campo" placeholder="Ej: contacto@cliente.com" />
+          </div>
+        </div>
+
+        <h3 class="subtitulo">Direcciones</h3>
+        <div id="direcciones" class="grid gap-6 md:grid-cols-3"></div>
+      </section>
+
+      <!-- PASO 2: EMPRESA -->
+      <section class="hidden space-y-6" data-paso="2">
+        <h2 class="titulo-paso">2. Información de la empresa</h2>
+        <div class="grid gap-6 md:grid-cols-3">
+          <div>
+            <label class="etiqueta" for="industria">Tipo de industria <span class="requerido">*</span></label>
+            <select id="industria" name="industria" required class="campo">
+              <option value="">Seleccioná la industria…</option>
+              <option>Seguridad industrial</option><option>Petrolera</option><option>Construcción</option><option>Marítima</option>
+              <option>Retail / Distribuidora</option><option>Salud</option><option>Agro</option><option>Metalúrgica</option>
+              <option>Siderúrgica</option><option>Química</option><option>Logística</option><option>Automotor</option>
+              <option>Aeronáutica</option><option>Gastronomía</option><option>Gráfica</option><option>Servicio de mantenimiento</option>
+              <option>Turística</option><option>Otros</option>
+            </select>
+            <input name="industriaOtra" maxlength="120" placeholder="¿Cuál?" aria-label="Otra industria" class="campo hidden" />
+          </div>
+          <div>
+            <label class="etiqueta" for="antiguedad">Antigüedad</label>
+            <div class="mt-1 flex items-center gap-2">
+              <input id="antiguedad" name="antiguedad" type="number" min="0" max="200" class="campo mt-0" placeholder="Ej: 10" />
+              <span class="text-sm text-slate-600">años</span>
+            </div>
+          </div>
+          <div id="bloque-puntos-venta" class="hidden">
+            <label class="etiqueta" for="puntosVenta">Puntos de venta <span class="requerido">*</span></label>
+            <select id="puntosVenta" name="puntosVenta" class="campo">
+              <option value="">Seleccioná…</option>
+              <option>Comercio digital</option><option>Comercio físico</option><option>Ambos</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid gap-6 md:grid-cols-2">
+          <div>
+            <label class="etiqueta" for="empleados">Cantidad de empleados</label>
+            <input id="empleados" name="empleados" type="number" min="0" class="campo" placeholder="Ej: 25" />
+          </div>
+          <div>
+            <label class="etiqueta" for="tipoCompra">Tipo de compra</label>
+            <select id="tipoCompra" name="tipoCompra" class="campo">
+              <option value="">Seleccioná…</option>
+              <option>Compras semanales</option><option>Compras mensuales</option><option>Compras anuales</option>
+              <option>Por licitación</option><option>Por contrato</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <!-- PASO 3: ENVIO -->
+      <section class="hidden space-y-6" data-paso="3">
+        <h2 class="titulo-paso">3. Envío / Transportista</h2>
+        <div class="grid gap-4 md:grid-cols-2">
+          <label class="flex items-start gap-2 rounded-xl border border-slate-200 p-3 text-sm has-[:checked]:border-azul has-[:checked]:bg-blue-50/50">
+            <input type="checkbox" name="retiraCliente" class="mt-1 accent-[#193e76]" />
+            <span><span class="block font-bold">Retira cliente</span>Una vez facturado cuenta con 7 días de corrido para retirar el pedido; caso contrario será desarmado.</span>
+          </label>
+          <label class="flex items-start gap-2 rounded-xl border border-slate-200 p-3 text-sm has-[:checked]:border-azul has-[:checked]:bg-blue-50/50">
+            <input type="checkbox" name="usaTransporte" class="mt-1 accent-[#193e76]" />
+            <span><span class="block font-bold">Envío por transporte</span>Indicá el transporte que usás habitualmente.</span>
+          </label>
+        </div>
+        <div id="bloque-transportista" class="hidden">
+          <p class="mb-1 text-sm font-medium text-azul">Datos del transportista</p>
+          <p class="mb-3 text-xs text-slate-500">Completá los datos del transporte habitual que vas a usar para tus envíos.</p>
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" id="transportista">
+            <label class="etiqueta flex-col items-start">Nombre de fantasía<input data-campo="fantasia" maxlength="200" class="campo" /></label>
+            <label class="etiqueta flex-col items-start">Razón social<input data-campo="razonSocial" maxlength="200" class="campo" /></label>
+            <label class="etiqueta flex-col items-start">CUIT<input data-campo="cuit" maxlength="13" inputmode="numeric" placeholder="30XXXXXXXXX" class="campo" /></label>
+            <label class="etiqueta flex-col items-start">Dirección en Bs. As.<input data-campo="direccion" maxlength="200" class="campo" /></label>
+            <label class="etiqueta flex-col items-start">Teléfono<input data-campo="telefono" type="tel" maxlength="20" class="campo" /></label>
+            <label class="etiqueta flex-col items-start">Destino<input data-campo="destino" maxlength="200" class="campo" /></label>
+          </div>
+        </div>
+      </section>
+
+      <!-- PASO 4: REFERENCIAS + DOCUMENTACION + FIRMA -->
+      <section class="hidden space-y-6" data-paso="4">
+        <h2 class="titulo-paso">4. Referencias comerciales</h2>
+        <p class="text-xs text-slate-600">Ingresá tres referencias comerciales vinculadas al rubro o reconocidas. Cada una con email o teléfono.</p>
+        <div class="hidden grid-cols-3 gap-2 rounded-t-xl bg-azul px-3 py-2 text-xs font-medium text-white sm:grid">
+          <span>Empresa *</span><span>Email</span><span>Teléfono</span>
+        </div>
+        <div id="referencias" class="-mt-4 flex flex-col gap-2 sm:mt-0"></div>
+
+        <div class="space-y-3 pt-2">
+          <h3 class="border-b border-slate-200 pb-2 font-semibold text-azul">Información adicional · documentación obligatoria</h3>
+          <p class="text-xs text-slate-600">PDF o imagen (JPG, PNG). Entre todos los archivos, hasta 4 MB. <span id="total-adjuntos"></span></p>
+          <div id="documentos" class="grid gap-x-8 gap-y-2 md:grid-cols-2"></div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-4 pt-2">
+          <span class="text-xl text-slate-700">Firma</span>
+          <button type="button" id="abrir-firma" class="relative flex min-h-12 min-w-64 items-center gap-2 rounded-md bg-[#fdf3c4] px-3 py-2 text-left text-sm text-slate-600 hover:ring-2 hover:ring-azul/30">
+            <span class="absolute top-0 left-1 text-red-500">*</span>
+            <span id="estado-firma">Haga clic aquí para firmar</span>
+            <img id="vista-firma" alt="Tu firma" class="hidden h-10" />
+          </button>
+        </div>
+
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="aceptaTerminos" required class="accent-[#193e76]" />
+          <span>Acepto los <a href="https://www.depascale.com.ar" target="_blank" rel="noopener" class="text-azul underline">términos y condiciones</a>.</span>
+        </label>
+      </section>
+
+      <p id="error-general" role="alert" class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"></p>
+
+      <div class="flex items-center justify-between border-t border-slate-200 pt-4">
+        <p class="text-xs text-slate-500">Paso <span id="numero-paso">1</span> de 4</p>
+        <div class="flex gap-3">
+          <button id="anterior" type="button" class="hidden rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Volver</button>
+          <button id="siguiente" type="button" class="rounded-xl bg-azul px-6 py-2 text-sm text-white hover:bg-blue-900">Siguiente</button>
+          <button id="enviar" type="submit" class="hidden min-w-48 rounded-xl bg-verde px-6 py-2 text-sm text-white hover:bg-green-700 disabled:cursor-wait disabled:opacity-60">Enviar solicitud</button>
+        </div>
+      </div>
+    </form>
   </main>
 
-  <footer class="mt-6 bg-dp text-sm text-blue-100">
-    <div class="mx-auto flex max-w-5xl flex-wrap justify-between gap-3 px-4 py-5">
-      <p>Industrias De Pascale S.A. · Defensa 2391, Aldo Bonzi, Bs. As.</p>
-      <p>ventas@depascale.com.ar · WhatsApp oficial +54 11 5782 5252</p>
+  <!-- Firma -->
+  <div id="modal-firma" class="fixed inset-0 z-[10000] hidden items-center justify-center bg-black/50 p-4">
+    <div class="w-full max-w-lg rounded-2xl bg-white p-5 shadow-lg">
+      <h3 class="text-lg font-semibold text-azul">Firma</h3>
+      <p class="text-sm text-slate-600">Firmá dentro del recuadro con el mouse o con el dedo.</p>
+      <canvas id="lienzo-firma" class="mt-3 h-44 w-full touch-none rounded-xl border-2 border-dashed border-slate-300 bg-[#fdf3c4]"></canvas>
+      <div class="mt-4 flex justify-between gap-2">
+        <button type="button" id="borrar-firma" class="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Borrar</button>
+        <div class="flex gap-2">
+          <button type="button" id="cancelar-firma" class="rounded-xl px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Cancelar</button>
+          <button type="button" id="guardar-firma" class="rounded-xl bg-azul px-5 py-2 text-sm text-white hover:bg-blue-900">Usar esta firma</button>
+        </div>
+      </div>
     </div>
-  </footer>
+  </div>
+
+  <!-- Exito -->
+  <div id="enviado" class="fixed inset-0 z-[10000] hidden items-center justify-center bg-black/50 p-4">
+    <div class="mx-auto max-w-md rounded-2xl bg-white p-8 text-center shadow-lg">
+      <img src="logo-depascale.png" alt="De Pascale" class="mx-auto mb-4 h-10" />
+      <h3 class="mb-2 text-lg font-semibold text-azul">¡Formulario enviado con éxito!</h3>
+      <p class="mb-6 text-sm leading-relaxed text-slate-600">Tu solicitud de alta fue enviada correctamente. Nuestro equipo analizará tu perfil y se comunicará para confirmar el alta como cliente mayorista.</p>
+      <a href="https://www.depascale.com.ar" class="inline-block rounded-xl bg-verde px-6 py-2 text-sm text-white hover:bg-green-700">Entendido, volver al inicio</a>
+    </div>
+  </div>
 
   <template id="plantilla-direccion">
-    <fieldset class="rounded-xl border border-slate-200 p-4" data-direccion>
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <p class="etiqueta" data-titulo></p>
-        <label class="hidden items-center gap-2 text-xs text-slate-600" data-igual>
-          <input type="checkbox" class="accent-dp" /> Igual a la dirección legal
-        </label>
+    <div class="space-y-2" data-direccion>
+      <p class="etiqueta" data-titulo></p>
+      <div class="relative">
+        <select data-campo="pais" class="campo mt-0" aria-label="País"></select>
       </div>
-      <div class="mt-2 grid gap-3 sm:grid-cols-6">
-        <label class="etiqueta sm:col-span-3">Calle y número <span class="text-red-600">*</span>
-          <input data-campo="direccion" required maxlength="200" class="campo" />
-        </label>
-        <label class="etiqueta sm:col-span-3">Localidad <span class="text-red-600">*</span>
-          <input data-campo="localidad" required maxlength="120" class="campo" />
-        </label>
-        <label class="etiqueta sm:col-span-2">Ciudad
-          <input data-campo="ciudad" maxlength="120" class="campo" />
-        </label>
-        <label class="etiqueta">CP <span class="text-red-600">*</span>
-          <input data-campo="cp" required maxlength="20" class="campo" />
-        </label>
-        <label class="etiqueta sm:col-span-2">Provincia <span class="text-red-600">*</span>
-          <select data-campo="provincia" required class="campo"></select>
-        </label>
-        <label class="etiqueta">País
-          <input data-campo="pais" maxlength="80" value="Argentina" class="campo" />
-        </label>
+      <div class="relative">
+        <input data-campo="direccion" maxlength="300" autocomplete="off" class="campo" placeholder="Indicá dirección y provincia" />
+        <ul data-sugerencias class="sugerencias absolute z-[9999] mt-1 hidden w-full overflow-y-auto rounded-xl border border-slate-200 bg-white text-xs shadow"></ul>
       </div>
-    </fieldset>
-  </template>
-
-  <template id="plantilla-transporte">
-    <fieldset class="rounded-xl border border-slate-200 p-4" data-transporte>
-      <legend class="px-1 text-sm font-semibold text-dp" data-titulo></legend>
-      <div class="grid gap-3 sm:grid-cols-2">
-        <label class="etiqueta">Nombre de fantasía<input data-campo="fantasia" maxlength="200" class="campo" /></label>
-        <label class="etiqueta">Razón social<input data-campo="razonSocial" maxlength="200" class="campo" /></label>
-        <label class="etiqueta">CUIT<input data-campo="cuit" maxlength="13" inputmode="numeric" class="campo" /></label>
-        <span></span>
-        <label class="etiqueta">Dirección en Bs. As.<input data-campo="direccion" maxlength="200" class="campo" /></label>
-        <label class="etiqueta">Teléfono<input data-campo="telDireccion" type="tel" maxlength="60" class="campo" /></label>
-        <label class="etiqueta">Destino<input data-campo="destino" maxlength="200" class="campo" /></label>
-        <label class="etiqueta">Teléfono<input data-campo="telDestino" type="tel" maxlength="60" class="campo" /></label>
-      </div>
-    </fieldset>
+      <div data-mapa class="mapa mt-2 rounded-xl border border-slate-200"></div>
+    </div>
   </template>
 
   <template id="plantilla-referencia">
-    <div class="grid grid-cols-2 gap-2 rounded-lg border border-slate-200 p-2 lg:grid-cols-6 lg:border-0 lg:p-0" data-referencia>
-      <input data-campo="empresa" maxlength="200" placeholder="Empresa" aria-label="Empresa" class="campo mt-0" />
-      <input data-campo="direccion" maxlength="200" placeholder="Dirección / localidad" aria-label="Dirección o localidad" class="campo mt-0" />
-      <input data-campo="credito" maxlength="60" placeholder="Crédito otorgado" aria-label="Crédito otorgado" class="campo mt-0" />
-      <input data-campo="contacto" maxlength="120" placeholder="Contacto" aria-label="Contacto" class="campo mt-0" />
-      <input data-campo="email" type="email" maxlength="200" placeholder="E-mail" aria-label="E-mail" class="campo mt-0" />
-      <input data-campo="telefono" type="tel" maxlength="60" placeholder="Teléfono" aria-label="Teléfono" class="campo mt-0" />
+    <div class="grid gap-2 rounded-xl border border-slate-200 p-2 sm:grid-cols-3 sm:rounded-none sm:border-0 sm:p-0" data-referencia>
+      <input data-campo="empresa" maxlength="200" placeholder="Empresa *" aria-label="Empresa" class="campo mt-0" />
+      <input data-campo="email" type="email" maxlength="200" placeholder="Email" aria-label="Email" class="campo mt-0" />
+      <input data-campo="telefono" type="tel" maxlength="20" placeholder="Teléfono" aria-label="Teléfono" class="campo mt-0" />
     </div>
   </template>
 
   <template id="plantilla-documento">
-    <label class="flex cursor-pointer items-center gap-3 rounded-lg border border-amber-200 bg-campo px-3 py-2.5 text-sm hover:border-dp" data-documento>
-      <span class="text-red-600">*</span>
-      <span class="min-w-0 flex-1">
-        <span class="block font-medium text-slate-800" data-titulo></span>
-        <span class="block truncate text-xs text-slate-500" data-estado>Hacé clic para adjuntar</span>
-      </span>
-      <input type="file" accept=".pdf,image/png,image/jpeg,image/webp" class="sr-only" />
+    <label class="relative flex cursor-pointer items-center gap-2 rounded-sm bg-[#fdf3c4] px-3 py-2 text-sm text-slate-700 hover:ring-2 hover:ring-azul/30" data-documento>
+      <span class="absolute top-0 left-0.5 text-red-500" data-asterisco>*</span>
+      <span class="min-w-0 flex-1 truncate" data-estado></span>
+      <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" class="sr-only" />
     </label>
   </template>
 

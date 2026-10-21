@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { Fragment, useState, useTransition } from "react";
+import { BotonGrupoWhatsapp } from "@/components/seguimiento/BotonGrupoWhatsapp";
 import { FichaCliente } from "@/components/seguimiento/FichaCliente";
 import { RecomendacionRespuesta } from "@/components/seguimiento/RecomendacionRespuesta";
 import { Button } from "@/components/ui/Button";
@@ -9,7 +10,7 @@ import { Icono } from "@/components/ui/Icono";
 import { Modal } from "@/components/ui/Modal";
 import { Textarea } from "@/components/ui/Textarea";
 import { useToast } from "@/components/ui/Toast";
-import { alertasCliente, claveChat, separarCliente } from "@/lib/seguimiento/presentacion";
+import { claveChat, estadoCliente, separarCliente } from "@/lib/seguimiento/presentacion";
 import type { Prioridad, ResumenChat } from "@/lib/seguimiento/presentacion";
 import type { RespuestaTipo } from "@/lib/seguimiento/respuestas";
 import { formatearDiaCorto, formatearHora } from "@/lib/utils/dates";
@@ -44,7 +45,7 @@ const ESTILO_RELACION: Record<Relacion, string> = {
 };
 
 /** Lo secundario (lista, vendedor, fecha, encargado) va dentro de estas columnas, en chico. */
-const COLUMNAS = ["Cliente", "Consulta", "Demora", "Seguimiento", "Respondido"] as const;
+const COLUMNAS = ["Cliente", "Consulta", "Demora", "Último estado", "Respondido"] as const;
 
 const PRIORIDADES: Record<Prioridad, { etiqueta: string; estilo: string; borde: string }> = {
   ALTA: { etiqueta: "Alta", estilo: "bg-red-600 text-white", borde: "border-l-red-600" },
@@ -75,7 +76,8 @@ function estiloHito(hito: string): string {
 function estiloEstado(estado: string): string {
   const texto = normalizarEncabezado(estado);
   if (texto === "ok") return "bg-emerald-600 text-white";
-  if (texto.includes("deuda")) return "bg-orange-500 text-white";
+  if (texto.includes("judicial")) return "bg-red-600 text-white";
+  if (texto.includes("deud")) return "bg-orange-500 text-white";
   if (texto.includes("no responder")) return "bg-violet-100 text-violet-700";
   return "bg-amber-100 text-amber-800";
 }
@@ -239,7 +241,7 @@ export function SeguimientoTable({
             const nuevoChat = agrupado && (indice === 0 || chat !== claveChat(consultas[indice - 1]));
             const resumen = chats[chat];
             const vendedor = consulta.grupoVendedor.replace(/^FILTRO GRUPO\s*/i, "");
-            const alertas = respondida ? [] : alertasCliente(consulta);
+            const estados = estadoCliente(consulta);
 
             return (
               <Fragment key={consulta.id}>
@@ -302,20 +304,10 @@ export function SeguimientoTable({
                         <Icono nombre="ojo" className="size-3.5 text-slate-400 group-hover:text-blue-700" />
                       </span>
                     </button>
-                    {vendedor ? (
-                      <p className="mt-1 truncate text-xs text-slate-500" title={consulta.grupoWhatsapp}>
-                        {vendedor}
-                      </p>
-                    ) : null}
-                    {alertas.length > 0 ? (
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {alertas.map((alerta) => (
-                          <span key={alerta} className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${estiloEstado(alerta)}`}>
-                            {alerta}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
+                    {vendedor ? <p className="mt-1 truncate text-xs text-slate-500">{vendedor}</p> : null}
+                    <div className="mt-1">
+                      <BotonGrupoWhatsapp grupo={consulta.grupoWhatsapp} link={consulta.linkWhatsapp} />
+                    </div>
                   </td>
 
                   {/* Consulta: hito y prioridad, el mensaje y lo que indico gerencia. */}
@@ -349,11 +341,14 @@ export function SeguimientoTable({
                         {consulta.indicacion.comentario ? ` · ${consulta.indicacion.comentario}` : ""}
                       </p>
                     ) : null}
-                    <p className="mt-1 text-xs text-slate-400">
-                      {formatearDiaCorto(consulta.fecha)}
-                      {formatearHora(consulta.fecha) !== "00:00 hs" ? ` · ${formatearHora(consulta.fecha)}` : ""}
-                      {` · ${consulta.encargado || "sin encargado"}`}
-                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <p className="text-xs text-slate-400">
+                        {formatearDiaCorto(consulta.fecha)}
+                        {formatearHora(consulta.fecha) !== "00:00 hs" ? ` · ${formatearHora(consulta.fecha)}` : ""}
+                        {consulta.encargado && consulta.encargado.toLowerCase() !== "bot" ? ` · ${consulta.encargado}` : ""}
+                      </p>
+                      <RecomendacionRespuesta consulta={consulta} apagada={respondida} catalogo={catalogo} />
+                    </div>
                   </td>
 
                   <td className="px-2 py-3 text-center">
@@ -372,8 +367,33 @@ export function SeguimientoTable({
                     )}
                   </td>
 
-                  {/* Seguimiento: como quedo / nota y la respuesta sugerida. */}
+                  {/* Ultimo estado: la situacion de la cuenta del cliente y como quedo la conversacion. */}
                   <td className="px-3 py-3">
+                    {estados.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {estados.map((estado) => (
+                          <span key={estado} className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${estiloEstado(estado)}`}>
+                            {estado}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-400">Sin datos de la cuenta</span>
+                    )}
+                    {consulta.cierre?.resultado && respondida ? (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-800">
+                          {consulta.cierre.resultado}
+                        </span>
+                        {consulta.cierre.relacion ? (
+                          <span
+                            className={`rounded border px-1.5 py-0.5 text-[11px] font-medium ${ESTILO_RELACION[consulta.cierre.relacion]}`}
+                          >
+                            {RELACIONES[consulta.cierre.relacion]}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
                     <button
                       type="button"
                       disabled={ocupada}
@@ -381,31 +401,13 @@ export function SeguimientoTable({
                         setBorrador(consulta.observaciones);
                         setEditando(consulta);
                       }}
-                      className="group flex w-full items-start rounded-md p-1 text-left text-xs text-slate-600 hover:bg-slate-100"
+                      title="Editar la observación"
+                      className="group mt-1 block w-full rounded-md text-left text-xs text-slate-500 hover:text-slate-800"
                     >
-                      <span className="line-clamp-3 flex-1">
-                        {consulta.cierre?.resultado && respondida ? (
-                          <span className="mb-1 flex flex-wrap gap-1">
-                            <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-800">
-                              {consulta.cierre.resultado}
-                            </span>
-                            {consulta.cierre.relacion ? (
-                              <span
-                                className={`rounded border px-1.5 py-0.5 text-[11px] font-medium ${ESTILO_RELACION[consulta.cierre.relacion]}`}
-                              >
-                                {RELACIONES[consulta.cierre.relacion]}
-                              </span>
-                            ) : null}
-                          </span>
-                        ) : null}
-                        {consulta.observaciones || (
-                          <span className="text-slate-400 group-hover:text-blue-700">+ Agregar nota</span>
-                        )}
+                      <span className="line-clamp-2">
+                        {consulta.observaciones || <span className="text-slate-400 group-hover:text-blue-700">+ Observación</span>}
                       </span>
                     </button>
-                    <div className="mt-1">
-                      <RecomendacionRespuesta consulta={consulta} apagada={respondida} catalogo={catalogo} />
-                    </div>
                   </td>
 
                   <td className="py-3 pr-4 pl-2 text-center">
