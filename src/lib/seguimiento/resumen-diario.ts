@@ -1,4 +1,4 @@
-import { diasAbierta, esReclamo, separarCliente } from "@/lib/seguimiento/presentacion";
+import { diasAbierta, esReclamo, estadoCliente, separarCliente } from "@/lib/seguimiento/presentacion";
 import { diaLocal } from "@/lib/seguimiento/tablero";
 import type { ReclamoPanel } from "@/types/reclamo";
 import type { Consulta, EventoHistorial } from "@/types/seguimiento";
@@ -88,13 +88,19 @@ export function armarResumenDiario({ consultas, eventosHoy, reclamos, ahora = ne
 
   if (demoradas.length > 0) {
     lineas.push("", "*Demoradas:*");
+    // Un cliente por bloque (nombre, grupo, estado de cuenta, hito) para leerlo de un vistazo.
     for (const { consulta, dias } of demoradas.slice(0, MAX_DEMORADAS)) {
       const { nombre } = separarCliente(consulta.cliente);
+      const estado = estadoCliente(consulta).join(" · ");
       lineas.push(
-        `• ${nombre} — ${consulta.hito || "Consulta"} — ${plural(dias, "día", "días")}${consulta.encargado ? ` — ${consulta.encargado}` : ""}`,
+        "",
+        `• *${nombre}*`,
+        `   Grupo: ${consulta.grupoWhatsapp || "sin grupo"}`,
+        `   Estado de cuenta: ${estado || "sin datos"}`,
+        `   Hito: ${consulta.hito || "Consulta"} · ${plural(dias, "día", "días")} sin respuesta`,
       );
     }
-    if (demoradas.length > MAX_DEMORADAS) lineas.push(`…y ${demoradas.length - MAX_DEMORADAS} más`);
+    if (demoradas.length > MAX_DEMORADAS) lineas.push("", `…y ${demoradas.length - MAX_DEMORADAS} más`);
   }
 
   if (enRiesgo.length > 0) {
