@@ -40,10 +40,10 @@
   <main class="mx-auto mt-6 mb-16 max-w-6xl space-y-8 rounded-2xl bg-white p-5 shadow-md sm:p-8">
     <!-- Progreso -->
     <ol class="flex items-center justify-between gap-2" aria-label="Pasos del formulario">
-      <li class="flex flex-1 items-center"><div class="flex flex-col items-center text-xs"><span data-indicador="1" class="paso-indicador">1</span><span class="mt-1 text-[11px] text-slate-700">Datos del cliente</span></div><div class="mx-2 h-px flex-1 bg-slate-300"></div></li>
-      <li class="flex flex-1 items-center"><div class="flex flex-col items-center text-xs"><span data-indicador="2" class="paso-indicador">2</span><span class="mt-1 text-[11px] text-slate-700">Empresa</span></div><div class="mx-2 h-px flex-1 bg-slate-300"></div></li>
-      <li class="flex flex-1 items-center"><div class="flex flex-col items-center text-xs"><span data-indicador="3" class="paso-indicador">3</span><span class="mt-1 text-[11px] text-slate-700">Envío</span></div><div class="mx-2 h-px flex-1 bg-slate-300"></div></li>
-      <li class="flex items-center"><div class="flex flex-col items-center text-xs"><span data-indicador="4" class="paso-indicador">4</span><span class="mt-1 text-[11px] text-slate-700">Referencias y documentos</span></div></li>
+      <li class="flex flex-1 items-center"><div class="flex flex-col items-center text-xs"><button type="button" data-indicador="1" class="paso-indicador" aria-label="Ir al paso 1">1</button><span class="mt-1 text-[11px] text-slate-700">Datos del cliente</span></div><div class="mx-2 h-px flex-1 bg-slate-300"></div></li>
+      <li class="flex flex-1 items-center"><div class="flex flex-col items-center text-xs"><button type="button" data-indicador="2" class="paso-indicador" aria-label="Ir al paso 2">2</button><span class="mt-1 text-[11px] text-slate-700">Empresa</span></div><div class="mx-2 h-px flex-1 bg-slate-300"></div></li>
+      <li class="flex flex-1 items-center"><div class="flex flex-col items-center text-xs"><button type="button" data-indicador="3" class="paso-indicador" aria-label="Ir al paso 3">3</button><span class="mt-1 text-[11px] text-slate-700">Envío</span></div><div class="mx-2 h-px flex-1 bg-slate-300"></div></li>
+      <li class="flex items-center"><div class="flex flex-col items-center text-xs"><button type="button" data-indicador="4" class="paso-indicador" aria-label="Ir al paso 4">4</button><span class="mt-1 text-[11px] text-slate-700">Referencias y documentos</span></div></li>
     </ol>
 
     <form id="formulario" class="space-y-8" novalidate>
@@ -84,14 +84,9 @@
             <input id="razonSocial" name="razonSocial" required maxlength="200" autocomplete="organization" class="campo" placeholder="Ej: El Tornillo S.A." />
           </div>
           <div>
-            <label class="etiqueta" for="idFiscal">Identificador fiscal <span class="requerido">*</span></label>
-            <div class="flex gap-1.5">
-              <select name="tipoIdFiscal" required aria-label="Tipo de identificador fiscal" class="campo w-32 shrink-0 self-start"></select>
-              <div class="min-w-0 flex-1">
-                <input id="idFiscal" name="idFiscal" required maxlength="30" class="campo" placeholder="Ingresá tu ID fiscal" />
-                <p class="mt-1 text-[11px] text-slate-500" id="ayuda-id">Respetá el formato de tu ID</p>
-              </div>
-            </div>
+            <label class="etiqueta" for="cuit">CUIT <span class="requerido">*</span></label>
+            <input id="cuit" name="cuit" required maxlength="13" inputmode="numeric" autocomplete="off" class="campo" placeholder="30-12345678-9" />
+            <p class="mt-1 text-[11px] text-slate-500" id="ayuda-cuit">11 números, con o sin guiones</p>
           </div>
         </div>
 
@@ -99,7 +94,7 @@
         <div class="grid gap-6 md:grid-cols-3">
           <div>
             <label class="etiqueta" for="telefono">Teléfono <span class="requerido">*</span></label>
-            <input id="telefono" name="telefono" type="tel" required pattern="^\+?[0-9 ()-]{7,20}$" maxlength="20" class="campo" placeholder="Ej: +5491123456789" />
+            <input id="telefono" name="telefono" type="tel" required pattern="\+?[0-9 \(\)\-]{7,20}" maxlength="20" class="campo" placeholder="Ej: +5491123456789" />
             <p class="mt-1 text-[11px] text-slate-500">Solo números, opcional prefijo +, entre 7 y 15 dígitos.</p>
           </div>
           <div>
@@ -215,11 +210,12 @@
         </div>
 
         <label class="flex items-center gap-2 text-sm">
-          <input type="checkbox" name="aceptaTerminos" required class="accent-[#193e76]" />
+          <input type="checkbox" name="aceptaTerminos" required aria-label="Aceptar los términos y condiciones" class="accent-[#193e76]" />
           <span>Acepto los <a href="https://www.depascale.com.ar" target="_blank" rel="noopener" class="text-azul underline">términos y condiciones</a>.</span>
         </label>
       </section>
 
+      <div id="aviso-paso" role="status" class="hidden rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"></div>
       <p id="error-general" role="alert" class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"></p>
 
       <div class="flex items-center justify-between border-t border-slate-200 pt-4">
@@ -262,9 +258,7 @@
   <template id="plantilla-direccion">
     <div class="space-y-2" data-direccion>
       <p class="etiqueta" data-titulo></p>
-      <div class="relative">
-        <select data-campo="pais" class="campo mt-0" aria-label="País"></select>
-      </div>
+      <select data-campo="provincia" class="campo mt-0" aria-label="Provincia"></select>
       <div class="relative">
         <input data-campo="direccion" maxlength="300" autocomplete="off" class="campo" placeholder="Indicá dirección y provincia" />
         <ul data-sugerencias class="sugerencias absolute z-[9999] mt-1 hidden w-full overflow-y-auto rounded-xl border border-slate-200 bg-white text-xs shadow"></ul>

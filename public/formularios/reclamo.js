@@ -52,7 +52,7 @@
     listaAdjuntos.innerHTML = "";
     archivos.forEach(function (archivo, indice) {
       var item = document.createElement("li");
-      item.className = "flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm";
+      item.className = "flex items-center gap-2 rounded border border-slate-200 bg-white px-3 py-2 text-sm";
       var nombre = document.createElement("span");
       nombre.className = "min-w-0 flex-1 truncate";
       nombre.textContent = archivo.name;
@@ -90,12 +90,32 @@
     pintarAdjuntos();
   });
 
+  // Al corregir un campo se le saca la marca roja.
+  formulario.addEventListener("input", function (evento) { evento.target.classList.remove("campo-invalido"); });
+  formulario.addEventListener("change", function (evento) { evento.target.classList.remove("campo-invalido"); });
+
   // --- Envio ---
   formulario.addEventListener("submit", function (evento) {
     evento.preventDefault();
     DP.error("");
-    if (!formulario.checkValidity()) {
-      formulario.reportValidity();
+    // Se marcan todos los campos que faltan (no solo el primero) y se listan.
+    var pendientes = Array.prototype.filter.call(formulario.elements, function (campo) {
+      return campo.willValidate && !campo.checkValidity();
+    });
+    if (pendientes.length) {
+      pendientes.forEach(function (campo) { campo.classList.add("campo-invalido"); });
+      DP.error(
+        "Revisá: " +
+          pendientes
+            .map(function (campo) {
+              var etiqueta = campo.closest("label");
+              var rotulo = etiqueta && etiqueta.querySelector(".rotulo");
+              var texto = rotulo ? rotulo.textContent : (document.querySelector('label[for="' + campo.id + '"]') || {}).textContent;
+              return String(texto || campo.name).replace("*", "").trim();
+            })
+            .join(", ") + "."
+      );
+      pendientes[0].focus({ preventScroll: true });
       return;
     }
 

@@ -6,132 +6,182 @@
   <meta name="robots" content="noindex" />
   <!-- Si este HTML se publica en otro sitio, poner aca la URL del CRM: <meta name="dp-api" content="https://..."> -->
   <meta name="dp-api" content="" />
-  <title>Reclamo de Cliente | De Pascale</title>
+  <title>Reclamo de Cliente · FOR-03 | De Pascale</title>
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.3"></script>
   <link rel="stylesheet" href="formularios.css" />
   <style type="text/tailwindcss">
     @theme {
-      --color-azul: #193e76;
-      --color-verde: #72bc46;
-      --color-fondo: #f5f6fa;
+      --color-dp: #0f2b66;
+      --color-verde: #8cc63f;
+      --color-celda: #dbe3ef;
+      --color-gris-azul: #c3cddc;
+      --color-fondo: #eef1f6;
     }
     @layer components {
-      .campo { @apply mt-1 w-full rounded-xl border border-slate-300 bg-white p-2.5 text-sm text-slate-900 placeholder:text-slate-400; }
-      .etiqueta { @apply block text-sm font-medium text-slate-800; }
-      .titulo-seccion { @apply border-b border-slate-200 pb-2 text-lg font-semibold text-azul; }
-      .requerido { @apply text-red-500; }
+      /* Barra de seccion como en el PDF: azul, con la punta derecha redondeada. */
+      .barra { @apply rounded-tr-2xl bg-dp px-4 py-2.5 text-[15px] font-semibold text-white sm:px-5; }
+      /* Fila "etiqueta | campo" de las grillas del formulario. */
+      .fila { @apply grid border-b border-dp/30 sm:grid-cols-[11rem_1fr]; }
+      .rotulo { @apply flex items-center bg-celda px-3 py-2 text-[13px] text-dp sm:px-4; }
+      .entrada { @apply w-full bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:bg-blue-50/40; }
+      .requerido { @apply text-red-600; }
     }
   </style>
 </head>
-<body class="bg-fondo text-[#2d2d2d] antialiased">
-  <header class="pb-4">
-    <div class="mx-auto flex items-center justify-between gap-4 rounded-b-3xl bg-white p-5 shadow-md sm:p-6">
-      <div class="flex items-center gap-3">
-        <img src="logo-depascale.png" alt="De Pascale" class="h-10" />
-        <h1 class="text-base font-semibold tracking-wide sm:text-lg">Formulario: Reclamo de Cliente</h1>
+<body class="bg-fondo text-slate-900 antialiased">
+  <div class="mx-auto max-w-4xl bg-white shadow-lg sm:my-6 sm:rounded-2xl sm:overflow-hidden">
+    <!-- Encabezado del FOR-03 -->
+    <header class="relative bg-dp pb-6 text-white">
+      <div class="flex items-start justify-between gap-4 px-4 pt-0 sm:px-8">
+        <div class="rounded-b-2xl bg-white px-4 pt-5 pb-3 shadow-md">
+          <img src="logo-depascale.png" alt="De Pascale · Protección Industrial" class="h-14 sm:h-16" />
+        </div>
+        <div class="pt-5 text-right text-[11px] leading-snug text-blue-100">
+          <p class="font-semibold tracking-wide text-white">DP · DPS · NUBUS · UCU</p>
+          <p class="hidden sm:block">Protección industrial, guantes, indumentaria y seguridad</p>
+          <a href="https://www.depascale.com.ar" class="mt-2 inline-block text-base font-bold text-verde hover:underline">www.depascale.com.ar</a>
+        </div>
       </div>
-      <span class="hidden text-xs text-slate-500 sm:block">FOR-03 Rev04 · <span id="fecha"></span></span>
-    </div>
-  </header>
+      <!-- La curva verde del PDF -->
+      <div class="absolute inset-x-0 bottom-0 h-2 bg-gradient-to-r from-verde via-verde to-dp"></div>
+    </header>
 
-  <main class="mx-auto mt-6 mb-16 max-w-5xl rounded-2xl bg-white p-5 shadow-md sm:p-8">
-    <div id="formulario-contenedor">
-      <p class="mb-6 text-sm text-slate-600">
-        Contanos qué pasó y nuestro equipo te va a contactar. Adjuntá copia del remito, factura, orden de compra o pedido del reclamo. Los campos con <span class="requerido">*</span> son obligatorios.
-      </p>
-
-      <form id="formulario" class="space-y-8" novalidate>
-        <div aria-hidden="true" class="absolute -left-[9999px]">
-          <label>Sitio web <input type="text" name="sitio_web" tabindex="-1" autocomplete="off" /></label>
+    <main class="px-4 py-6 sm:px-8">
+      <div id="formulario-contenedor">
+        <div class="text-right">
+          <p class="text-sm font-bold text-dp">FOR-03Rev04</p>
+          <p class="text-xl font-extrabold text-verde">COPIA CONTROLADA</p>
         </div>
 
-        <section class="space-y-5">
-          <h2 class="titulo-seccion">1. Tus datos</h2>
-          <div class="grid gap-5 md:grid-cols-3">
-            <label class="etiqueta">Razón social <span class="requerido">*</span><input name="razonSocial" required maxlength="200" class="campo" /></label>
-            <label class="etiqueta">N° de cliente<input name="numeroCliente" maxlength="40" class="campo" /></label>
-            <label class="etiqueta">Sucursal<input name="sucursal" maxlength="120" class="campo" /></label>
-            <label class="etiqueta">Nombre y apellido <span class="requerido">*</span><input name="contacto" required maxlength="120" autocomplete="name" class="campo" /></label>
-            <label class="etiqueta">Cargo<input name="cargo" maxlength="120" class="campo" /></label>
-            <label class="etiqueta">Transporte<input name="transporte" maxlength="120" class="campo" /></label>
-            <label class="etiqueta">Teléfono <span class="requerido">*</span><input name="telefono" type="tel" required maxlength="60" autocomplete="tel" class="campo" placeholder="Ej: +5491123456789" /></label>
-            <label class="etiqueta md:col-span-2">Email <span class="requerido">*</span><input name="email" type="email" required maxlength="200" autocomplete="email" class="campo" placeholder="Ej: compras@empresa.com" /></label>
-          </div>
-        </section>
-
-        <section class="space-y-5">
-          <h2 class="titulo-seccion">2. El problema</h2>
-          <div class="grid gap-5 md:grid-cols-[16rem_1fr]">
-            <label class="etiqueta">Clasificación <span class="requerido">*</span>
-              <select name="clasificacion" required class="campo">
-                <option value="">Seleccioná…</option>
-                <option>Error de Facturación</option>
-                <option>Plazo de Entrega</option>
-                <option>Diferencia de Precio</option>
-                <option>Error de Cliente</option>
-                <option>Falla de Calidad</option>
-                <option>Faltante de Mercadería</option>
-              </select>
-            </label>
-            <label class="etiqueta">Detalle del problema <span class="requerido">*</span>
-              <textarea name="detalle" required rows="4" maxlength="4000" class="campo" placeholder="Contanos qué pasó, con el mayor detalle posible."></textarea>
-            </label>
-          </div>
-        </section>
-
-        <section class="space-y-5">
-          <h2 class="titulo-seccion">3. Productos y comprobantes</h2>
-          <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            <label class="etiqueta">N° orden de compra<input name="ordenCompra" maxlength="60" class="campo" /></label>
-            <label class="etiqueta">N° de factura<input name="factura" maxlength="60" class="campo" /></label>
-            <label class="etiqueta">N° de pedido<input name="pedido" maxlength="60" class="campo" /></label>
-            <label class="etiqueta">N° de remito<input name="remito" maxlength="60" class="campo" /></label>
-          </div>
-
-          <div>
-            <div class="hidden grid-cols-[1fr_2fr_7rem_7rem_2.25rem] gap-2 rounded-t-xl bg-azul px-3 py-2 text-xs font-medium text-white sm:grid">
-              <span>Código producto</span><span>Descripción</span><span>Cant. facturada</span><span>Cant. reclamo</span><span></span>
+        <div class="mt-3 rounded-tr-2xl border border-dp/40 p-4 sm:p-5">
+          <h1 class="text-2xl font-extrabold text-dp sm:text-3xl">Reclamo de Cliente <span class="text-sm font-normal text-slate-600">(a completar por Industrias De Pascale S.A.)</span></h1>
+          <div class="mt-4 grid gap-4 sm:grid-cols-[1fr_12rem]">
+            <div>
+              <p class="rounded bg-celda px-3 py-2 text-sm text-slate-500">Se asigna al enviar el formulario</p>
+              <p class="mt-1 border-t border-dp/40 pt-1 text-sm text-slate-700">Número de Reclamo</p>
             </div>
-            <div id="productos" class="mt-2 flex flex-col gap-2"></div>
-            <button type="button" id="agregar-producto" class="mt-3 rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50">+ Otro producto</button>
+            <div>
+              <p id="fecha" class="rounded bg-celda px-3 py-2 text-sm font-medium text-dp"></p>
+              <p class="mt-1 border-t border-dp/40 pt-1 text-sm text-slate-700">Fecha</p>
+            </div>
           </div>
-        </section>
-
-        <section class="space-y-4">
-          <h2 class="titulo-seccion">4. Documentación</h2>
-          <label class="relative flex cursor-pointer items-center gap-2 rounded-sm bg-[#fdf3c4] px-3 py-2.5 text-sm text-slate-700 hover:ring-2 hover:ring-azul/30">
-            <span>Haga clic para adjuntar remito, factura, orden de compra o pedido</span>
-            <span class="ml-auto text-xs text-slate-500">PDF o imagen · hasta 4 archivos, 4 MB</span>
-            <input id="adjuntos" type="file" multiple accept=".pdf,image/png,image/jpeg,image/webp" class="sr-only" />
-          </label>
-          <ul id="lista-adjuntos" class="flex flex-col gap-1.5"></ul>
-        </section>
-
-        <p id="error-general" role="alert" class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"></p>
-
-        <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
-          <p class="text-xs text-slate-500">El reclamo llega directo a nuestro equipo comercial y de calidad.</p>
-          <button type="submit" id="enviar" class="min-w-48 rounded-xl bg-verde px-6 py-2 text-sm text-white hover:bg-green-700 disabled:cursor-wait disabled:opacity-60">Enviar reclamo</button>
         </div>
-      </form>
-    </div>
 
-    <div id="enviado" class="hidden py-6 text-center">
-      <img src="logo-depascale.png" alt="De Pascale" class="mx-auto mb-4 h-10" />
-      <h2 class="mb-2 text-lg font-semibold text-azul">¡Recibimos tu reclamo!</h2>
-      <p class="text-sm text-slate-700">Número de reclamo: <strong id="numero-reclamo" class="text-azul"></strong></p>
-      <p class="mt-2 mb-6 text-sm text-slate-600">Guardá este número. Nuestro equipo lo va a revisar y se va a comunicar con vos.</p>
-      <a href="https://www.depascale.com.ar" class="inline-block rounded-xl bg-verde px-6 py-2 text-sm text-white hover:bg-green-700">Volver a depascale.com.ar</a>
-    </div>
-  </main>
+        <form id="formulario" class="mt-6 flex flex-col gap-6" novalidate>
+          <div aria-hidden="true" class="absolute -left-[9999px]">
+            <label>Sitio web <input type="text" name="sitio_web" tabindex="-1" autocomplete="off" /></label>
+          </div>
+
+          <!-- A completar por el Cliente -->
+          <section>
+            <h2 class="barra">A completar por el Cliente</h2>
+            <p class="bg-celda px-4 py-3 text-sm text-dp sm:text-[15px]">
+              <strong>IMPORTANTE:</strong> enviar adjunto una copia de Remito, Factura, Orden de Compra y Pedido del Cliente pertenecientes al reclamo en cuestión.
+            </p>
+            <div class="border-x border-t-4 border-dp border-x-dp/30 sm:grid sm:grid-cols-2">
+              <label class="fila sm:border-r"><span class="rotulo">Razón social <span class="requerido">&nbsp;*</span></span><input name="razonSocial" required maxlength="200" autocomplete="organization" class="entrada" /></label>
+              <label class="fila"><span class="rotulo">N° de cliente</span><input name="numeroCliente" maxlength="40" class="entrada" /></label>
+              <label class="fila sm:border-r"><span class="rotulo">Sucursal</span><input name="sucursal" maxlength="120" class="entrada" /></label>
+              <label class="fila"><span class="rotulo">Transporte</span><input name="transporte" maxlength="120" class="entrada" /></label>
+              <label class="fila sm:border-r"><span class="rotulo">Nombre y apellido <span class="requerido">&nbsp;*</span></span><input name="contacto" required maxlength="120" autocomplete="name" class="entrada" /></label>
+              <label class="fila"><span class="rotulo">Cargo</span><input name="cargo" maxlength="120" class="entrada" /></label>
+              <label class="fila sm:border-r"><span class="rotulo">Teléfono <span class="requerido">&nbsp;*</span></span><input name="telefono" type="tel" required maxlength="60" autocomplete="tel" placeholder="Ej: +54 9 11 4444-3773" class="entrada" /></label>
+              <label class="fila"><span class="rotulo">E-mail <span class="requerido">&nbsp;*</span></span><input name="email" type="email" required maxlength="200" autocomplete="email" placeholder="compras@empresa.com" class="entrada" /></label>
+            </div>
+          </section>
+
+          <!-- Clasificacion del problema -->
+          <section>
+            <h2 class="barra">Clasificación del Problema</h2>
+            <div class="grid gap-3 border-x border-b border-dp/30 p-3 sm:grid-cols-[16rem_1fr] sm:gap-4 sm:p-4">
+              <div>
+                <label for="clasificacion" class="text-sm text-slate-700">Clasificación <span class="requerido">*</span></label>
+                <select id="clasificacion" name="clasificacion" required class="mt-1 w-full border-b-2 border-dp/40 bg-white px-2 py-2 text-sm text-slate-900">
+                  <option value="">Seleccioná…</option>
+                  <option>Error de Facturación</option>
+                  <option>Plazo de Entrega</option>
+                  <option>Diferencia de Precio</option>
+                  <option>Error de Cliente</option>
+                  <option>Falla de Calidad</option>
+                  <option>Faltante de Mercadería</option>
+                </select>
+              </div>
+              <div>
+                <label for="detalle" class="text-sm text-slate-700">Detalle del problema <span class="requerido">*</span></label>
+                <textarea id="detalle" name="detalle" required rows="4" maxlength="4000" placeholder="Contanos qué pasó, con el mayor detalle posible." class="mt-1 w-full bg-gris-azul/70 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-600 focus:bg-white"></textarea>
+              </div>
+            </div>
+          </section>
+
+          <!-- Datos del producto -->
+          <section>
+            <h2 class="barra">Datos del Producto sobre el cual se realiza el Reclamo</h2>
+            <div class="border-x border-dp/30 sm:grid sm:grid-cols-2">
+              <label class="fila sm:border-r"><span class="rotulo">N° orden de compra del cliente</span><input name="ordenCompra" maxlength="60" class="entrada" /></label>
+              <label class="fila"><span class="rotulo">N° de pedido</span><input name="pedido" maxlength="60" class="entrada" /></label>
+              <label class="fila sm:border-r"><span class="rotulo">N° de factura del reclamo</span><input name="factura" maxlength="60" class="entrada" /></label>
+              <label class="fila"><span class="rotulo">N° de remito</span><input name="remito" maxlength="60" class="entrada" /></label>
+            </div>
+
+            <div class="hidden grid-cols-[1fr_1.6fr_7rem_7rem_2.25rem] bg-celda text-[12px] text-dp sm:grid">
+              <span class="px-3 py-2">Código producto</span>
+              <span class="px-3 py-2">Descripción</span>
+              <span class="px-3 py-2">Cant. facturada</span>
+              <span class="px-3 py-2">Cant. reclamo</span>
+              <span></span>
+            </div>
+            <div id="productos" class="flex flex-col border-x border-b border-dp/30"></div>
+            <button type="button" id="agregar-producto" class="mt-2 rounded-lg border border-dp/40 px-3 py-1.5 text-sm font-medium text-dp hover:bg-celda disabled:opacity-50">+ Otro producto</button>
+          </section>
+
+          <!-- Documentacion -->
+          <section>
+            <h2 class="barra">Documentación del reclamo</h2>
+            <div class="flex flex-col gap-2 border-x border-b border-dp/30 p-3 sm:p-4">
+              <label class="flex cursor-pointer flex-wrap items-center gap-2 rounded bg-celda px-3 py-3 text-sm text-dp hover:ring-2 hover:ring-dp/30">
+                <span class="font-semibold">Hacé clic para adjuntar remito, factura, orden de compra o pedido</span>
+                <span class="text-xs text-slate-600 sm:ml-auto">PDF o imagen · hasta 4 archivos y 4 MB</span>
+                <input id="adjuntos" type="file" multiple accept=".pdf,image/png,image/jpeg,image/webp" class="sr-only" />
+              </label>
+              <ul id="lista-adjuntos" class="flex flex-col gap-1.5"></ul>
+            </div>
+          </section>
+
+          <p id="error-general" role="alert" class="hidden rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"></p>
+
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <p class="text-xs text-slate-500">Los campos con <span class="requerido">*</span> son obligatorios. El reclamo llega directo al equipo comercial y de calidad.</p>
+            <button type="submit" id="enviar" class="rounded-lg bg-dp px-6 py-3 text-sm font-semibold text-white shadow hover:bg-blue-950 disabled:cursor-wait disabled:opacity-60">Enviar reclamo</button>
+          </div>
+        </form>
+      </div>
+
+      <div id="enviado" class="hidden py-10 text-center">
+        <div class="mx-auto flex size-14 items-center justify-center rounded-full bg-verde text-3xl text-white">✓</div>
+        <h2 class="mt-4 text-2xl font-extrabold text-dp">¡Recibimos tu reclamo!</h2>
+        <p class="mt-2 text-slate-700">Número de reclamo: <strong id="numero-reclamo" class="text-dp"></strong></p>
+        <p class="mt-2 text-sm text-slate-600">Guardá este número. Nuestro equipo lo va a revisar y se va a comunicar con vos.</p>
+      </div>
+    </main>
+
+    <!-- Pie como el del FOR-03 -->
+    <footer class="bg-dp px-4 py-5 text-sm text-blue-100 sm:px-8">
+      <p class="text-center italic">Sin otro particular, lo saluda atte. <strong class="not-italic text-white">Flia De Pascale S.A.</strong></p>
+      <div class="mt-4 grid gap-3 text-[13px] sm:grid-cols-3">
+        <p>Defensa 2391<br />Aldo Bonzi, Bs. As.</p>
+        <p><a href="mailto:ventas@depascale.com.ar" class="font-semibold text-verde hover:underline">ventas@depascale.com.ar</a><br />Tel: +54 9 (11) 4442-3773</p>
+        <p>WhatsApp oficial:<br /><a href="https://wa.me/541157825252" class="font-semibold text-white hover:underline">+54 11 5782 5252</a></p>
+      </div>
+    </footer>
+  </div>
 
   <template id="fila-producto">
-    <div class="grid grid-cols-2 gap-2 rounded-xl border border-slate-200 p-2 sm:grid-cols-[1fr_2fr_7rem_7rem_2.25rem] sm:rounded-none sm:border-0 sm:p-0">
-      <input data-campo="codigo" maxlength="60" placeholder="Código" aria-label="Código del producto" class="campo mt-0" />
-      <input data-campo="descripcion" maxlength="200" placeholder="Descripción" aria-label="Descripción del producto" class="campo mt-0" />
-      <input data-campo="cantidadFacturada" inputmode="decimal" placeholder="Facturada" aria-label="Cantidad facturada" class="campo mt-0" />
-      <input data-campo="cantidadReclamo" inputmode="decimal" placeholder="Reclamo" aria-label="Cantidad reclamada" class="campo mt-0" />
-      <button type="button" data-quitar aria-label="Quitar producto" class="rounded-xl text-lg text-slate-500 hover:bg-slate-100">×</button>
+    <div class="grid grid-cols-2 gap-px border-t border-dp/20 bg-dp/10 sm:grid-cols-[1fr_1.6fr_7rem_7rem_2.25rem]">
+      <input data-campo="codigo" maxlength="60" placeholder="Código producto" aria-label="Código del producto" class="entrada" />
+      <input data-campo="descripcion" maxlength="200" placeholder="Descripción" aria-label="Descripción del producto" class="entrada" />
+      <input data-campo="cantidadFacturada" inputmode="decimal" placeholder="Facturada" aria-label="Cantidad facturada" class="entrada" />
+      <input data-campo="cantidadReclamo" inputmode="decimal" placeholder="Reclamada" aria-label="Cantidad reclamada" class="entrada" />
+      <button type="button" data-quitar aria-label="Quitar producto" class="col-span-2 bg-white py-1 text-lg text-slate-500 hover:bg-red-50 hover:text-red-600 sm:col-span-1">×</button>
     </div>
   </template>
 

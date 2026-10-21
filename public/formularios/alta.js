@@ -1,46 +1,44 @@
-/* Formulario publico de Alta de Clientes (4 pasos + documentacion + firma). */
+/*
+ * Formulario publico de Alta de Clientes (4 pasos + documentacion + firma).
+ * La navegacion nunca bloquea: si falta algo se avisa y se marca, y se puede
+ * seguir y volver. Solo el envio final exige que este todo.
+ */
 (function () {
   "use strict";
 
-  var PAISES = [
-    { nombre: "Argentina", codigo: "AR", centro: [-34.714, -58.5157] },
-    { nombre: "Uruguay", codigo: "UY", centro: [-34.9055, -56.186] },
-    { nombre: "Brasil", codigo: "BR", centro: [-23.5739, -46.6269] },
-    { nombre: "Chile", codigo: "CL", centro: [-33.4817, -70.6423] },
-    { nombre: "Paraguay", codigo: "PY", centro: [-25.289, -57.5795] },
-    { nombre: "Bolivia", codigo: "BO", centro: [-16.5126, -68.1178] },
-    { nombre: "Perú", codigo: "PE", centro: [-12.0427, -77.0414] },
-    { nombre: "México", codigo: "MX", centro: [19.3586, -99.1121] },
-    { nombre: "Estados Unidos", codigo: "US", centro: [38.9034, -77.0373] },
-    { nombre: "Colombia", codigo: "CO", centro: [4.6938, -74.0809] },
-    { nombre: "Ecuador", codigo: "EC", centro: [-0.2306, -78.5138] },
-    { nombre: "Venezuela", codigo: "VE", centro: [10.4651, -66.9066] },
-    { nombre: "Panamá", codigo: "PA", centro: [9.3576, -79.9025] },
-    { nombre: "Costa Rica", codigo: "CR", centro: [9.9346, -84.0876] },
-    { nombre: "Guatemala", codigo: "GT", centro: [14.6253, -90.5177] },
-    { nombre: "Honduras", codigo: "HN", centro: [14.0552, -87.2133] },
-    { nombre: "El Salvador", codigo: "SV", centro: [13.6917, -89.2102] },
+  // Provincias con un punto de referencia para centrar el mapa y las sugerencias.
+  var PROVINCIAS = [
+    ["Buenos Aires", -34.65, -58.55], ["CABA", -34.6037, -58.3816], ["Catamarca", -28.4696, -65.7852],
+    ["Chaco", -27.4514, -58.9867], ["Chubut", -43.3002, -65.1023], ["Córdoba", -31.4201, -64.1888],
+    ["Corrientes", -27.4692, -58.8306], ["Entre Ríos", -31.7333, -60.5297], ["Formosa", -26.1775, -58.1781],
+    ["Jujuy", -24.1858, -65.2995], ["La Pampa", -36.6167, -64.2833], ["La Rioja", -29.4131, -66.8558],
+    ["Mendoza", -32.8895, -68.8458], ["Misiones", -27.3621, -55.9009], ["Neuquén", -38.9516, -68.0591],
+    ["Río Negro", -40.8135, -62.9967], ["Salta", -24.7821, -65.4232], ["San Juan", -31.5375, -68.5364],
+    ["San Luis", -33.3017, -66.3378], ["Santa Cruz", -51.623, -69.2168], ["Santa Fe", -32.9468, -60.6393],
+    ["Santiago del Estero", -27.7951, -64.2615], ["Tierra del Fuego", -54.8019, -68.303], ["Tucumán", -26.8083, -65.2176],
   ];
-  var TIPOS_ID = ["CUIT", "CNPJ", "CPF", "RUT", "RUC", "NIT", "RFC", "EIN", "BN", "RTN", "NITE", "Cédula Jurídica", "RIF", "RNC", "TRN", "BIR", "NIF", "TIN"];
+  var CENTRO_INICIAL = [-34.714, -58.5157];
   var DIRECCIONES = [
     { clave: "legal", titulo: "Dirección legal", requerida: true },
     { clave: "sucursal", titulo: "Dirección de sucursal", requerida: false },
     { clave: "comercial", titulo: "Dirección comercial", requerida: false },
   ];
-  // En el orden de la planilla (dos columnas). soloCuit: obligatorio solo con CUIT.
+  // En el orden de la planilla (dos columnas). Todos obligatorios.
   var DOCUMENTOS = [
-    { campo: "doc_cm05", titulo: "Formulario CM05 de IIBB", soloCuit: true },
-    { campo: "doc_cargas", titulo: "Última DDJJ cargas sociales", soloCuit: true },
-    { campo: "doc_legajo", titulo: "Legajo impositivo", soloCuit: true },
-    { campo: "doc_ganancias", titulo: "Última DDJJ Ganancias", soloCuit: true },
-    { campo: "doc_cuit", titulo: "Constancia de CUIT", soloCuit: false },
-    { campo: "doc_estatuto", titulo: "Contrato social / Estatuto", soloCuit: false },
-    { campo: "doc_iva", titulo: "Declaración jurada IVA", soloCuit: true },
-    { campo: "doc_balance", titulo: "Último balance", soloCuit: false },
+    { campo: "doc_cm05", titulo: "Formulario CM05 de IIBB" },
+    { campo: "doc_cargas", titulo: "Última DDJJ cargas sociales" },
+    { campo: "doc_legajo", titulo: "Legajo impositivo" },
+    { campo: "doc_ganancias", titulo: "Última DDJJ Ganancias" },
+    { campo: "doc_cuit", titulo: "Constancia de CUIT" },
+    { campo: "doc_estatuto", titulo: "Contrato social / Estatuto" },
+    { campo: "doc_iva", titulo: "Declaración jurada IVA" },
+    { campo: "doc_balance", titulo: "Último balance" },
   ];
   var TOTAL_PASOS = 4;
+  var NOMBRES_PASO = ["", "Datos del cliente", "Empresa", "Envío", "Referencias y documentos"];
 
   var formulario = document.getElementById("formulario");
+  var aviso = document.getElementById("aviso-paso");
   var paso = 1;
   var archivos = {};
   var firma = "";
@@ -52,30 +50,55 @@
   function $$(selector, raiz) {
     return Array.prototype.slice.call((raiz || document).querySelectorAll(selector));
   }
-  function esCuit() {
-    return formulario.tipoIdFiscal.value === "CUIT";
+  function escapar(texto) {
+    return String(texto).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
   }
 
-  // --- Paso 1: canal, ID fiscal y direcciones ---
+  // --- Paso 1 ---
   formulario.canal.addEventListener("change", function () {
     var otro = formulario.canal.value === "Otro";
     formulario.canalOtro.classList.toggle("hidden", !otro);
     if (otro) formulario.canalOtro.focus();
   });
 
-  formulario.tipoIdFiscal.innerHTML =
-    '<option value="">Elegí…</option>' + TIPOS_ID.map(function (tipo) { return "<option>" + tipo + "</option>"; }).join("");
-  formulario.tipoIdFiscal.value = "CUIT";
-  formulario.tipoIdFiscal.addEventListener("change", actualizarSegunId);
+  function cuitValido(valor) {
+    var d = valor.replace(/\D/g, "");
+    if (d.length !== 11) return false;
+    var pesos = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+    var suma = 0;
+    for (var j = 0; j < 10; j += 1) suma += pesos[j] * Number(d[j]);
+    var resto = 11 - (suma % 11);
+    var verificador = resto === 11 ? 0 : resto;
+    return verificador !== 10 && verificador === Number(d[10]);
+  }
 
+  // El digito verificador no bloquea: solo se avisa.
+  formulario.cuit.addEventListener("input", function () {
+    var ayuda = document.getElementById("ayuda-cuit");
+    var digitos = formulario.cuit.value.replace(/\D/g, "");
+    if (digitos.length === 11 && !cuitValido(digitos)) {
+      ayuda.textContent = "Revisá el CUIT: el último dígito no coincide (podés seguir igual).";
+      ayuda.className = "mt-1 text-[11px] font-medium text-amber-700";
+    } else {
+      ayuda.textContent = "11 números, con o sin guiones";
+      ayuda.className = "mt-1 text-[11px] text-slate-500";
+    }
+  });
+
+  // --- Direcciones con provincia, autocompletado y mapa ---
   var plantillaDireccion = document.getElementById("plantilla-direccion");
   DIRECCIONES.forEach(function (definicion) {
     var nodo = plantillaDireccion.content.cloneNode(true);
     var bloque = $("[data-direccion]", nodo);
     bloque.dataset.direccion = definicion.clave;
     $("[data-titulo]", nodo).innerHTML = definicion.titulo + (definicion.requerida ? ' <span class="requerido">*</span>' : "");
-    var pais = $('[data-campo="pais"]', nodo);
-    pais.innerHTML = PAISES.map(function (p) { return "<option>" + p.nombre + "</option>"; }).join("");
+    var provincia = $('[data-campo="provincia"]', nodo);
+    provincia.innerHTML =
+      '<option value="">Provincia…</option>' +
+      PROVINCIAS.map(function (p) { return "<option>" + p[0] + "</option>"; }).join("");
+    provincia.required = definicion.requerida;
     var entrada = $('[data-campo="direccion"]', nodo);
     entrada.required = definicion.requerida;
     entrada.setAttribute("aria-label", definicion.titulo);
@@ -83,22 +106,28 @@
     prepararDireccion(bloque);
   });
 
-  function paisDe(bloque) {
-    var nombre = $('[data-campo="pais"]', bloque).value;
-    return PAISES.find(function (p) { return p.nombre === nombre; }) || PAISES[0];
+  function centroDe(bloque) {
+    var nombre = $('[data-campo="provincia"]', bloque).value;
+    var provincia = PROVINCIAS.find(function (p) { return p[0] === nombre; });
+    return provincia ? [provincia[1], provincia[2]] : CENTRO_INICIAL;
   }
 
   function prepararDireccion(bloque) {
     var clave = bloque.dataset.direccion;
     var entrada = $('[data-campo="direccion"]', bloque);
     var lista = $("[data-sugerencias]", bloque);
-    var pais = $('[data-campo="pais"]', bloque);
+    var provincia = $('[data-campo="provincia"]', bloque);
 
-    if (window.L) {
-      var mapa = L.map($("[data-mapa]", bloque), { scrollWheelZoom: false }).setView(PAISES[0].centro, 12);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(mapa);
-      mapas[clave] = { mapa: mapa, marcador: L.marker(PAISES[0].centro).addTo(mapa) };
-    } else {
+    // Si el mapa no carga (sin internet, bloqueado), el formulario sigue igual.
+    try {
+      if (window.L) {
+        var mapa = L.map($("[data-mapa]", bloque), { scrollWheelZoom: false }).setView(CENTRO_INICIAL, 12);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(mapa);
+        mapas[clave] = { mapa: mapa, marcador: L.marker(CENTRO_INICIAL).addTo(mapa) };
+      } else {
+        $("[data-mapa]", bloque).classList.add("hidden");
+      }
+    } catch (error) {
       $("[data-mapa]", bloque).classList.add("hidden");
     }
 
@@ -111,28 +140,27 @@
       }
     }
 
-    pais.addEventListener("change", function () {
-      var elegido = paisDe(bloque);
+    provincia.addEventListener("change", function () {
       delete bloque.dataset.lat;
       delete bloque.dataset.lng;
+      var centro = centroDe(bloque);
       if (mapas[clave]) {
-        mapas[clave].mapa.setView(elegido.centro, 5);
-        mapas[clave].marcador.setLatLng(elegido.centro);
+        mapas[clave].mapa.setView(centro, provincia.value === "CABA" ? 12 : 9);
+        mapas[clave].marcador.setLatLng(centro);
       }
     });
 
-    // Autocompletado con Photon (OpenStreetMap). Se prioriza el pais elegido.
+    // Photon (OpenStreetMap): sugerencias de Argentina, priorizando la provincia elegida.
     function buscar(texto, limite) {
-      var elegido = paisDe(bloque);
+      var centro = centroDe(bloque);
+      var consulta = provincia.value ? texto + ", " + provincia.value : texto;
       var url =
-        "https://photon.komoot.io/api/?q=" + encodeURIComponent(texto) +
-        "&limit=" + limite + "&lat=" + elegido.centro[0] + "&lon=" + elegido.centro[1];
+        "https://photon.komoot.io/api/?q=" + encodeURIComponent(consulta) +
+        "&limit=" + limite + "&lat=" + centro[0] + "&lon=" + centro[1];
       return fetch(url)
         .then(function (r) { return r.ok ? r.json() : { features: [] }; })
         .then(function (datos) {
-          return (datos.features || []).filter(function (f) {
-            return !f.properties.countrycode || f.properties.countrycode === elegido.codigo;
-          });
+          return (datos.features || []).filter(function (f) { return f.properties.countrycode === "AR"; });
         })
         .catch(function () { return []; });
     }
@@ -140,21 +168,34 @@
     function describir(f) {
       var p = f.properties;
       var calle = p.street ? p.street + (p.housenumber ? " " + p.housenumber : "") : p.name;
-      return [calle, p.city || p.district, p.state, p.country].filter(Boolean).join(", ");
+      return [calle, p.city || p.district, p.state].filter(Boolean).join(", ");
+    }
+
+    function provinciaDe(f) {
+      var estado = (f.properties.state || "").toLowerCase();
+      if (/ciudad aut[oó]noma|capital federal/.test(estado)) return "CABA";
+      var encontrada = PROVINCIAS.find(function (p) {
+        return estado.normalize("NFD").replace(/[̀-ͯ]/g, "").indexOf(
+          p[0].toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+        ) !== -1;
+      });
+      return encontrada ? encontrada[0] : "";
     }
 
     function elegir(f) {
       entrada.value = describir(f);
-      bloque.dataset.provincia = f.properties.state || "";
       lista.classList.add("hidden");
+      var deLaSugerencia = provinciaDe(f);
+      if (deLaSugerencia && !provincia.value) provincia.value = deLaSugerencia;
       ubicar(f.geometry.coordinates[1], f.geometry.coordinates[0], 15);
+      limpiarMarca(entrada);
+      limpiarMarca(provincia);
     }
 
     var espera;
     entrada.addEventListener("input", function () {
       delete bloque.dataset.lat;
       delete bloque.dataset.lng;
-      bloque.dataset.provincia = "";
       clearTimeout(espera);
       var texto = entrada.value.trim();
       if (texto.length < 4) return lista.classList.add("hidden");
@@ -175,16 +216,12 @@
         });
       }, 400);
     });
-    // Si escribio la direccion sin elegir de la lista, se ubica sola al salir.
     entrada.addEventListener("blur", function () {
       setTimeout(function () { lista.classList.add("hidden"); }, 150);
       var texto = entrada.value.trim();
       if (!texto || bloque.dataset.lat) return;
       buscar(texto, 1).then(function (resultados) {
-        if (resultados[0]) {
-          bloque.dataset.provincia = resultados[0].properties.state || "";
-          ubicar(resultados[0].geometry.coordinates[1], resultados[0].geometry.coordinates[0], 15);
-        }
+        if (resultados[0]) ubicar(resultados[0].geometry.coordinates[1], resultados[0].geometry.coordinates[0], 15);
       });
     });
   }
@@ -192,24 +229,22 @@
   function leerDireccion(clave) {
     var bloque = $('[data-direccion="' + clave + '"]');
     return {
-      pais: $('[data-campo="pais"]', bloque).value,
       direccion: $('[data-campo="direccion"]', bloque).value,
-      provincia: bloque.dataset.provincia || "",
+      provincia: $('[data-campo="provincia"]', bloque).value,
       lat: bloque.dataset.lat || "",
       lng: bloque.dataset.lng || "",
     };
   }
 
-  // --- Paso 2: industria ---
+  // --- Paso 2 ---
   formulario.industria.addEventListener("change", function () {
     var retail = formulario.industria.value === "Retail / Distribuidora";
     document.getElementById("bloque-puntos-venta").classList.toggle("hidden", !retail);
     formulario.puntosVenta.required = retail;
-    var otra = formulario.industria.value === "Otros";
-    formulario.industriaOtra.classList.toggle("hidden", !otra);
+    formulario.industriaOtra.classList.toggle("hidden", formulario.industria.value !== "Otros");
   });
 
-  // --- Paso 3: transporte ---
+  // --- Paso 3 ---
   formulario.usaTransporte.addEventListener("change", function () {
     document.getElementById("bloque-transportista").classList.toggle("hidden", !formulario.usaTransporte.checked);
   });
@@ -235,7 +270,7 @@
       DP.error("");
       archivos[documento.campo] = archivo;
       estado.textContent = "✓ " + documento.titulo + " · " + archivo.name;
-      etiqueta.classList.remove("bg-[#fdf3c4]");
+      etiqueta.classList.remove("bg-[#fdf3c4]", "campo-invalido");
       etiqueta.classList.add("bg-emerald-50", "text-emerald-800");
       pintarTotal();
     });
@@ -251,19 +286,6 @@
     caja.textContent = total ? "Llevás " + DP.tamano(total) + " de 4 MB." : "";
     caja.className = total > DP.MAX_BYTES ? "font-semibold text-red-700" : "font-medium text-slate-800";
   }
-
-  function actualizarSegunId() {
-    var cuit = esCuit();
-    document.getElementById("ayuda-id").textContent = cuit ? "11 dígitos, con o sin guiones" : "Respetá el formato de tu ID";
-    DOCUMENTOS.forEach(function (documento) {
-      var etiqueta = $('[data-documento="' + documento.campo + '"]');
-      $("[data-asterisco]", etiqueta).classList.toggle("hidden", documento.soloCuit && !cuit);
-      if (documento.campo === "doc_cuit" && !archivos.doc_cuit) {
-        $("[data-estado]", etiqueta).textContent = "Haga clic para adjuntar Constancia de " + (cuit ? "CUIT" : "ID fiscal");
-      }
-    });
-  }
-  actualizarSegunId();
 
   // Firma en un modal con lienzo.
   var modalFirma = document.getElementById("modal-firma");
@@ -323,33 +345,28 @@
     vista.src = firma;
     vista.classList.remove("hidden");
     document.getElementById("estado-firma").textContent = "Firmado ✓";
+    document.getElementById("abrir-firma").classList.remove("campo-invalido");
     cerrarFirma();
     pintarTotal();
   });
 
-  // --- Validacion ---
-  function cuitValido(valor) {
-    var d = valor.replace(/\D/g, "");
-    if (d.length !== 11) return false;
-    var pesos = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
-    var suma = 0;
-    for (var j = 0; j < 10; j += 1) suma += pesos[j] * Number(d[j]);
-    var resto = 11 - (suma % 11);
-    var verificador = resto === 11 ? 0 : resto;
-    return verificador !== 10 && verificador === Number(d[10]);
+  // --- Revision de cada paso (sin bloquear) ---
+  function marcar(elemento) {
+    elemento.classList.add("campo-invalido");
+    elemento.setAttribute("aria-invalid", "true");
   }
+  function limpiarMarca(elemento) {
+    elemento.classList.remove("campo-invalido");
+    elemento.removeAttribute("aria-invalid");
+  }
+  // Al corregir un campo se le saca la marca roja.
+  formulario.addEventListener("input", function (evento) { limpiarMarca(evento.target); });
+  formulario.addEventListener("change", function (evento) { limpiarMarca(evento.target); });
 
-  function camposValidos(seccion) {
-    var campos = $$("input, select, textarea", seccion).filter(function (campo) {
-      return !campo.closest(".hidden") && campo.type !== "file";
-    });
-    for (var k = 0; k < campos.length; k += 1) {
-      if (!campos[k].checkValidity()) {
-        campos[k].reportValidity();
-        return false;
-      }
-    }
-    return true;
+  function nombreDe(campo) {
+    var etiqueta = campo.id ? $('label[for="' + campo.id + '"]') : null;
+    var texto = campo.getAttribute("aria-label") || (etiqueta && etiqueta.textContent) || campo.placeholder || campo.name;
+    return String(texto).replace("*", "").trim();
   }
 
   function leerReferencias() {
@@ -359,52 +376,86 @@
       return datos;
     });
   }
-
   function leerTransportista() {
     var datos = {};
     $$("#transportista [data-campo]").forEach(function (campo) { datos[campo.dataset.campo] = campo.value.trim(); });
     return datos;
   }
 
-  function problemaDelPaso(numero) {
+  /** Lo que falta en un paso. Si `marcarCampos`, ademas los pinta en rojo. */
+  function faltantesDelPaso(numero, marcarCampos) {
     var seccion = $('[data-paso="' + numero + '"]');
-    if (!camposValidos(seccion)) return "Revisá los campos marcados.";
-    if (numero === 1) {
-      if (esCuit() && !cuitValido(formulario.idFiscal.value)) return "El CUIT no es válido. Revisá los 11 dígitos.";
+    var faltantes = [];
+    $$("input, select, textarea", seccion).forEach(function (campo) {
+      if (campo.type === "file" || campo.closest(".hidden") || campo.checkValidity()) return;
+      faltantes.push(nombreDe(campo));
+      if (marcarCampos) marcar(campo);
+    });
+
+    if (numero === 1 && formulario.cuit.value.replace(/\D/g, "").length > 0 && formulario.cuit.value.replace(/\D/g, "").length !== 11) {
+      faltantes.push("CUIT (tiene que tener 11 números)");
+      if (marcarCampos) marcar(formulario.cuit);
     }
     if (numero === 3) {
-      if (!formulario.retiraCliente.checked && !formulario.usaTransporte.checked) return "Indicá si retirás vos o si usás transporte.";
+      if (!formulario.retiraCliente.checked && !formulario.usaTransporte.checked) faltantes.push("Elegí retira cliente o envío por transporte");
       if (formulario.usaTransporte.checked) {
         var t = leerTransportista();
-        if (!(t.fantasia || t.razonSocial) || !t.telefono) return "Completá el nombre y el teléfono del transportista.";
+        if (!(t.fantasia || t.razonSocial)) faltantes.push("Nombre o razón social del transportista");
+        if (!t.telefono) faltantes.push("Teléfono del transportista");
       }
     }
     if (numero === 4) {
-      var referencias = leerReferencias();
-      if (referencias.some(function (r) { return !r.empresa; })) return "Completá las tres referencias comerciales.";
-      if (referencias.some(function (r) { return !r.email && !r.telefono; })) return "Cada referencia necesita un email o un teléfono.";
-      var faltante = DOCUMENTOS.find(function (d) { return !archivos[d.campo] && (esCuit() || !d.soloCuit); });
-      if (faltante) return "Falta adjuntar: " + faltante.titulo + ".";
-      if (bytesTotales() > DP.MAX_BYTES - 200 * 1024) return "Los archivos superan los 4 MB en total. Probá con archivos más livianos.";
-      if (!firma) return "Falta la firma: hacé clic en \"Haga clic aquí para firmar\".";
+      leerReferencias().forEach(function (r, indice) {
+        var fila = $$("[data-referencia]")[indice];
+        if (!r.empresa) {
+          faltantes.push("Referencia " + (indice + 1) + ": empresa");
+          if (marcarCampos) marcar($('[data-campo="empresa"]', fila));
+        } else if (!r.email && !r.telefono) {
+          faltantes.push("Referencia " + (indice + 1) + ": email o teléfono");
+          if (marcarCampos) marcar($('[data-campo="email"]', fila));
+        }
+      });
+      DOCUMENTOS.forEach(function (d) {
+        if (archivos[d.campo]) return;
+        faltantes.push(d.titulo);
+        if (marcarCampos) marcar($('[data-documento="' + d.campo + '"]'));
+      });
+      if (bytesTotales() > DP.MAX_BYTES - 200 * 1024) faltantes.push("Los archivos superan los 4 MB: usá archivos más livianos");
+      if (!firma) {
+        faltantes.push("Firma");
+        if (marcarCampos) marcar(document.getElementById("abrir-firma"));
+      }
     }
-    return "";
+    return faltantes;
   }
 
-  // --- Pasos ---
+  function mostrarAviso(html) {
+    aviso.innerHTML = html || "";
+    aviso.classList.toggle("hidden", !html);
+  }
+
+  function actualizarIndicadores() {
+    $$("[data-indicador]").forEach(function (indicador) {
+      var numero = Number(indicador.dataset.indicador);
+      indicador.classList.toggle("activo", numero <= paso);
+      // Los pasos ya visitados que quedaron incompletos se marcan.
+      var visitado = indicador.dataset.visitado === "1";
+      indicador.classList.toggle("con-faltantes", visitado && numero !== paso && faltantesDelPaso(numero, false).length > 0);
+    });
+  }
+
   function mostrarPaso(numero) {
-    paso = numero;
+    $('[data-indicador="' + paso + '"]').dataset.visitado = "1";
+    paso = Math.min(Math.max(numero, 1), TOTAL_PASOS);
     $$("[data-paso]").forEach(function (seccion) {
       seccion.classList.toggle("hidden", Number(seccion.dataset.paso) !== paso);
-    });
-    $$("[data-indicador]").forEach(function (indicador) {
-      indicador.classList.toggle("activo", Number(indicador.dataset.indicador) <= paso);
     });
     document.getElementById("numero-paso").textContent = paso;
     document.getElementById("anterior").classList.toggle("hidden", paso === 1);
     document.getElementById("siguiente").classList.toggle("hidden", paso === TOTAL_PASOS);
     document.getElementById("enviar").classList.toggle("hidden", paso !== TOTAL_PASOS);
     DP.error("");
+    actualizarIndicadores();
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (paso === 1) {
       setTimeout(function () {
@@ -413,31 +464,66 @@
     }
   }
 
-  document.getElementById("anterior").addEventListener("click", function () { mostrarPaso(paso - 1); });
+  document.getElementById("anterior").addEventListener("click", function () {
+    mostrarAviso("");
+    mostrarPaso(paso - 1);
+  });
   document.getElementById("siguiente").addEventListener("click", function () {
-    var problema = problemaDelPaso(paso);
-    if (problema) return DP.error(problema);
+    var faltantes = faltantesDelPaso(paso, true);
+    var anterior = paso;
     mostrarPaso(paso + 1);
+    mostrarAviso(
+      faltantes.length
+        ? "<strong>En el paso " + anterior + " (" + NOMBRES_PASO[anterior] + ") quedó pendiente:</strong> " +
+            escapar(faltantes.join(", ")) + ". Podés seguir y completarlo antes de enviar."
+        : ""
+    );
+  });
+  $$("[data-indicador]").forEach(function (indicador) {
+    indicador.addEventListener("click", function () {
+      mostrarAviso("");
+      mostrarPaso(Number(indicador.dataset.indicador));
+    });
+  });
+  aviso.addEventListener("click", function (evento) {
+    var ir = evento.target.closest("[data-ir]");
+    if (!ir) return;
+    var numero = Number(ir.dataset.ir);
+    mostrarPaso(numero);
+    faltantesDelPaso(numero, true);
   });
 
-  // --- Envio ---
+  // --- Envio: aca si tiene que estar todo ---
   formulario.addEventListener("submit", function (evento) {
     evento.preventDefault();
+    DP.error("");
+    var porPaso = [];
     for (var n = 1; n <= TOTAL_PASOS; n += 1) {
-      var problema = problemaDelPaso(n);
-      if (problema) {
-        if (n !== paso) mostrarPaso(n);
-        return DP.error(problema);
-      }
+      var faltantes = faltantesDelPaso(n, n === paso);
+      if (faltantes.length) porPaso.push({ numero: n, faltantes: faltantes });
     }
+    if (porPaso.length) {
+      mostrarAviso(
+        "<strong>Antes de enviar, completá:</strong><ul class='mt-1 list-disc pl-5'>" +
+          porPaso.map(function (p) {
+            return "<li>Paso " + p.numero + " (" + NOMBRES_PASO[p.numero] + "): " + escapar(p.faltantes.join(", ")) +
+              " <button type='button' data-ir='" + p.numero + "' class='ml-1 font-semibold text-azul underline'>Ir al paso " + p.numero + "</button></li>";
+          }).join("") +
+          "</ul>"
+      );
+      $$("[data-indicador]").forEach(function (indicador) { indicador.dataset.visitado = "1"; });
+      actualizarIndicadores();
+      aviso.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    mostrarAviso("");
 
     var datos = {
       canal: formulario.canal.value,
       canalOtro: formulario.canalOtro.value,
       nombreFantasia: formulario.nombreFantasia.value,
       razonSocial: formulario.razonSocial.value,
-      tipoIdFiscal: formulario.tipoIdFiscal.value,
-      idFiscal: formulario.idFiscal.value,
+      cuit: formulario.cuit.value,
       telefono: formulario.telefono.value,
       responsable: formulario.responsable.value,
       email: formulario.email.value,
@@ -470,6 +556,7 @@
         exito.classList.add("flex");
       })
       .catch(function (causa) {
+        // El error del servidor no deja el boton trabado: se puede corregir y reenviar.
         DP.error(causa.message);
         DP.ocupado(boton, false);
       });

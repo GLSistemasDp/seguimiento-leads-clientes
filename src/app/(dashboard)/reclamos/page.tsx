@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { PanelReclamos } from "@/components/reclamos/PanelReclamos";
 import { CopiarLink } from "@/components/ui/CopiarLink";
 import { EncabezadoPagina } from "@/components/ui/EncabezadoPagina";
@@ -29,13 +28,16 @@ export default async function ReclamosPage({ searchParams }: PageProps<"/reclamo
         acciones={
           <>
             <CopiarLink ruta="/formularios/reclamo" etiqueta="Link del formulario para el cliente" />
-            <Link
-              href="/reclamos/nuevo"
+            <a
+              href="/formularios/reclamo"
+              target="_blank"
+              rel="noopener"
+              title="Abre el formulario que completa el cliente"
               className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-800"
             >
-              <Icono nombre="documento" />
+              <Icono nombre="externo" />
               Nuevo reclamo
-            </Link>
+            </a>
           </>
         }
       />

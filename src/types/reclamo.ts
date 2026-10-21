@@ -8,7 +8,7 @@ export const ACCIONES = {
   CAMBIO: "Retirar y cambiar mercadería",
   REPOSICION: "Esperar reposición de stock",
   CONTACTAR: "Llamar al cliente antes de responder",
-  NO_PROCEDE: "Reclamo no procedente",
+  NO_PROCEDE: "Reclamo no válido",
   OTRA: "Otra indicación",
 } as const;
 
@@ -20,7 +20,7 @@ export const DETALLE_ACCIONES: Record<AccionReclamo, string> = {
   CAMBIO: "El vendedor coordina el retiro de la mercadería y el envío del reemplazo.",
   REPOSICION: "El vendedor avisa al cliente la fecha estimada de reposición y le da seguimiento.",
   CONTACTAR: "Antes de responder por el grupo, el vendedor llama al cliente para entender el caso.",
-  NO_PROCEDE: "El vendedor le explica al cliente por qué el reclamo no corresponde.",
+  NO_PROCEDE: "El vendedor le explica al cliente por qué el reclamo no es válido.",
   OTRA: "Escribí la indicación en el comentario.",
 };
 

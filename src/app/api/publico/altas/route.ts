@@ -50,11 +50,10 @@ export const POST = async (request: Request) => {
     const alta = validarAlta(crudo, hoyArgentina());
 
     const documentos: { etiqueta: string; archivo: ArchivoAdjunto }[] = [];
-    for (const { campo, etiqueta, soloCuit } of DOCUMENTOS_ALTA) {
+    for (const { campo, etiqueta } of DOCUMENTOS_ALTA) {
       const archivo = await leerArchivo(formulario.get(campo), etiqueta);
-      // Los impositivos de Argentina son obligatorios solo con CUIT.
-      if (!archivo && (alta.esCuit || !soloCuit)) throw new ErrorFormulario(`Falta adjuntar: ${etiqueta}.`);
-      if (archivo) documentos.push({ etiqueta, archivo });
+      if (!archivo) throw new ErrorFormulario(`Falta adjuntar: ${etiqueta}.`);
+      documentos.push({ etiqueta, archivo });
     }
     const firma = leerFirma(formulario.get("firma"));
     controlarTotal([...documentos.map((documento) => documento.archivo), firma]);

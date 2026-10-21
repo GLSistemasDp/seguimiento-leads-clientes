@@ -33,6 +33,20 @@ textarea:focus {
   font-weight: 600;
 }
 
+.paso-indicador {
+  cursor: pointer;
+}
+
+.paso-indicador.con-faltantes {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 2px #fde68a;
+}
+
+.campo-invalido {
+  border-color: #f87171 !important;
+  background: #fef2f2 !important;
+}
+
 .paso-indicador.activo {
   border-color: #193e76;
   background: #193e76;

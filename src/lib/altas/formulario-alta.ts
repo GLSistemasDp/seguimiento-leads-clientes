@@ -4,26 +4,26 @@ import type { DatosSolicitud } from "@/types/solicitud";
 /**
  * Formulario de Alta de Clientes que completa el cliente desde
  * /formularios/alta (mismo formulario que pedidos-web-dp, en 4 pasos, mas la
- * documentacion obligatoria y la firma). Valida lo que llega y lo convierte
+ * documentacion obligatoria y la firma). Solo clientes de Argentina (CUIT). Valida lo que llega y lo convierte
  * en una solicitud de alta de la intranet.
  */
 
 export class ErrorAlta extends Error {}
 
 /**
- * Documentos de "Informacion adicional". Los marcados `soloCuit` son
- * impositivos de Argentina: obligatorios cuando el ID fiscal es CUIT.
- * Las etiquetas son las que usa la clasificacion (lib/solicitudes/evaluacion.ts).
+ * Documentos de "Informacion adicional": todos obligatorios (solo operamos en
+ * Argentina). Las etiquetas son las que usa la clasificacion
+ * (lib/solicitudes/evaluacion.ts).
  */
 export const DOCUMENTOS_ALTA = [
-  { campo: "doc_legajo", etiqueta: "Legajo impositivo", soloCuit: true },
-  { campo: "doc_cm05", etiqueta: "Formulario CM05", soloCuit: true },
-  { campo: "doc_cuit", etiqueta: "Constancia de CUIT", soloCuit: false },
-  { campo: "doc_iva", etiqueta: "Declaración jurada de IVA", soloCuit: true },
-  { campo: "doc_cargas", etiqueta: "Última DDJJ de cargas sociales", soloCuit: true },
-  { campo: "doc_ganancias", etiqueta: "Última DDJJ de Ganancias", soloCuit: true },
-  { campo: "doc_estatuto", etiqueta: "Contrato social / Estatuto", soloCuit: false },
-  { campo: "doc_balance", etiqueta: "Último balance", soloCuit: false },
+  { campo: "doc_legajo", etiqueta: "Legajo impositivo" },
+  { campo: "doc_cm05", etiqueta: "Formulario CM05" },
+  { campo: "doc_cuit", etiqueta: "Constancia de CUIT" },
+  { campo: "doc_iva", etiqueta: "Declaración jurada de IVA" },
+  { campo: "doc_cargas", etiqueta: "Última DDJJ de cargas sociales" },
+  { campo: "doc_ganancias", etiqueta: "Última DDJJ de Ganancias" },
+  { campo: "doc_estatuto", etiqueta: "Contrato social / Estatuto" },
+  { campo: "doc_balance", etiqueta: "Último balance" },
 ] as const;
 
 const CANALES = [
@@ -32,8 +32,10 @@ const CANALES = [
   "Referencia de otro cliente", "Otro",
 ];
 
-export const TIPOS_ID_FISCAL = [
-  "CUIT", "CNPJ", "CPF", "RUT", "RUC", "NIT", "RFC", "EIN", "BN", "RTN", "NITE", "Cédula Jurídica", "RIF", "RNC", "TRN", "BIR", "NIF", "TIN",
+export const PROVINCIAS = [
+  "Buenos Aires", "CABA", "Catamarca", "Chaco", "Chubut", "Córdoba", "Corrientes", "Entre Ríos", "Formosa",
+  "Jujuy", "La Pampa", "La Rioja", "Mendoza", "Misiones", "Neuquén", "Río Negro", "Salta", "San Juan",
+  "San Luis", "Santa Cruz", "Santa Fe", "Santiago del Estero", "Tierra del Fuego", "Tucumán",
 ];
 
 const INDUSTRIAS = [
@@ -44,7 +46,7 @@ const INDUSTRIAS = [
 const PUNTOS_VENTA = ["Comercio digital", "Comercio físico", "Ambos"];
 const TIPOS_COMPRA = ["Compras semanales", "Compras mensuales", "Compras anuales", "Por licitación", "Por contrato"];
 
-type Direccion = { pais: string; direccion: string; provincia: string; lat: string; lng: string };
+type Direccion = { direccion: string; provincia: string; lat: string; lng: string };
 
 function texto(valor: unknown, maximo = 200): string {
   return typeof valor === "string" ? valor.trim().slice(0, maximo) : typeof valor === "number" ? String(valor) : "";
@@ -75,9 +77,8 @@ function direccion(valor: unknown): Direccion {
     return Number.isFinite(numero) && texto(dato, 30) ? numero.toFixed(6) : "";
   };
   return {
-    pais: texto(datos.pais, 80) || "Argentina",
     direccion: texto(datos.direccion, 300),
-    provincia: texto(datos.provincia, 120),
+    provincia: PROVINCIAS.includes(texto(datos.provincia, 60)) ? texto(datos.provincia, 60) : "",
     lat: coordenada(datos.lat),
     lng: coordenada(datos.lng),
   };
@@ -85,7 +86,11 @@ function direccion(valor: unknown): Direccion {
 
 function formatoDireccion(dir: Direccion): string {
   if (!dir.direccion) return "";
-  return dir.direccion.toLowerCase().includes(dir.pais.toLowerCase()) ? dir.direccion : `${dir.direccion}, ${dir.pais}`;
+  const conProvincia =
+    dir.provincia && !dir.direccion.toLowerCase().includes(dir.provincia.toLowerCase())
+      ? `${dir.direccion}, ${dir.provincia}`
+      : dir.direccion;
+  return /argentina/i.test(conProvincia) ? conProvincia : `${conProvincia}, Argentina`;
 }
 
 /** Cantidad entera razonable (antiguedad, empleados); vacio si no la cargo. */
@@ -100,7 +105,7 @@ function entero(valor: unknown, maximo: number, etiqueta: string): string {
 const TELEFONO = /^\+?[0-9 ()-]{7,20}$/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export type AltaValidada = { nombre: string; email: string; datos: DatosSolicitud; esCuit: boolean };
+export type AltaValidada = { nombre: string; email: string; datos: DatosSolicitud };
 
 /**
  * Valida el JSON del formulario. Los adjuntos y la firma se agregan despues,
@@ -115,10 +120,10 @@ export function validarAlta(valor: unknown, fecha: string): AltaValidada {
 
   const nombreFantasia = obligatorio(texto(datos.nombreFantasia), "Nombre de fantasía");
   const razonSocial = obligatorio(texto(datos.razonSocial), "Razón social");
-  const tipoId = deLista(texto(datos.tipoIdFiscal, 30), TIPOS_ID_FISCAL, "Identificador fiscal", true);
-  const idFiscal = obligatorio(texto(datos.idFiscal, 30), "Número de identificador fiscal");
-  const esCuit = tipoId === "CUIT";
-  if (esCuit && !cuitValido(idFiscal)) throw new ErrorAlta("El CUIT no es válido. Revisá los 11 dígitos.");
+  const cuit = obligatorio(texto(datos.cuit, 20), "CUIT");
+  if (cuit.replace(/\D/g, "").length !== 11) throw new ErrorAlta("El CUIT tiene que tener 11 números.");
+  // Un digito verificador que no coincide no frena el alta: queda marcado para revisar.
+  const cuitARevisar = !cuitValido(cuit);
 
   const telefono = obligatorio(texto(datos.telefono, 30), "Teléfono");
   if (!TELEFONO.test(telefono)) throw new ErrorAlta("El teléfono debe tener entre 7 y 15 números (podés empezar con +).");
@@ -129,6 +134,7 @@ export function validarAlta(valor: unknown, fecha: string): AltaValidada {
   const crudas = objeto(datos.direcciones);
   const legal = direccion(crudas.legal);
   obligatorio(legal.direccion, "Dirección legal");
+  obligatorio(legal.provincia, "Provincia de la dirección legal");
   const sucursal = direccion(crudas.sucursal);
   const comercial = direccion(crudas.comercial);
 
@@ -179,7 +185,8 @@ export function validarAlta(valor: unknown, fecha: string): AltaValidada {
     "Cómo nos conoció": canal,
     "Nombre de fantasía": nombreFantasia,
     "Razón social": razonSocial,
-    ...(esCuit ? { CUIT: idFiscal } : { "ID fiscal": `${tipoId} ${idFiscal}` }),
+    CUIT: cuit,
+    ...(cuitARevisar ? { "CUIT a verificar": "El dígito verificador no coincide" } : {}),
     Responsable: responsable,
     Teléfono: telefono,
     "Dirección legal": formatoDireccion(legal),
@@ -211,5 +218,5 @@ export function validarAlta(valor: unknown, fecha: string): AltaValidada {
   // Sin campos vacios: la clasificacion cuenta lo que se completo.
   for (const [clave, valorCampo] of Object.entries(salida)) if (valorCampo === "") delete salida[clave];
 
-  return { nombre: razonSocial, email, datos: salida, esCuit };
+  return { nombre: razonSocial, email, datos: salida };
 }
