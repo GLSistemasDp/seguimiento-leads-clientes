@@ -166,6 +166,8 @@ export type ReclamoPanel = {
   tipo: string;
   encargado: string;
   grupoWhatsapp: string;
+  /** Link de invitacion al grupo, si la planilla lo tiene. */
+  linkWhatsapp: string;
   grupoVendedor: string;
   /**
    * Situacion de la cuenta del cliente segun el maestro: "OK", "TIENE DEUDA",

@@ -1,6 +1,8 @@
+import { after } from "next/server";
 import { guardarAdjuntos, urlAdjunto } from "@/lib/db/adjuntos";
 import type { ArchivoAdjunto } from "@/lib/db/adjuntos";
 import { upsertMany } from "@/lib/db/solicitudes";
+import { notificarAltaNueva, urlBase } from "@/lib/notificaciones/envios";
 import { DOCUMENTOS_ALTA, ErrorAlta, validarAlta } from "@/lib/altas/formulario-alta";
 import {
   ErrorFormulario,
@@ -68,6 +70,8 @@ export const POST = async (request: Request) => {
     alta.datos.Firma = urlAdjunto(guardados[guardados.length - 1]);
 
     await upsertMany([{ nombre: alta.nombre, email: alta.email, datos: alta.datos }]);
+    // Aviso al grupo de Telegram de altas, sin demorar la respuesta al cliente.
+    after(() => notificarAltaNueva(alta.email, urlBase(request)));
     return respuesta(request, { ok: true }, 201);
   } catch (error) {
     if (error instanceof ErrorFormulario || error instanceof ErrorAlta) {

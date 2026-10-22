@@ -5,10 +5,12 @@ import { FiltrosSolicitudes } from "@/components/solicitudes/FiltrosSolicitudes"
 import { MetricasAlta } from "@/components/solicitudes/MetricasAlta";
 import { Paginacion } from "@/components/solicitudes/Paginacion";
 import { SolicitudesTable } from "@/components/solicitudes/SolicitudesTable";
+import { BotonTelegram } from "@/components/ui/BotonTelegram";
 import { CopiarLink } from "@/components/ui/CopiarLink";
 import { Icono } from "@/components/ui/Icono";
 import { contarLista } from "@/lib/db/repositorio";
 import { getAll } from "@/lib/db/solicitudes";
+import { telegramConfigurado } from "@/lib/notificaciones/telegram";
 import { contarDocumentos } from "@/lib/solicitudes/documentos";
 import { evaluarPorReglas } from "@/lib/solicitudes/evaluacion";
 import {
@@ -96,6 +98,7 @@ export default async function SolicitudesPage({ searchParams }: PageProps<"/soli
         }
         acciones={
           <>
+            <BotonTelegram tipo="altas" listo={telegramConfigurado("altas")} etiqueta="Pendientes a Telegram" />
             <CopiarLink ruta="/formularios/alta" etiqueta="Link del formulario de alta" />
             <Link
               href="/solicitudes/importar"

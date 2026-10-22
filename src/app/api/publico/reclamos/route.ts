@@ -1,4 +1,6 @@
+import { after } from "next/server";
 import { crearFormulario } from "@/lib/db/reclamos";
+import { notificarReclamoNuevo, urlBase } from "@/lib/notificaciones/envios";
 import {
   ErrorFormulario,
   controlarTotal,
@@ -52,6 +54,8 @@ export const POST = async (request: Request) => {
     controlarTotal(archivos);
 
     const reclamo = await crearFormulario(datos, archivos, "cliente");
+    // Aviso al grupo de Telegram de reclamos, sin demorar la respuesta al cliente.
+    after(() => notificarReclamoNuevo(reclamo, urlBase(request)));
     return respuesta(request, { numero: reclamo.id }, 201);
   } catch (error) {
     if (error instanceof ErrorFormulario || error instanceof ErrorValidacion) {

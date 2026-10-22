@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { ProximoEnvio } from "@/components/resumen/ProximoEnvio";
+import { BotonTelegram } from "@/components/ui/BotonTelegram";
 import { FiltrosSeguimiento } from "@/components/seguimiento/FiltrosSeguimiento";
 import { MetricasSeguimiento } from "@/components/seguimiento/MetricasSeguimiento";
 import { SeguimientoTable } from "@/components/seguimiento/SeguimientoTable";
@@ -90,7 +91,12 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
         titulo="Seguimiento de clientes"
         etiqueta="EQUIPO COMERCIAL"
         descripcion="Las consultas de los grupos de WhatsApp, ordenadas por clasificación del cliente (A, B, C) y, dentro de cada una, por prioridad. Al marcar una consulta como respondida, indicá cómo quedó; queda en el historial del cliente."
-        acciones={<ProximoEnvio proximo={proximo?.toISOString() ?? null} ahora={ahora.getTime()} telegramListo={telegramConfigurado()} />}
+        acciones={
+          <>
+            <ProximoEnvio proximo={proximo?.toISOString() ?? null} ahora={ahora.getTime()} telegramListo={telegramConfigurado()} />
+            <BotonTelegram tipo="seguimiento" listo={telegramConfigurado()} />
+          </>
+        }
       />
 
       <MetricasSeguimiento metricas={calcularMetricas(todas, ahora)} />

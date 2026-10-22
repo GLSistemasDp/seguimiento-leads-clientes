@@ -1,41 +1,56 @@
 import "server-only";
 
 /**
- * Envio de mensajes a un grupo de Telegram con la API de bots.
+ * Envio de mensajes a grupos de Telegram con la API de bots.
  *
  * Variables de entorno (nunca se loguean ni se devuelven):
  * - TELEGRAM_BOT_TOKEN: el token que da @BotFather (/newbot).
- * - TELEGRAM_VENDEDORES_CHAT_ID: el chat_id del grupo (empieza con -100). Se
+ * - TELEGRAM_VENDEDORES_CHAT_ID: grupo por defecto (empieza con -100). Se
  *   obtiene agregando el bot al grupo y leyendo
- *   https://api.telegram.org/bot<TOKEN>/getUpdates. TELEGRAM_CHAT_ID se
- *   sigue aceptando como nombre anterior.
+ *   https://api.telegram.org/bot<TOKEN>/getUpdates. TELEGRAM_CHAT_ID se sigue
+ *   aceptando como nombre anterior.
+ * - Opcionales, para mandar cada tipo a otro grupo: TELEGRAM_ALTAS_CHAT_ID,
+ *   TELEGRAM_RECLAMOS_CHAT_ID y TELEGRAM_SEGUIMIENTO_CHAT_ID.
  */
+
+/** A que grupo va cada tipo de notificacion. */
+export type CanalTelegram = "altas" | "reclamos" | "seguimiento";
 
 /** Telegram corta en 4096 caracteres; se deja margen para las etiquetas HTML. */
 const LIMITE = 3800;
 
-function credenciales(): { token: string; chatId: string } | null {
+function chatDe(canal: CanalTelegram): string | undefined {
+  const propio = process.env[`TELEGRAM_${canal.toUpperCase()}_CHAT_ID`];
+  return propio || process.env.TELEGRAM_VENDEDORES_CHAT_ID || process.env.TELEGRAM_CHAT_ID;
+}
+
+function credenciales(canal: CanalTelegram): { token: string; chatId: string } | null {
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_VENDEDORES_CHAT_ID || process.env.TELEGRAM_CHAT_ID;
+  const chatId = chatDe(canal);
   return token && chatId ? { token, chatId } : null;
 }
 
-export function telegramConfigurado(): boolean {
-  return credenciales() !== null;
+export function telegramConfigurado(canal: CanalTelegram = "seguimiento"): boolean {
+  return credenciales(canal) !== null;
 }
 
 function escaparHtml(texto: string): string {
-  return texto.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return texto.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-/** El resumen usa el formato de WhatsApp (*negrita*); Telegram recibe HTML. */
+/**
+ * Los mensajes se escriben con *negrita* y [texto](url) (como en WhatsApp y
+ * Markdown); Telegram recibe HTML.
+ */
 export function aHtmlTelegram(texto: string): string {
-  return escaparHtml(texto).replace(/\*([^*\n]+)\*/g, "<b>$1</b>");
+  return escaparHtml(texto)
+    .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2">$1</a>')
+    .replace(/\*([^*\n]+)\*/g, "<b>$1</b>");
 }
 
 /**
  * Parte el texto por lineas para no pasar el limite. Una linea que sola ya
- * lo supera se corta a la fuerza (no pasa con el resumen, pero no rompe).
+ * lo supera se corta a la fuerza (no pasa con estos mensajes, pero no rompe).
  */
 export function partir(texto: string, limite = LIMITE): string[] {
   const partes: string[] = [];
@@ -63,16 +78,16 @@ export class ErrorTelegram extends Error {
 }
 
 /**
- * Envia el texto (formato WhatsApp) al grupo configurado, en tantos mensajes
- * como haga falta. Devuelve cuantos mensajes se mandaron.
+ * Envia uno o varios mensajes (en orden) al grupo del canal, partiendo los
+ * largos. Devuelve cuantos mensajes de Telegram se mandaron.
  */
-export async function enviarTelegram(texto: string): Promise<number> {
-  const datos = credenciales();
+export async function enviarTelegram(textos: string | readonly string[], canal: CanalTelegram = "seguimiento"): Promise<number> {
+  const datos = credenciales(canal);
   if (!datos) {
     throw new ErrorTelegram("Telegram no está configurado: faltan TELEGRAM_BOT_TOKEN y TELEGRAM_VENDEDORES_CHAT_ID.", true);
   }
 
-  const partes = partir(aHtmlTelegram(texto));
+  const partes = (typeof textos === "string" ? [textos] : textos).flatMap((texto) => partir(aHtmlTelegram(texto)));
   for (const [indice, parte] of partes.entries()) {
     let respuesta: Response;
     try {

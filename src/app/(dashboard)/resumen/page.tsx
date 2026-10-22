@@ -13,7 +13,8 @@ import { getAll } from "@/lib/db/seguimiento";
 import { getAll as getSolicitudes } from "@/lib/db/solicitudes";
 import { CATEGORIAS, evaluarPorReglas } from "@/lib/solicitudes/evaluacion";
 import { opciones } from "@/lib/seguimiento/presentacion";
-import { proximoEnvioCierre, textoCierre } from "@/lib/seguimiento/cierre-del-dia";
+import { proximoEnvioCierre } from "@/lib/seguimiento/cierre-del-dia";
+import { textosSeguimiento, urlBaseActual } from "@/lib/notificaciones/envios";
 import { armarResumenDiario } from "@/lib/seguimiento/resumen-diario";
 import { telegramConfigurado } from "@/lib/notificaciones/telegram";
 import { PERIODOS, calcularTablero, diaLocal, esPeriodo, vendedorCorto } from "@/lib/seguimiento/tablero";
@@ -293,7 +294,7 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
         </Tarjeta>
 
         <ResumenDiario
-          texto={textoCierre(resumen, ahora)}
+          textos={(await textosSeguimiento(await urlBaseActual(), ahora)).textos}
           telegramListo={telegramConfigurado()}
           proximo={proximo?.toISOString() ?? null}
           ahora={ahora.getTime()}

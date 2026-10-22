@@ -1,8 +1,12 @@
 import { PanelReclamos } from "@/components/reclamos/PanelReclamos";
+import { ProximoEnvio } from "@/components/resumen/ProximoEnvio";
+import { BotonTelegram } from "@/components/ui/BotonTelegram";
 import { CopiarLink } from "@/components/ui/CopiarLink";
 import { EncabezadoPagina } from "@/components/ui/EncabezadoPagina";
 import { Icono } from "@/components/ui/Icono";
 import { getPanel } from "@/lib/db/reclamos";
+import { telegramConfigurado } from "@/lib/notificaciones/telegram";
+import { HORARIOS_RECLAMOS, proximoEnvio } from "@/lib/seguimiento/cierre-del-dia";
 import { ESTADOS_RECLAMO, type EstadoReclamo } from "@/types/reclamo";
 
 export const metadata = { title: "Reclamos · CRM De Pascale" };
@@ -14,7 +18,12 @@ function esFiltro(valor: unknown): valor is EstadoReclamo | "TODOS" {
 
 export default async function ReclamosPage({ searchParams }: PageProps<"/reclamos">) {
   const { estado } = await searchParams;
-  const { reclamos, error } = await getPanel();
+  const ahora = new Date();
+  const [{ reclamos, error }, proximo] = await Promise.all([
+    getPanel(ahora),
+    proximoEnvio(HORARIOS_RECLAMOS, ahora).catch(() => null),
+  ]);
+  const telegramListo = telegramConfigurado("reclamos");
   const pendientes = reclamos.filter((reclamo) => reclamo.estado === "SIN_DEFINIR").length;
   // Si no hay nada esperando a la gerencia se abre directo en "Todos".
   const estadoInicial = esFiltro(estado) ? estado : pendientes > 0 ? "SIN_DEFINIR" : "TODOS";
@@ -27,6 +36,8 @@ export default async function ReclamosPage({ searchParams }: PageProps<"/reclamo
         descripcion="Reclamos de los grupos de WhatsApp y formularios FOR-03 en un solo panel. En cada uno indicá cómo sigue el vendedor; la indicación aparece en el seguimiento del chat."
         acciones={
           <>
+            <ProximoEnvio proximo={proximo?.toISOString() ?? null} ahora={ahora.getTime()} telegramListo={telegramListo} />
+            <BotonTelegram tipo="reclamos" listo={telegramListo} />
             <CopiarLink ruta="/formularios/reclamo" etiqueta="Link del formulario para el cliente" />
             <a
               href="/formularios/reclamo"

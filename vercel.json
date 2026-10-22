@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/cierre-del-dia",
       "schedule": "0 20 * * 1-5"
+    },
+    {
+      "path": "/api/cron/reclamos",
+      "schedule": "0 20 * * 1-5"
     }
   ]
 }

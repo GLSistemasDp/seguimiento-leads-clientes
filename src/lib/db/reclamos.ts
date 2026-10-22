@@ -215,6 +215,7 @@ function desdeConsulta(
     tipo: "WhatsApp",
     encargado: consulta.encargado,
     grupoWhatsapp: consulta.grupoWhatsapp,
+    linkWhatsapp: consulta.linkWhatsapp,
     grupoVendedor: consulta.grupoVendedor.replace(/^FILTRO GRUPO\s*/i, ""),
     estadoCliente: estadoCliente(consulta),
     respondido: consulta.respondida,
@@ -230,7 +231,7 @@ function desdeConsulta(
 function desdeFormulario(
   reclamo: Reclamo,
   indicacion: Indicacion | null,
-  cliente: { clasificacion: string; estado: string[] } | undefined,
+  cliente: DatosCliente | undefined,
   ahora: Date,
 ): ReclamoPanel {
   const fecha = new Date(`${reclamo.fecha}T12:00:00-03:00`);
@@ -246,8 +247,9 @@ function desdeFormulario(
     detalle: reclamo.detalle,
     tipo: reclamo.canal === "cliente" ? `${reclamo.clasificacion} · cargado por el cliente` : reclamo.clasificacion,
     encargado: reclamo.contacto,
-    grupoWhatsapp: "",
-    grupoVendedor: "",
+    grupoWhatsapp: cliente?.grupoWhatsapp ?? "",
+    linkWhatsapp: cliente?.linkWhatsapp ?? "",
+    grupoVendedor: cliente?.grupoVendedor ?? "",
     estadoCliente: cliente?.estado ?? [],
     respondido,
     dias: respondido ? null : Math.max(0, Math.floor((ahora.getTime() - fecha.getTime()) / 86_400_000)),
@@ -260,6 +262,39 @@ function desdeFormulario(
 }
 
 const ORDEN_ESTADO: Record<EstadoReclamo, number> = { SIN_DEFINIR: 0, EN_GESTION: 1, RESUELTO: 2 };
+
+/** Lo que se sabe de un cliente por la planilla de seguimiento (para los formularios). */
+export type DatosCliente = {
+  clasificacion: string;
+  estado: string[];
+  grupoWhatsapp: string;
+  linkWhatsapp: string;
+  grupoVendedor: string;
+};
+
+function clientesPorCodigo(consultas: readonly Consulta[]): Map<string, DatosCliente> {
+  const clientes = new Map<string, DatosCliente>();
+  for (const consulta of consultas) {
+    const { codigo } = separarCliente(consulta.cliente);
+    if (!codigo || clientes.has(codigo)) continue;
+    clientes.set(codigo, {
+      clasificacion: (consulta.clasificacion || consulta.ficha?.clasificacion || "").toUpperCase(),
+      estado: estadoCliente(consulta),
+      grupoWhatsapp: consulta.grupoWhatsapp || consulta.ficha?.grupoWhatsapp || "",
+      linkWhatsapp: consulta.linkWhatsapp || consulta.ficha?.linkWhatsapp || "",
+      grupoVendedor: consulta.grupoVendedor.replace(/^FILTRO GRUPO\s*/i, ""),
+    });
+  }
+  return clientes;
+}
+
+/** Datos del cliente por su N° (para avisar de un formulario nuevo). Null si no figura. */
+export async function datosDeCliente(numeroCliente: string): Promise<DatosCliente | null> {
+  const codigo = numeroCliente.replace(/\D/g, "");
+  if (!codigo) return null;
+  const consultas = await getConsultas().catch(() => []);
+  return clientesPorCodigo(consultas).get(codigo) ?? null;
+}
 
 export type PanelReclamos = {
   reclamos: ReclamoPanel[];
@@ -282,16 +317,8 @@ export async function getPanel(ahora = new Date()): Promise<PanelReclamos> {
     error = causa instanceof Error ? causa.message : String(causa);
   }
 
-  // Clasificacion y estado de cuenta por codigo de cliente, para los formularios.
-  const clientes = new Map<string, { clasificacion: string; estado: string[] }>();
-  for (const consulta of consultas) {
-    const { codigo } = separarCliente(consulta.cliente);
-    if (!codigo || clientes.has(codigo)) continue;
-    clientes.set(codigo, {
-      clasificacion: (consulta.clasificacion || consulta.ficha?.clasificacion || "").toUpperCase(),
-      estado: estadoCliente(consulta),
-    });
-  }
+  // Clasificacion, estado de cuenta y grupo por codigo de cliente, para los formularios.
+  const clientes = clientesPorCodigo(consultas);
 
   const formularioPorConsulta = new Map(
     todosFormularios.filter((reclamo) => reclamo.consultaId).map((reclamo) => [reclamo.consultaId!, reclamo.id]),

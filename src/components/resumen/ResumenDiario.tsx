@@ -2,17 +2,19 @@
 
 import { useState } from "react";
 import { ProximoEnvio } from "@/components/resumen/ProximoEnvio";
+import { BotonTelegram } from "@/components/ui/BotonTelegram";
 import { Button } from "@/components/ui/Button";
 import { Icono } from "@/components/ui/Icono";
 import { Modal } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
 
 /**
- * Cierre del dia para el grupo de Telegram de gerencia. Se puede mandar a
- * mano desde aca; el envio automatico lo hace el cron (/api/cron/resumen-diario).
+ * Seguimiento de chats para el grupo de Telegram: un mensaje con el resumen y
+ * uno por prioridad (reclamos, pedidos nuevos, refacturar, resto). Se puede
+ * mandar a mano desde aca; el envio automatico lo hace /api/cron/cierre-del-dia.
  */
 export function ResumenDiario({
-  texto,
+  textos,
   telegramListo,
   datos,
   proximo,
@@ -21,15 +23,15 @@ export function ResumenDiario({
   /** ISO del proximo envio automatico. */
   proximo: string | null;
   ahora: number;
-  /** Formato WhatsApp/Telegram (*negrita*). */
-  texto: string;
-  /** Si estan TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID. */
+  /** Mensajes tal como salen (formato *negrita* y [texto](link)). */
+  textos: string[];
+  /** Si estan el token del bot y el chat de seguimiento. */
   telegramListo: boolean;
   datos: { etiqueta: string; valor: number; color: string }[];
 }) {
   const { mostrar } = useToast();
   const [abierto, setAbierto] = useState(false);
-  const [enviando, setEnviando] = useState(false);
+  const texto = textos.join("\n\n— — —\n\n");
 
   async function copiar() {
     try {
@@ -40,20 +42,6 @@ export function ResumenDiario({
     }
   }
 
-  async function enviar() {
-    setEnviando(true);
-    try {
-      const respuesta = await fetch("/api/resumen-diario/telegram", { method: "POST" });
-      const cuerpo = (await respuesta.json().catch(() => ({}))) as { error?: string };
-      if (!respuesta.ok) throw new Error(cuerpo.error ?? `Error ${respuesta.status}`);
-      mostrar("Resumen enviado al grupo de Telegram.", "exito");
-    } catch (error) {
-      mostrar(error instanceof Error ? error.message : "No se pudo enviar.", "error");
-    } finally {
-      setEnviando(false);
-    }
-  }
-
   return (
     <section className="flex flex-col gap-4 rounded-2xl border border-sky-200 bg-white p-5 shadow-sm">
       <div className="flex items-start gap-3">
@@ -61,8 +49,12 @@ export function ResumenDiario({
           <Icono nombre="chat" className="size-5" />
         </span>
         <div>
-          <h2 className="font-semibold text-slate-900">Cierre del día por Telegram</h2>
-          <p className="text-sm text-slate-600">Estado final de los chats y lo demorado, para el grupo de gerencia.</p>
+          <h2 className="font-semibold text-slate-900">Seguimiento de chats por Telegram</h2>
+          <p className="text-sm text-slate-600">
+            {textos.length > 1
+              ? `${textos.length} mensajes priorizados: resumen, reclamos, pedidos nuevos, refacturar y el resto.`
+              : "Sin consultas pendientes en este corte."}
+          </p>
         </div>
       </div>
 
@@ -76,18 +68,10 @@ export function ResumenDiario({
       </dl>
 
       <div className="flex flex-wrap gap-2">
-        <Button
-          disabled={!telegramListo || enviando}
-          title={telegramListo ? undefined : "Falta configurar TELEGRAM_BOT_TOKEN y TELEGRAM_VENDEDORES_CHAT_ID"}
-          onClick={() => void enviar()}
-          className="bg-sky-600 hover:bg-sky-700 disabled:bg-sky-300"
-        >
-          <Icono nombre="flecha" className="size-4" />
-          {enviando ? "Enviando…" : "Enviar a Telegram"}
-        </Button>
+        <BotonTelegram tipo="seguimiento" listo={telegramListo} />
         <Button variante="secundario" onClick={() => setAbierto(true)}>
           <Icono nombre="ojo" className="size-4" />
-          Ver mensaje
+          Ver mensajes
         </Button>
         <Button variante="fantasma" onClick={() => void copiar()}>
           <Icono nombre="copiar" className="size-4" />
@@ -99,7 +83,7 @@ export function ResumenDiario({
       <Modal
         abierto={abierto}
         ancho="lg"
-        titulo="Mensaje de cierre del día"
+        titulo="Mensajes del seguimiento de chats"
         onCerrar={() => setAbierto(false)}
         acciones={
           <>
@@ -113,7 +97,13 @@ export function ResumenDiario({
           </>
         }
       >
-        <pre className="rounded-lg bg-sky-50 p-4 font-sans text-sm whitespace-pre-wrap text-slate-900">{texto}</pre>
+        <div className="flex flex-col gap-3">
+          {textos.map((mensaje, indice) => (
+            <pre key={indice} className="rounded-lg bg-sky-50 p-4 font-sans text-sm whitespace-pre-wrap text-slate-900">
+              {mensaje}
+            </pre>
+          ))}
+        </div>
       </Modal>
     </section>
   );

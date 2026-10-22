@@ -9,9 +9,10 @@ import "server-only";
  */
 
 export type RegistroAutomatizacion = {
-  /** "cierre-del-dia". */
+  /** "seguimiento-chats", "reclamos-pendientes", "alta-nueva"... */
   automatizacion: string;
-  origen: "manual" | "cron";
+  /** Boton de la intranet, cron programado o aviso al instante (formulario nuevo). */
+  origen: "manual" | "cron" | "evento";
   estado: "ok" | "error" | "omitido";
   /** Mensajes de Telegram enviados. */
   mensajes: number;
