@@ -123,9 +123,10 @@
               <label class="fila"><span class="rotulo">N° de remito</span><input name="remito" maxlength="60" class="entrada" /></label>
             </div>
 
-            <div class="hidden grid-cols-[1fr_1.6fr_7rem_7rem_2.25rem] bg-celda text-[12px] text-dp sm:grid">
+            <div class="hidden grid-cols-[1fr_1.6fr_7rem_7rem_7rem_2.25rem] bg-celda text-[12px] text-dp sm:grid">
               <span class="px-3 py-2">Código producto</span>
               <span class="px-3 py-2">Descripción</span>
+              <span class="px-3 py-2">Lote</span>
               <span class="px-3 py-2">Cant. facturada</span>
               <span class="px-3 py-2">Cant. reclamo</span>
               <span></span>
@@ -176,9 +177,10 @@
   </div>
 
   <template id="fila-producto">
-    <div class="grid grid-cols-2 gap-px border-t border-dp/20 bg-dp/10 sm:grid-cols-[1fr_1.6fr_7rem_7rem_2.25rem]">
+    <div class="grid grid-cols-2 gap-px border-t border-dp/20 bg-dp/10 sm:grid-cols-[1fr_1.6fr_7rem_7rem_7rem_2.25rem]">
       <input data-campo="codigo" maxlength="60" placeholder="Código producto" aria-label="Código del producto" class="entrada" />
       <input data-campo="descripcion" maxlength="200" placeholder="Descripción" aria-label="Descripción del producto" class="entrada" />
+      <input data-campo="lote" maxlength="60" placeholder="Lote (si figura)" aria-label="Lote del producto" title="El número de lote impreso en el producto o el envase" class="entrada col-span-2 sm:col-span-1" />
       <input data-campo="cantidadFacturada" inputmode="decimal" placeholder="Facturada" aria-label="Cantidad facturada" class="entrada" />
       <input data-campo="cantidadReclamo" inputmode="decimal" placeholder="Reclamada" aria-label="Cantidad reclamada" class="entrada" />
       <button type="button" data-quitar aria-label="Quitar producto" class="col-span-2 bg-white py-1 text-lg text-slate-500 hover:bg-red-50 hover:text-red-600 sm:col-span-1">×</button>

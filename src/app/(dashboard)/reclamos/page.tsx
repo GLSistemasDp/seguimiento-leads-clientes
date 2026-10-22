@@ -1,11 +1,12 @@
 import { PanelReclamos } from "@/components/reclamos/PanelReclamos";
+import { InformeReclamos } from "@/components/reclamos/informe/InformeReclamos";
 import { ProximoEnvio } from "@/components/resumen/ProximoEnvio";
 import { BotonTelegram } from "@/components/ui/BotonTelegram";
 import { CopiarLink } from "@/components/ui/CopiarLink";
 import { EncabezadoPagina } from "@/components/ui/EncabezadoPagina";
-import { Icono } from "@/components/ui/Icono";
-import { getPanel } from "@/lib/db/reclamos";
+import { getPanel, getReclamos } from "@/lib/db/reclamos";
 import { telegramConfigurado } from "@/lib/notificaciones/telegram";
+import { META_RESOLUCION_DIAS, calcularInforme, esPeriodoInforme } from "@/lib/reclamos/informe";
 import { HORARIOS_RECLAMOS, proximoEnvio } from "@/lib/seguimiento/cierre-del-dia";
 import { ESTADOS_RECLAMO, type EstadoReclamo } from "@/types/reclamo";
 
@@ -17,45 +18,46 @@ function esFiltro(valor: unknown): valor is EstadoReclamo | "TODOS" {
 }
 
 export default async function ReclamosPage({ searchParams }: PageProps<"/reclamos">) {
-  const { estado } = await searchParams;
+  const params = await searchParams;
   const ahora = new Date();
-  const [{ reclamos, error }, proximo] = await Promise.all([
+  const [{ reclamos, error }, todos, proximo] = await Promise.all([
     getPanel(ahora),
+    getReclamos(),
     proximoEnvio(HORARIOS_RECLAMOS, ahora).catch(() => null),
   ]);
   const telegramListo = telegramConfigurado("reclamos");
   const pendientes = reclamos.filter((reclamo) => reclamo.estado === "SIN_DEFINIR").length;
   // Si no hay nada esperando a la gerencia se abre directo en "Todos".
-  const estadoInicial = esFiltro(estado) ? estado : pendientes > 0 ? "SIN_DEFINIR" : "TODOS";
+  const estadoInicial = esFiltro(params.estado) ? params.estado : pendientes > 0 ? "SIN_DEFINIR" : "TODOS";
+  const periodo = esPeriodoInforme(params.periodo) ? params.periodo : "90";
+  const meta = Number(process.env.RECLAMOS_META_DIAS) || META_RESOLUCION_DIAS;
+  const informe = calcularInforme(todos, ahora, periodo, meta);
+
+  const parametros: Record<string, string> = {};
+  for (const [clave, valor] of Object.entries(params)) {
+    if (typeof valor === "string" && clave !== "periodo" && clave !== "informe") parametros[clave] = valor;
+  }
 
   return (
     <div className="flex flex-col gap-5">
       <EncabezadoPagina
         titulo="Reclamos"
         etiqueta="SOLO GERENCIA"
-        descripcion="Reclamos de los grupos de WhatsApp y formularios FOR-03 en un solo panel. En cada uno indicá cómo sigue el vendedor; la indicación aparece en el seguimiento del chat."
+        descripcion="Reclamos que los clientes cargan con el formulario FOR-03. En cada uno indicá cómo sigue el vendedor y completá la gestión para el informe."
         acciones={
           <>
             <ProximoEnvio proximo={proximo?.toISOString() ?? null} ahora={ahora.getTime()} telegramListo={telegramListo} />
             <BotonTelegram tipo="reclamos" listo={telegramListo} />
             <CopiarLink ruta="/formularios/reclamo" etiqueta="Link del formulario para el cliente" />
-            <a
-              href="/formularios/reclamo"
-              target="_blank"
-              rel="noopener"
-              title="Abre el formulario que completa el cliente"
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-800"
-            >
-              <Icono nombre="externo" />
-              Nuevo reclamo
-            </a>
           </>
         }
       />
 
+      <InformeReclamos informe={informe} abierto={params.informe === "1"} parametros={parametros} />
+
       {error ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
-          No se pudieron leer los reclamos de WhatsApp: {error}
+          No se pudo leer la planilla de clientes (clasificación y estado de cuenta): {error}
         </p>
       ) : null}
 

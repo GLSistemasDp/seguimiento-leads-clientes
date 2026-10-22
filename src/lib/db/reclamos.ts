@@ -1,16 +1,16 @@
 import "server-only";
 import { guardarAdjuntos } from "@/lib/db/adjuntos";
 import type { ArchivoAdjunto } from "@/lib/db/adjuntos";
+import { reclamosDemo } from "@/lib/db/demo/reclamos";
 import { leer, modificar } from "@/lib/db/local/almacen";
 import { backendActivo } from "@/lib/db/repositorio";
 import { getAll as getConsultas } from "@/lib/db/seguimiento";
-import { PRODUCTOS_DEMO } from "@/lib/reclamos/catalogo";
-import { diasAbierta, esReclamo, estadoCliente, separarCliente } from "@/lib/seguimiento/presentacion";
+import { esReclamo, estadoCliente, separarCliente } from "@/lib/seguimiento/presentacion";
 import {
   CAMPOS_CIERRE,
-  CLASIFICACIONES,
   type Calidad,
   type EstadoReclamo,
+  type Gestion,
   type Indicacion,
   type NuevoReclamo,
   type Reclamo,
@@ -19,13 +19,12 @@ import {
 import type { Consulta } from "@/types/seguimiento";
 
 /**
- * Panel de reclamos para gerencia. Junta dos fuentes:
- * - los reclamos que el bot detecta en los grupos de WhatsApp (hito "Reclamo"
- *   de la planilla de seguimiento), que hoy se reenvian por Telegram;
- * - los formularios FOR-03 cargados desde la app (y, con DB_BACKEND="demo",
- *   seis formularios de ejemplo).
+ * Reclamos de clientes: los formularios FOR-03 que llegan por el link publico
+ * (o que carga el equipo). Los reclamos que el bot detecta en los grupos de
+ * WhatsApp siguen en Seguimiento de clientes, no en este panel.
  *
- * Formularios, adjuntos e indicaciones del gerente se guardan en `.data/`.
+ * Formularios, adjuntos e indicaciones se guardan en el almacen (Postgres en
+ * produccion). Con DB_BACKEND="demo" se suman formularios de ejemplo.
  */
 
 const INDICACIONES = "reclamos-indicaciones";
@@ -42,51 +41,48 @@ function calidadVacia(): Calidad {
   return { clasificacion: null, causa: null, procedente: null, acciones: [] };
 }
 
-function ejemplos(): Reclamo[] {
-  return CLASIFICACIONES.map((clasificacion, i) => ({
-    id: `REC-${String(i + 1).padStart(4, "0")}`,
-    fecha: new Date(Date.now() - i * 86400000).toISOString().slice(0, 10),
-    razonSocial: ["Distribuidora del Sur", "Seguridad Industrial Norte", "Ferretería Central", "Suministros del Oeste", "Protección Integral", "Insumos del Litoral"][i],
-    numeroCliente: `CLI-${1200 + i}`, sucursal: "Casa central", transporte: "Transporte de ejemplo",
-    contacto: ["Lucía Pérez", "Martín López", "Ana García", "Diego Ruiz", "Carolina Díaz", "Pablo Torres"][i],
-    cargo: "Compras", telefono: "011 0000-0000", email: `compras${i + 1}@example.com`,
-    ordenCompra: `OC-${800 + i}`, pedido: `PED-${2400 + i}`, factura: `0001-${String(4200 + i).padStart(8, "0")}`, remito: `R-${3100 + i}`,
-    clasificacion,
-    detalle: [
-      "La factura incluye unidades que no corresponden al pedido. Solicitamos revisar el comprobante.",
-      "El pedido no llegó en la fecha acordada. Necesitamos confirmar una nueva fecha de entrega.",
-      "El precio facturado difiere del acordado en la orden de compra.",
-      "Seleccionamos un modelo incorrecto al realizar el pedido. Consultamos por una alternativa.",
-      "Detectamos fallas en la terminación de parte de los productos recibidos.",
-      "Recibimos menos unidades que las indicadas en el remito. Solicitamos el envío de las faltantes.",
-    ][i],
-    productos: [{ codigo: PRODUCTOS_DEMO[i].id, descripcion: PRODUCTOS_DEMO[i].nombre, cantidadFacturada: 50, cantidadReclamo: 10 }],
-    canal: "intranet",
-    adjuntos: [],
-    calidad: calidadVacia(),
-    cierre: cierreVacio(),
-    indicacion: null,
-    consultaId: null,
-  }));
+export function gestionVacia(): Gestion {
+  return {
+    responsable: "",
+    severidad: null,
+    tipoEpp: null,
+    canalIngreso: null,
+    deposito: "",
+    motivoLogistico: null,
+    diasDemora: null,
+    montoNotaCredito: null,
+    costoAdicional: null,
+    cerrado: false,
+  };
 }
 
-const memoria = globalThis as typeof globalThis & { reclamosDemo?: Reclamo[] };
+const memoria = globalThis as typeof globalThis & { reclamosDemoV2?: Reclamo[] };
 
 /** Los de ejemplo solo existen en la demo; los guardados (nuevos o editados) pisan a los de ejemplo. */
 async function formularios(): Promise<Reclamo[]> {
   const guardados = await leer<Reclamo>(FORMULARIOS);
-  const demo = backendActivo() === "demo" ? (memoria.reclamosDemo ??= ejemplos()) : [];
+  const demo = backendActivo() === "demo" ? (memoria.reclamosDemoV2 ??= reclamosDemo()) : [];
   const porId = new Map<string, Reclamo>();
   for (const reclamo of [...demo, ...Object.values(guardados)]) {
-    // Los creados antes de sumar adjuntos/consulta no traen esos campos.
+    // Los guardados antes de sumar campos nuevos no los traen.
     porId.set(reclamo.id, {
       ...reclamo,
       canal: reclamo.canal ?? "intranet",
       adjuntos: reclamo.adjuntos ?? [],
       consultaId: reclamo.consultaId ?? null,
+      productos: reclamo.productos.map((producto) => ({ ...producto, lote: producto.lote ?? "" })),
+      gestion: { ...gestionVacia(), ...reclamo.gestion },
+      resueltoEn: reclamo.resueltoEn ?? null,
+      cerradoEn: reclamo.cerradoEn ?? null,
     });
   }
   return [...porId.values()];
+}
+
+async function guardarFormulario(reclamo: Reclamo): Promise<void> {
+  await modificar<Reclamo, void>(FORMULARIOS, (guardados) => {
+    guardados[reclamo.id] = reclamo;
+  });
 }
 
 /** REC-0007: sigue la numeracion mas alta existente. */
@@ -107,25 +103,34 @@ export async function crearFormulario(
   archivos: ArchivoAdjunto[],
   canal: Reclamo["canal"] = "intranet",
 ): Promise<Reclamo> {
-  const existentes = await formularios();
-  const id = siguienteNumero(existentes);
-  const adjuntos = await guardarAdjuntos(archivos, `reclamo:${id}`);
-  const reclamo: Reclamo = {
+  const base: Omit<Reclamo, "id" | "adjuntos"> = {
     ...datos,
-    id,
     canal,
-    adjuntos,
     calidad: calidadVacia(),
     cierre: cierreVacio(),
     indicacion: null,
+    gestion: { ...gestionVacia(), canalIngreso: canal === "cliente" ? "PORTAL" : null },
+    resueltoEn: null,
+    cerradoEn: null,
   };
-  await modificar<Reclamo, void>(FORMULARIOS, (guardados) => {
-    guardados[id] = reclamo;
+  // El numero se asigna dentro de la escritura: dos formularios a la vez no se pisan.
+  const demo = backendActivo() === "demo" ? (memoria.reclamosDemoV2 ??= reclamosDemo()) : [];
+  const reclamo = await modificar<Reclamo, Reclamo>(FORMULARIOS, (guardados) => {
+    const id = siguienteNumero([...demo, ...Object.values(guardados)]);
+    const nuevo: Reclamo = { ...base, id, adjuntos: [] };
+    guardados[id] = nuevo;
+    return nuevo;
   });
-  return reclamo;
+  if (archivos.length === 0) return reclamo;
+  const conAdjuntos = { ...reclamo, adjuntos: await guardarAdjuntos(archivos, `reclamo:${reclamo.id}`) };
+  await guardarFormulario(conAdjuntos);
+  return conAdjuntos;
 }
 
-/** Guarda la parte del Asegurador de Calidad y el cierre. */
+/**
+ * Guarda la parte del Asegurador de Calidad y el cierre. La primera vez que
+ * se carga la respuesta al cliente queda registrado cuando se resolvio.
+ */
 export async function actualizarCalidad(
   id: string,
   calidad: Calidad,
@@ -133,10 +138,27 @@ export async function actualizarCalidad(
 ): Promise<Reclamo | null> {
   const actual = (await formularios()).find((reclamo) => reclamo.id === id);
   if (!actual) return null;
-  const actualizado: Reclamo = { ...actual, calidad, cierre: { ...cierreVacio(), ...cierre } };
-  await modificar<Reclamo, void>(FORMULARIOS, (guardados) => {
-    guardados[id] = actualizado;
-  });
+  const respondido = Boolean(cierre["Respuesta al cliente"]?.trim());
+  const actualizado: Reclamo = {
+    ...actual,
+    calidad,
+    cierre: { ...cierreVacio(), ...cierre },
+    resueltoEn: respondido ? (actual.resueltoEn ?? new Date().toISOString()) : null,
+  };
+  await guardarFormulario(actualizado);
+  return actualizado;
+}
+
+/** Datos de gestion para el informe (responsable, severidad, montos, cierre). */
+export async function actualizarGestion(id: string, gestion: Gestion): Promise<Reclamo | null> {
+  const actual = (await formularios()).find((reclamo) => reclamo.id === id);
+  if (!actual) return null;
+  const actualizado: Reclamo = {
+    ...actual,
+    gestion,
+    cerradoEn: gestion.cerrado ? (actual.cerradoEn ?? new Date().toISOString()) : null,
+  };
+  await guardarFormulario(actualizado);
   return actualizado;
 }
 
@@ -152,10 +174,15 @@ export function idWhatsapp(consultaId: string): string {
 
 /**
  * Donde vive la indicacion de un formulario: si se cargo desde un reclamo de
- * WhatsApp, comparte la del chat (es el mismo reclamo).
+ * WhatsApp, comparte la del chat (es el mismo reclamo y se ve en el seguimiento).
  */
 function claveIndicacion(reclamo: Reclamo): string {
   return reclamo.consultaId ? idWhatsapp(reclamo.consultaId) : reclamo.id;
+}
+
+/** Indicacion guardada, o la que trae el formulario (los de ejemplo). */
+function indicacionDe(reclamo: Reclamo, indicaciones: Record<string, Indicacion>): Indicacion | null {
+  return indicaciones[claveIndicacion(reclamo)] ?? reclamo.indicacion ?? null;
 }
 
 /** Guarda la indicacion si el reclamo existe; null si no se encontro. */
@@ -184,7 +211,13 @@ export async function getFormulario(id: string): Promise<Reclamo | null> {
   const reclamo = (await formularios()).find((item) => item.id === id);
   if (!reclamo) return null;
   const indicaciones = await getIndicaciones();
-  return { ...structuredClone(reclamo), indicacion: indicaciones[claveIndicacion(reclamo)] ?? null };
+  return { ...structuredClone(reclamo), indicacion: indicacionDe(reclamo, indicaciones) };
+}
+
+/** Todos los formularios con su indicacion (para el informe). */
+export async function getReclamos(): Promise<Reclamo[]> {
+  const [todos, indicaciones] = await Promise.all([formularios(), getIndicaciones()]);
+  return todos.map((reclamo) => ({ ...reclamo, indicacion: indicacionDe(reclamo, indicaciones) }));
 }
 
 /** El formulario que se cargo a partir de un reclamo de WhatsApp, si ya existe. */
@@ -197,37 +230,6 @@ function estado(indicacion: Indicacion | null, respondido: boolean): EstadoRecla
   return indicacion ? "EN_GESTION" : "SIN_DEFINIR";
 }
 
-function desdeConsulta(
-  consulta: Consulta,
-  indicacion: Indicacion | null,
-  formulario: string | null,
-  ahora: Date,
-): ReclamoPanel {
-  const { codigo, nombre } = separarCliente(consulta.cliente);
-  return {
-    id: idWhatsapp(consulta.id),
-    origen: "whatsapp",
-    fecha: consulta.fecha ? consulta.fecha.toISOString() : null,
-    cliente: nombre,
-    codigo,
-    clasificacionCliente: (consulta.clasificacion || consulta.ficha?.clasificacion || "").toUpperCase(),
-    detalle: consulta.consulta,
-    tipo: "WhatsApp",
-    encargado: consulta.encargado,
-    grupoWhatsapp: consulta.grupoWhatsapp,
-    linkWhatsapp: consulta.linkWhatsapp,
-    grupoVendedor: consulta.grupoVendedor.replace(/^FILTRO GRUPO\s*/i, ""),
-    estadoCliente: estadoCliente(consulta),
-    respondido: consulta.respondida,
-    dias: consulta.respondida ? null : diasAbierta(consulta, ahora),
-    observaciones: consulta.observaciones,
-    indicacion,
-    estado: estado(indicacion, consulta.respondida),
-    formulario,
-    consultaId: consulta.id,
-  };
-}
-
 function desdeFormulario(
   reclamo: Reclamo,
   indicacion: Indicacion | null,
@@ -235,17 +237,17 @@ function desdeFormulario(
   ahora: Date,
 ): ReclamoPanel {
   const fecha = new Date(`${reclamo.fecha}T12:00:00-03:00`);
-  // Con el cierre completo (respuesta al cliente) el reclamo se considera respondido.
-  const respondido = Boolean(reclamo.cierre["Respuesta al cliente"]?.trim());
+  // Con la respuesta al cliente cargada (o cerrado) el reclamo se considera respondido.
+  const respondido = Boolean(reclamo.cierre["Respuesta al cliente"]?.trim()) || reclamo.gestion.cerrado;
   return {
     id: reclamo.id,
-    origen: "formulario",
     fecha: fecha.toISOString(),
     cliente: reclamo.razonSocial,
     codigo: reclamo.numeroCliente,
     clasificacionCliente: cliente?.clasificacion ?? "",
     detalle: reclamo.detalle,
-    tipo: reclamo.canal === "cliente" ? `${reclamo.clasificacion} · cargado por el cliente` : reclamo.clasificacion,
+    tipo: reclamo.calidad.clasificacion ?? reclamo.clasificacion,
+    delCliente: reclamo.canal === "cliente",
     encargado: reclamo.contacto,
     grupoWhatsapp: cliente?.grupoWhatsapp ?? "",
     linkWhatsapp: cliente?.linkWhatsapp ?? "",
@@ -253,11 +255,9 @@ function desdeFormulario(
     estadoCliente: cliente?.estado ?? [],
     respondido,
     dias: respondido ? null : Math.max(0, Math.floor((ahora.getTime() - fecha.getTime()) / 86_400_000)),
-    observaciones: "",
     indicacion,
     estado: estado(indicacion, respondido),
-    formulario: reclamo.id,
-    consultaId: null,
+    responsable: reclamo.gestion.responsable,
   };
 }
 
@@ -298,14 +298,14 @@ export async function datosDeCliente(numeroCliente: string): Promise<DatosClient
 
 export type PanelReclamos = {
   reclamos: ReclamoPanel[];
-  /** Si la planilla de seguimiento no se pudo leer, por que. */
+  /** Si la planilla de clientes no se pudo leer (clasificacion, estado de cuenta), por que. */
   error: string | null;
 };
 
 /**
- * Todos los reclamos, primero los que esperan a la gerencia y dentro de cada
- * estado los que llevan mas dias. Un formulario cargado a partir de un
- * reclamo de WhatsApp no se lista aparte: queda enlazado a ese reclamo.
+ * Los formularios de reclamo, primero los que esperan a la gerencia y dentro
+ * de cada estado los que llevan mas dias. La clasificacion, el estado de
+ * cuenta y el grupo del cliente salen de la planilla de seguimiento.
  */
 export async function getPanel(ahora = new Date()): Promise<PanelReclamos> {
   const [indicaciones, todosFormularios] = await Promise.all([getIndicaciones(), formularios()]);
@@ -316,40 +316,22 @@ export async function getPanel(ahora = new Date()): Promise<PanelReclamos> {
   } catch (causa) {
     error = causa instanceof Error ? causa.message : String(causa);
   }
-
-  // Clasificacion, estado de cuenta y grupo por codigo de cliente, para los formularios.
   const clientes = clientesPorCodigo(consultas);
 
-  const formularioPorConsulta = new Map(
-    todosFormularios.filter((reclamo) => reclamo.consultaId).map((reclamo) => [reclamo.consultaId!, reclamo.id]),
-  );
-  const consultasReclamo = consultas.filter(esReclamo);
-  const idsConsultas = new Set(consultasReclamo.map((consulta) => consulta.id));
-
-  const reclamos = [
-    ...consultasReclamo.map((consulta) =>
-      desdeConsulta(
-        consulta,
-        indicaciones[idWhatsapp(consulta.id)] ?? null,
-        formularioPorConsulta.get(consulta.id) ?? null,
+  const reclamos = todosFormularios
+    .map((reclamo) =>
+      desdeFormulario(
+        reclamo,
+        indicacionDe(reclamo, indicaciones),
+        clientes.get(reclamo.numeroCliente.replace(/\D/g, "")),
         ahora,
       ),
-    ),
-    ...todosFormularios
-      .filter((reclamo) => !reclamo.consultaId || !idsConsultas.has(reclamo.consultaId))
-      .map((reclamo) =>
-        desdeFormulario(
-          reclamo,
-          indicaciones[claveIndicacion(reclamo)] ?? null,
-          clientes.get(reclamo.numeroCliente.replace(/\D/g, "")),
-          ahora,
-        ),
-      ),
-  ].sort(
-    (a, b) =>
-      ORDEN_ESTADO[a.estado] - ORDEN_ESTADO[b.estado] ||
-      (b.dias ?? -1) - (a.dias ?? -1) ||
-      (b.fecha ?? "").localeCompare(a.fecha ?? ""),
-  );
+    )
+    .sort(
+      (a, b) =>
+        ORDEN_ESTADO[a.estado] - ORDEN_ESTADO[b.estado] ||
+        (b.dias ?? -1) - (a.dias ?? -1) ||
+        (b.fecha ?? "").localeCompare(a.fecha ?? ""),
+    );
   return { reclamos, error };
 }

@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { FormularioIndicacion } from "@/components/reclamos/FormularioIndicacion";
-import { CopiarLink } from "@/components/ui/CopiarLink";
 import { Icono } from "@/components/ui/Icono";
 import { Modal } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
@@ -45,15 +44,14 @@ function Dias({ dias }: { dias: number | null }) {
 }
 
 /**
- * Panel de gerencia: todos los reclamos (WhatsApp y formularios), con la
- * accion a indicar en cada uno. Reemplaza el reenvio por Telegram.
+ * Panel de gerencia: los formularios de reclamo, con la accion a indicar en
+ * cada uno. Los reclamos de los grupos de WhatsApp quedan en Seguimiento.
  */
 export function PanelReclamos({ reclamos, estadoInicial }: { reclamos: ReclamoPanel[]; estadoInicial: Filtro }) {
   const router = useRouter();
   const { mostrar } = useToast();
   const [, startTransition] = useTransition();
   const [filtro, setFiltro] = useState<Filtro>(estadoInicial);
-  const [origen, setOrigen] = useState<"" | ReclamoPanel["origen"]>("");
   const [busqueda, setBusqueda] = useState("");
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const editando = reclamos.find((reclamo) => reclamo.id === editandoId) ?? null;
@@ -69,9 +67,8 @@ export function PanelReclamos({ reclamos, estadoInicial }: { reclamos: ReclamoPa
   const visibles = reclamos.filter(
     (reclamo) =>
       (filtro === "TODOS" || reclamo.estado === filtro) &&
-      (!origen || reclamo.origen === origen) &&
       (!texto ||
-        `${reclamo.cliente} ${reclamo.codigo} ${reclamo.detalle} ${reclamo.encargado} ${reclamo.grupoWhatsapp} ${reclamo.formulario ?? ""}`
+        `${reclamo.cliente} ${reclamo.codigo} ${reclamo.detalle} ${reclamo.encargado} ${reclamo.responsable} ${reclamo.tipo} ${reclamo.id}`
           .toLocaleLowerCase("es")
           .includes(texto)),
   );
@@ -109,30 +106,16 @@ export function PanelReclamos({ reclamos, estadoInicial }: { reclamos: ReclamoPa
             </button>
           ))}
         </div>
-        <div className="flex flex-wrap gap-2">
-          <label className="relative">
-            <span className="sr-only">Buscar reclamos</span>
-            <Icono nombre="buscar" className="pointer-events-none absolute top-2.5 left-3 size-4 text-slate-500" />
-            <input
-              value={busqueda}
-              onChange={(evento) => setBusqueda(evento.target.value)}
-              placeholder="Cliente, N°, detalle, encargado…"
-              className="w-60 rounded-lg border border-slate-200 py-2 pr-3 pl-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </label>
-          <label>
-            <span className="sr-only">Origen</span>
-            <select
-              value={origen}
-              onChange={(evento) => setOrigen(evento.target.value as typeof origen)}
-              className="rounded-lg border border-slate-200 bg-white py-2 pr-8 pl-3 text-sm"
-            >
-              <option value="">Todos los orígenes</option>
-              <option value="whatsapp">Grupos de WhatsApp</option>
-              <option value="formulario">Formularios FOR-03</option>
-            </select>
-          </label>
-        </div>
+        <label className="relative">
+          <span className="sr-only">Buscar reclamos</span>
+          <Icono nombre="buscar" className="pointer-events-none absolute top-2.5 left-3 size-4 text-slate-500" />
+          <input
+            value={busqueda}
+            onChange={(evento) => setBusqueda(evento.target.value)}
+            placeholder="Cliente, N°, tipo, detalle, responsable…"
+            className="w-72 rounded-lg border border-slate-200 py-2 pr-3 pl-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </label>
       </div>
 
       {visibles.length === 0 ? (
@@ -181,16 +164,11 @@ export function PanelReclamos({ reclamos, estadoInicial }: { reclamos: ReclamoPa
                   {/* Columna 2: codigo, descripcion y dias de espera */}
                   <td className="px-3 py-3">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span
-                        className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ${
-                          reclamo.origen === "whatsapp" && !reclamo.formulario
-                            ? "bg-emerald-50 text-emerald-800"
-                            : "bg-amber-50 text-amber-900"
-                        }`}
-                      >
-                        <Icono nombre={reclamo.formulario ? "documento" : "chat"} className="size-3" />
-                        {reclamo.formulario ?? "WhatsApp"}
+                      <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-900">
+                        <Icono nombre="documento" className="size-3" />
+                        {reclamo.id}
                       </span>
+                      <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs text-slate-700">{reclamo.tipo}</span>
                       <Dias dias={reclamo.dias} />
                       <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${ESTILO_ESTADO[reclamo.estado]}`}>
                         {ESTADOS_RECLAMO[reclamo.estado]}
@@ -199,6 +177,11 @@ export function PanelReclamos({ reclamos, estadoInicial }: { reclamos: ReclamoPa
                     <p className="mt-1 line-clamp-2 text-sm text-slate-800" title={reclamo.detalle}>
                       {reclamo.detalle}
                     </p>
+                    {reclamo.responsable ? (
+                      <p className="mt-1 text-xs text-slate-500">
+                        Responsable: <span className="font-medium text-slate-700">{reclamo.responsable}</span>
+                      </p>
+                    ) : null}
                     {reclamo.indicacion ? (
                       <p className="mt-1.5 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-xs text-blue-900">
                         <span className="font-semibold">Gerencia:</span> {ACCIONES[reclamo.indicacion.accion]}
@@ -213,24 +196,13 @@ export function PanelReclamos({ reclamos, estadoInicial }: { reclamos: ReclamoPa
                   {/* Columna 3: acciones */}
                   <td className="py-3 pr-5 pl-3">
                     <div className="flex flex-col items-stretch gap-1.5">
-                      {reclamo.formulario ? (
-                        <Link
-                          href={`/reclamos/${reclamo.formulario}`}
-                          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                        >
-                          <Icono nombre="ojo" className="size-4" />
-                          Ver formulario
-                        </Link>
-                      ) : reclamo.consultaId ? (
-                        <CopiarLink
-                          etiqueta="Enviar formulario"
-                          ruta={`/formularios/reclamo?${new URLSearchParams({
-                            razon: reclamo.cliente,
-                            cliente: reclamo.codigo,
-                            ref: reclamo.consultaId,
-                          }).toString()}`}
-                        />
-                      ) : null}
+                      <Link
+                        href={`/reclamos/${reclamo.id}`}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        <Icono nombre="ojo" className="size-4" />
+                        Ver formulario
+                      </Link>
                       <button
                         type="button"
                         onClick={() => setEditandoId(reclamo.id)}
@@ -261,7 +233,7 @@ export function PanelReclamos({ reclamos, estadoInicial }: { reclamos: ReclamoPa
           <div className="flex flex-col gap-4">
             <div className="rounded-lg bg-slate-50 p-3">
               <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
-                {editando.origen === "whatsapp" ? "Reclamo por WhatsApp" : `Formulario · ${editando.tipo}`}
+                {editando.id} · {editando.tipo}
               </p>
               <p className="mt-1 text-sm text-slate-800">{editando.detalle}</p>
             </div>

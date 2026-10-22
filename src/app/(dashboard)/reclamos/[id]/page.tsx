@@ -3,9 +3,12 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { AccionReclamo } from "@/components/reclamos/AccionReclamo";
 import { FormularioCalidad } from "@/components/reclamos/FormularioCalidad";
+import { FormularioGestion } from "@/components/reclamos/FormularioGestion";
 import { Icono } from "@/components/ui/Icono";
 import { urlAdjunto } from "@/lib/db/adjuntos";
 import { getFormulario } from "@/lib/db/reclamos";
+import { tipoEppDe } from "@/lib/reclamos/informe";
+import { CANALES_INGRESO, MOTIVOS_LOGISTICOS } from "@/types/reclamo";
 
 export const metadata = { title: "Formulario de reclamo · CRM De Pascale" };
 export const dynamic = "force-dynamic";
@@ -38,6 +41,10 @@ export default async function ReclamoPage({ params }: { params: Promise<{ id: st
   const r = await getFormulario((await params).id);
   if (!r) notFound();
   const fecha = r.fecha.split("-").reverse().join("/");
+  const automatico = { ...r, gestion: { ...r.gestion, tipoEpp: null, canalIngreso: null, motivoLogistico: null } };
+  const clasificacion = r.calidad.clasificacion ?? r.clasificacion;
+  const motivoDeducido =
+    clasificacion === "Faltante de Mercadería" ? MOTIVOS_LOGISTICOS.FALTANTE : clasificacion === "Plazo de Entrega" ? MOTIVOS_LOGISTICOS.DEMORA : null;
 
   return (
     <div className="flex flex-col gap-5 pb-10">
@@ -109,8 +116,9 @@ export default async function ReclamoPage({ params }: { params: Promise<{ id: st
               <table className="mt-4 w-full table-fixed text-left text-sm">
                 <thead className="bg-slate-50 text-xs text-slate-500">
                   <tr>
-                    <th scope="col" className="w-[22%] p-2.5 font-medium">Código</th>
+                    <th scope="col" className="w-[18%] p-2.5 font-medium">Código</th>
                     <th scope="col" className="p-2.5 font-medium">Descripción</th>
+                    <th scope="col" className="w-28 p-2.5 font-medium">Lote</th>
                     <th scope="col" className="w-24 p-2.5 text-right font-medium">Facturada</th>
                     <th scope="col" className="w-24 p-2.5 text-right font-medium">Reclamo</th>
                   </tr>
@@ -120,6 +128,7 @@ export default async function ReclamoPage({ params }: { params: Promise<{ id: st
                     <tr key={i} className="border-t border-slate-100">
                       <td className="truncate p-2.5 font-mono text-xs">{p.codigo || "—"}</td>
                       <td className="p-2.5">{p.descripcion || "—"}</td>
+                      <td className="truncate p-2.5 font-mono text-xs">{p.lote || "—"}</td>
                       <td className="p-2.5 text-right tabular-nums">{p.cantidadFacturada}</td>
                       <td className="p-2.5 text-right font-semibold text-amber-800 tabular-nums">{p.cantidadReclamo}</td>
                     </tr>
@@ -157,6 +166,16 @@ export default async function ReclamoPage({ params }: { params: Promise<{ id: st
 
         <div className="flex flex-col gap-5">
           <AccionReclamo id={r.id} inicial={r.indicacion} />
+          <FormularioGestion
+            id={r.id}
+            inicial={r.gestion}
+            cerradoEn={r.cerradoEn}
+            deducido={{
+              tipoEpp: tipoEppDe(automatico),
+              canalIngreso: CANALES_INGRESO[r.canal === "cliente" ? "PORTAL" : "COMERCIAL"],
+              motivoLogistico: motivoDeducido,
+            }}
+          />
         </div>
       </div>
 

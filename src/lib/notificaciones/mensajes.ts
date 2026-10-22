@@ -121,21 +121,15 @@ export function mensajeReclamosPendientes(reclamos: readonly ReclamoPanel[], bas
     `${plural(sinIndicar, "esperando a la gerencia", "esperando a la gerencia")} · ${pendientes.length - sinIndicar} indicados, en gestión`,
   ];
   for (const reclamo of pendientes.slice(0, MAX_ITEMS)) {
-    const hito =
-      reclamo.origen === "formulario"
-        ? reclamo.tipo.replace(" · cargado por el cliente", "")
-        : `WhatsApp: ${reclamo.detalle.length > 90 ? `${reclamo.detalle.slice(0, 87)}…` : reclamo.detalle}`;
     lineas.push(
       "",
       cliente(reclamo.cliente, reclamo.codigo, reclamo.clasificacionCliente),
       `   Grupo: ${grupo(reclamo.grupoWhatsapp, reclamo.linkWhatsapp)}`,
       `   Estado de cuenta: ${reclamo.estadoCliente.join(" · ") || "sin datos"}`,
-      `   Hito: ${hito}`,
+      `   Hito: ${reclamo.tipo}`,
       `   ${reclamo.dias === null ? "" : `${plural(reclamo.dias, "día", "días")} · `}${ESTADOS_RECLAMO[reclamo.estado]}`,
     );
-    const enlace = reclamo.formulario
-      ? link(`Ver reclamo ${reclamo.formulario}`, base, `/reclamos/${reclamo.formulario}`)
-      : link("Ver en el seguimiento", base, `/seguimiento?vista=todas&hito=Reclamo&q=${encodeURIComponent(reclamo.cliente)}`);
+    const enlace = link(`Ver reclamo ${reclamo.id}`, base, `/reclamos/${reclamo.id}`);
     if (enlace) lineas.push(`   ${enlace}`);
   }
   if (pendientes.length > MAX_ITEMS) lineas.push("", `…y ${pendientes.length - MAX_ITEMS} más. ${link("Ver todos", base, "/reclamos")}`);

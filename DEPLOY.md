@@ -22,15 +22,24 @@ privada para este modo. Altas y formularios de reclamo usan datos de ejemplo.
 
 ## Almacenamiento y acceso
 
-En Vercel, las notas, indicaciones, evaluaciones e historial de esta demo se
-guardan en archivos temporales. Pueden desaparecer al reiniciar una instancia,
-al desplegar o al atender una solicitud desde otra instancia. No constituyen
-un almacenamiento persistente ni compartido entre usuarios. Las solicitudes
-en memoria tambien son temporales. En local se mantiene `.data/`.
+**En Vercel hace falta una base Postgres.** Cada funcion de Vercel tiene su
+propio disco temporal: sin base, un reclamo que entra por el formulario
+publico se guarda en el disco de `/api/publico/reclamos` y la pantalla de
+Reclamos (otra funcion) no lo ve.
 
-Para uso operativo hace falta implementar almacenamiento persistente para
-estas funciones. Configurar solamente `DB_BACKEND=postgres` no migra el
-historial ni los cambios del seguimiento.
+Con `DATABASE_URL` (o `POSTGRES_URL`) configurada, los formularios de reclamo,
+adjuntos, indicaciones de gerencia, gestion, historial de seguimiento, cambios
+de la planilla y bases de mailing se guardan en la tabla `almacen_registros`,
+que la app crea sola la primera vez. No hace falta migrar nada.
+
+Para crearla: en el proyecto de Vercel, **Storage → Create Database → Neon
+(Postgres)**, conectarla al proyecto (agrega `DATABASE_URL`) y volver a
+desplegar. El plan gratuito alcanza para esta etapa.
+
+Las solicitudes de alta siguen el `DB_BACKEND`: con `demo` viven en memoria y
+tambien se pierden. Para que el formulario de alta persista, usar
+`DB_BACKEND=postgres` y crear sus tablas una vez con `npm run db:push`
+(con la misma `DATABASE_URL`). Sin base, en local todo se guarda en `.data/`.
 
 La aplicacion actualmente abre sin login. Quienes tengan acceso al despliegue
 pueden ver los datos de la planilla y usar las acciones disponibles. Para
@@ -104,10 +113,10 @@ Los formularios solo envían datos a `/api/publico/*`, que responde "recibido"
 
 1. Configurar `INTRANET_USUARIO` e `INTRANET_PASSWORD`: sin eso la intranet
    abre sin login en el mismo dominio que los formularios.
-2. Pasar a almacenamiento persistente. En Vercel lo que mandan los clientes
-   (formularios, adjuntos, firma) hoy se guarda en archivos temporales y se
-   puede perder. Hace falta Postgres + un almacenamiento de archivos
-   (Vercel Blob, S3 o Google Drive).
+2. Configurar Postgres (`DATABASE_URL`, ver "Almacenamiento y acceso"). Sin
+   base, lo que mandan los clientes no llega a la intranet. Los adjuntos se
+   guardan en la base; si el volumen crece conviene pasarlos a Vercel Blob,
+   S3 o Google Drive.
 3. Los adjuntos de un envío no pueden superar ~4 MB en total (límite de
    Vercel por request).
 

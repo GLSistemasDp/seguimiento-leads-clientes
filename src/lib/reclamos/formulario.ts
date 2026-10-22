@@ -1,10 +1,15 @@
 import {
   CAMPOS_CIERRE,
+  CANALES_INGRESO,
   CLASIFICACIONES,
   CLASIFICACIONES_CALIDAD,
   MAX_PRODUCTOS,
+  MOTIVOS_LOGISTICOS,
+  SEVERIDADES,
+  TIPOS_EPP,
   type AccionCorrectiva,
   type Calidad,
+  type Gestion,
   type NuevoReclamo,
   type ProductoReclamo,
 } from "@/types/reclamo";
@@ -61,6 +66,7 @@ export function validarNuevoReclamo(valor: unknown): NuevoReclamo {
     const producto = {
       codigo,
       descripcion,
+      lote: texto(item.lote, 60),
       cantidadFacturada: cantidad(item.cantidadFacturada),
       cantidadReclamo: cantidad(item.cantidadReclamo),
     };
@@ -88,6 +94,42 @@ export function validarNuevoReclamo(valor: unknown): NuevoReclamo {
     detalle,
     productos,
     consultaId: texto(datos.consultaId, 80) || null,
+  };
+}
+
+/** Numero opcional: vacio = null; si viene, entero o decimal entre 0 y `maximo`. */
+function opcional(valor: unknown, nombre: string, maximo: number): number | null {
+  if (valor === null || valor === undefined || String(valor).trim() === "") return null;
+  const crudo = String(valor).trim();
+  // "1.500,50" (formato argentino) o "1500.50".
+  const numero = typeof valor === "number" ? valor : Number(crudo.includes(",") ? crudo.replace(/\./g, "").replace(",", ".") : crudo);
+  if (!Number.isFinite(numero) || numero < 0 || numero > maximo) throw new ErrorValidacion(`${nombre}: valor inválido.`);
+  return Math.round(numero * 100) / 100;
+}
+
+function opcion<T extends string>(valor: unknown, opciones: Record<T, string>, nombre: string): T | null {
+  if (valor === null || valor === undefined || valor === "") return null;
+  if (typeof valor !== "string" || !Object.hasOwn(opciones, valor)) throw new ErrorValidacion(`${nombre}: valor inválido.`);
+  return valor as T;
+}
+
+/** Datos de gestion del reclamo (los que alimentan el informe). */
+export function validarGestion(valor: unknown): Gestion {
+  if (!valor || typeof valor !== "object") throw new ErrorValidacion("Datos inválidos.");
+  const datos = valor as Record<string, unknown>;
+  const tipoEpp = texto(datos.tipoEpp, 60);
+  if (tipoEpp && !(TIPOS_EPP as readonly string[]).includes(tipoEpp)) throw new ErrorValidacion("El tipo de EPP no es válido.");
+  return {
+    responsable: texto(datos.responsable, 120),
+    severidad: opcion(datos.severidad, SEVERIDADES, "Severidad"),
+    tipoEpp: tipoEpp || null,
+    canalIngreso: opcion(datos.canalIngreso, CANALES_INGRESO, "Canal de ingreso"),
+    deposito: texto(datos.deposito, 120),
+    motivoLogistico: opcion(datos.motivoLogistico, MOTIVOS_LOGISTICOS, "Motivo logístico"),
+    diasDemora: opcional(datos.diasDemora, "Días de demora", 365),
+    montoNotaCredito: opcional(datos.montoNotaCredito, "Notas de crédito", 1e12),
+    costoAdicional: opcional(datos.costoAdicional, "Otros costos", 1e12),
+    cerrado: datos.cerrado === true,
   };
 }
 

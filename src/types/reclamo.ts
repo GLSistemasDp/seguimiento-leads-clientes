@@ -74,7 +74,14 @@ export const CAMPOS_CIERRE = [
 
 export const MAX_PRODUCTOS = 10;
 
-export type ProductoReclamo = { codigo: string; descripcion: string; cantidadFacturada: number; cantidadReclamo: number };
+export type ProductoReclamo = {
+  codigo: string;
+  descripcion: string;
+  /** Lote impreso en el producto (para detectar lotes con problemas). */
+  lote: string;
+  cantidadFacturada: number;
+  cantidadReclamo: number;
+};
 export type AccionCorrectiva = { fecha: string; accion: string; responsable: string; tiempo: string; resultado: string };
 export type Adjunto = { id: string; nombre: string; tipo: string; tamano: number };
 
@@ -83,6 +90,60 @@ export type Calidad = {
   causa: string | null;
   procedente: boolean | null;
   acciones: AccionCorrectiva[];
+};
+
+export const SEVERIDADES = { CRITICA: "Crítico", MODERADA: "Moderado", LEVE: "Leve" } as const;
+export type Severidad = keyof typeof SEVERIDADES;
+
+/** Por donde entro el reclamo. El formulario publico es "Portal". */
+export const CANALES_INGRESO = { PORTAL: "Portal (formulario web)", MAIL: "Mail", TELEFONO: "Teléfono", COMERCIAL: "Comercial" } as const;
+export type CanalIngreso = keyof typeof CANALES_INGRESO;
+
+export const MOTIVOS_LOGISTICOS = {
+  FALTANTE: "Faltante",
+  SOBRANTE: "Sobrante",
+  DANO_TRANSITO: "Daño en tránsito",
+  DEMORA: "Demora en la entrega",
+} as const;
+export type MotivoLogistico = keyof typeof MOTIVOS_LOGISTICOS;
+
+export const TIPOS_EPP = [
+  "Protección de manos",
+  "Protección ocular y facial",
+  "Protección auditiva",
+  "Protección respiratoria",
+  "Trabajo en altura (caídas)",
+  "Protección de cabeza",
+  "Calzado de seguridad",
+  "Ropa y señalización vial",
+  "Otros",
+] as const;
+
+/**
+ * Datos de gestion que carga la gerencia en cada reclamo y alimentan el
+ * informe. Todo es opcional: lo que no se carga se infiere (tipo de EPP por
+ * los productos, motivo logistico por la clasificacion, canal por quien lo
+ * cargo) o queda como "sin dato".
+ */
+export type Gestion = {
+  /** Quien lleva el reclamo (carga de trabajo del equipo). */
+  responsable: string;
+  severidad: Severidad | null;
+  /** Null = se deduce de los productos. */
+  tipoEpp: string | null;
+  /** Null = Portal si lo cargo el cliente, Comercial si lo cargo el equipo. */
+  canalIngreso: CanalIngreso | null;
+  /** Deposito desde el que se despacho. */
+  deposito: string;
+  /** Null = se deduce de la clasificacion (faltante / plazo de entrega). */
+  motivoLogistico: MotivoLogistico | null;
+  diasDemora: number | null;
+  /** Monto de las notas de credito emitidas por este reclamo, en pesos. */
+  montoNotaCredito: number | null;
+  /** Otros costos del reclamo (fletes, reposicion), en pesos. */
+  costoAdicional: number | null;
+  /** Cerrado: resuelto y con la documentacion terminada. */
+  cerrado: boolean;
 };
 
 /** Formulario FOR-03 Rev04 de reclamo de cliente. */
@@ -115,6 +176,11 @@ export type Reclamo = {
   indicacion: Indicacion | null;
   /** Si se cargo a partir de un reclamo de WhatsApp: el id de esa consulta. */
   consultaId: string | null;
+  gestion: Gestion;
+  /** ISO: cuando se cargo la respuesta al cliente por primera vez. */
+  resueltoEn: string | null;
+  /** ISO: cuando se marco como cerrado. */
+  cerradoEn: string | null;
 };
 
 /** Lo que se carga al dar de alta un formulario (la parte "A completar por el Cliente"). */
@@ -147,14 +213,10 @@ export const ESTADOS_RECLAMO = {
 
 export type EstadoReclamo = keyof typeof ESTADOS_RECLAMO;
 
-/**
- * Un reclamo en el panel de gerencia, venga del grupo de WhatsApp (hito
- * "Reclamo" de la planilla de seguimiento) o de un formulario FOR-03.
- */
+/** Un formulario FOR-03 en el panel de gerencia. */
 export type ReclamoPanel = {
   id: string;
-  origen: "whatsapp" | "formulario";
-  /** ISO o null si la planilla no trae fecha. */
+  /** ISO. */
   fecha: string | null;
   cliente: string;
   codigo: string;
@@ -162,8 +224,10 @@ export type ReclamoPanel = {
   clasificacionCliente: string;
   /** Lo que reclama el cliente. */
   detalle: string;
-  /** Clasificacion del formulario o "WhatsApp". */
+  /** Clasificacion del formulario. */
   tipo: string;
+  /** Lo cargo el cliente desde el link publico. */
+  delCliente: boolean;
   encargado: string;
   grupoWhatsapp: string;
   /** Link de invitacion al grupo, si la planilla lo tiene. */
@@ -176,13 +240,9 @@ export type ReclamoPanel = {
    */
   estadoCliente: string[];
   respondido: boolean;
-  /** Dias desde que entro el reclamo. */
+  /** Dias desde que entro el reclamo (null si ya se respondio). */
   dias: number | null;
-  observaciones: string;
   indicacion: Indicacion | null;
   estado: EstadoReclamo;
-  /** Formulario FOR-03 (propio o cargado a partir de este reclamo de WhatsApp). */
-  formulario: string | null;
-  /** Para cargar el formulario a partir de un reclamo de WhatsApp. */
-  consultaId: string | null;
+  responsable: string;
 };
