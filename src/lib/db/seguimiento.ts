@@ -1,4 +1,5 @@
 import "server-only";
+import { postgresConfigurado } from "@/lib/db/postgres/pg";
 import { backendActivo } from "@/lib/db/repositorio";
 import type { Backend, RepositorioSeguimiento } from "@/lib/db/repositorio";
 import { RESPUESTAS } from "@/lib/seguimiento/respuestas";
@@ -16,7 +17,21 @@ import type { CambiosConsulta, Consulta, Relacion, Resultado } from "@/types/seg
  */
 export function backendSeguimiento(): Backend {
   const valor = process.env.SEGUIMIENTO_BACKEND;
-  return valor === "demo" || valor === "sheets" || valor === "postgres" ? valor : backendActivo();
+  const elegido = valor === "demo" || valor === "sheets" || valor === "postgres" ? valor : backendActivo();
+  // Sin base configurada no se puede usar la cola: se sigue con la planilla
+  // (o la demo) y la pantalla avisa, en vez de romper todas las paginas.
+  if (elegido === "postgres" && !postgresConfigurado()) return process.env.SEGUIMIENTO_SHEETS_ID ? "sheets" : "demo";
+  return elegido;
+}
+
+/** Se pidio Postgres pero falta DATABASE_URL (en Vercel, para ese entorno). */
+function postgresSinBase(): boolean {
+  return process.env.SEGUIMIENTO_BACKEND === "postgres" && !postgresConfigurado();
+}
+
+/** Problema de configuracion para mostrar arriba del seguimiento, o null. */
+export function avisoConfiguracion(): string | null {
+  return postgresSinBase() ? origenSeguimiento().aviso : null;
 }
 
 async function repo(): Promise<RepositorioSeguimiento> {
@@ -64,6 +79,13 @@ export async function getRespuestas(): Promise<readonly RespuestaTipo[]> {
 
 /** Donde terminan los tildes y observaciones que se hacen desde la app. */
 export function origenSeguimiento(): { destino: string; aviso: string | null } {
+  if (postgresSinBase()) {
+    return {
+      destino: backendSeguimiento() === "demo" ? "la demo" : "la app",
+      aviso:
+        'SEGUIMIENTO_BACKEND="postgres" pero falta DATABASE_URL en este entorno: se muestra la planilla. En Vercel, habilitá DATABASE_URL también para Preview y volvé a desplegar.',
+    };
+  }
   if (backendSeguimiento() === "demo") {
     return { destino: "la demo", aviso: null };
   }

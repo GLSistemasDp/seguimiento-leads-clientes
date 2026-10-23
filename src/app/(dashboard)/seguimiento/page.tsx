@@ -9,7 +9,7 @@ import { Paginacion } from "@/components/solicitudes/Paginacion";
 import { EncabezadoPagina } from "@/components/ui/EncabezadoPagina";
 import { porConsulta } from "@/lib/db/historial";
 import { getIndicaciones, idWhatsapp } from "@/lib/db/reclamos";
-import { backendSeguimiento, getAll, getRespuestas, origenSeguimiento } from "@/lib/db/seguimiento";
+import { avisoConfiguracion, backendSeguimiento, getAll, getRespuestas, origenSeguimiento } from "@/lib/db/seguimiento";
 import { telegramConfigurado } from "@/lib/notificaciones/telegram";
 import { proximoEnvioCierre } from "@/lib/seguimiento/cierre-del-dia";
 import {
@@ -100,6 +100,10 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
           </>
         }
       />
+
+      {avisoConfiguracion() ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">{avisoConfiguracion()}</p>
+      ) : null}
 
       <MetricasSeguimiento metricas={calcularMetricas(todas, ahora)} />
 

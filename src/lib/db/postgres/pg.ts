@@ -62,6 +62,9 @@ async function migrar(pool: Pool): Promise<void> {
 
 /** Pool unico por instancia, con el esquema ya aplicado. */
 export function pool(): Promise<Pool> {
+  if (!postgresConfigurado()) {
+    return Promise.reject(new Error("Falta DATABASE_URL (o POSTGRES_URL): no hay base Postgres configurada en este entorno."));
+  }
   global.crmPool ??= (async () => {
     const { Pool: PoolPg, types } = await import("pg");
     // `date` como texto AAAA-MM-DD (sin pasar por la zona horaria del servidor).
@@ -71,6 +74,7 @@ export function pool(): Promise<Pool> {
     return nuevo;
   })().catch((error: unknown) => {
     global.crmPool = undefined;
+    console.error(`[postgres] no se pudo preparar la base: ${error instanceof Error ? error.message : String(error)}`);
     throw error;
   });
   return global.crmPool;
