@@ -4,9 +4,10 @@ import { ProximoEnvio } from "@/components/resumen/ProximoEnvio";
 import { BotonTelegram } from "@/components/ui/BotonTelegram";
 import { CopiarLink } from "@/components/ui/CopiarLink";
 import { EncabezadoPagina } from "@/components/ui/EncabezadoPagina";
-import { getPanel, getReclamos } from "@/lib/db/reclamos";
+import { getPanel, getReclamos, reclamosEnPostgres } from "@/lib/db/reclamos";
 import { telegramConfigurado } from "@/lib/notificaciones/telegram";
 import { META_RESOLUCION_DIAS, calcularInforme, esPeriodoInforme } from "@/lib/reclamos/informe";
+import { informeDesdeVistas } from "@/lib/reclamos/informe-db";
 import { HORARIOS_RECLAMOS, proximoEnvio } from "@/lib/seguimiento/cierre-del-dia";
 import { ESTADOS_RECLAMO, type EstadoReclamo } from "@/types/reclamo";
 
@@ -20,18 +21,20 @@ function esFiltro(valor: unknown): valor is EstadoReclamo | "TODOS" {
 export default async function ReclamosPage({ searchParams }: PageProps<"/reclamos">) {
   const params = await searchParams;
   const ahora = new Date();
-  const [{ reclamos, error }, todos, proximo] = await Promise.all([
+  const periodo = esPeriodoInforme(params.periodo) ? params.periodo : "90";
+  const meta = Number(process.env.RECLAMOS_META_DIAS) || META_RESOLUCION_DIAS;
+  // Con Postgres el informe sale de las vistas; sin base se calcula en memoria.
+  const [{ reclamos, error }, informe, proximo] = await Promise.all([
     getPanel(ahora),
-    getReclamos(),
+    reclamosEnPostgres()
+      ? informeDesdeVistas(ahora, periodo, meta)
+      : getReclamos().then((todos) => calcularInforme(todos, ahora, periodo, meta)),
     proximoEnvio(HORARIOS_RECLAMOS, ahora).catch(() => null),
   ]);
   const telegramListo = telegramConfigurado("reclamos");
   const pendientes = reclamos.filter((reclamo) => reclamo.estado === "SIN_DEFINIR").length;
   // Si no hay nada esperando a la gerencia se abre directo en "Todos".
   const estadoInicial = esFiltro(params.estado) ? params.estado : pendientes > 0 ? "SIN_DEFINIR" : "TODOS";
-  const periodo = esPeriodoInforme(params.periodo) ? params.periodo : "90";
-  const meta = Number(process.env.RECLAMOS_META_DIAS) || META_RESOLUCION_DIAS;
-  const informe = calcularInforme(todos, ahora, periodo, meta);
 
   const parametros: Record<string, string> = {};
   for (const [clave, valor] of Object.entries(params)) {

@@ -2,7 +2,7 @@ import "server-only";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
-import type { Pool } from "pg";
+import { pool, postgresConfigurado } from "@/lib/db/postgres/pg";
 
 /**
  * Registros que la app genera por su cuenta y no tienen columna en la
@@ -10,7 +10,7 @@ import type { Pool } from "pg";
  * historial de seguimiento, bases de mailing...
  *
  * - Con Postgres (DATABASE_URL o POSTGRES_URL) se guardan en la tabla
- *   `almacen_registros` (coleccion, clave -> datos jsonb), que se crea sola.
+ *   `almacen_registros` (coleccion, clave -> datos jsonb) de db/schema.sql.
  *   Es lo que hay que usar en Vercel: cada funcion tiene su propio disco
  *   temporal, asi que lo que guarda el formulario publico no lo veria la
  *   pantalla de la intranet.
@@ -19,35 +19,8 @@ import type { Pool } from "pg";
 
 // --- Postgres -------------------------------------------------------------------
 
-function urlBase(): string | undefined {
-  return process.env.DATABASE_URL || process.env.POSTGRES_URL || undefined;
-}
-
 export function almacenPersistente(): boolean {
-  return Boolean(urlBase());
-}
-
-const global = globalThis as typeof globalThis & { almacenPool?: Promise<Pool> };
-
-/** Pool unico (y la tabla creada) por instancia. */
-function pool(): Promise<Pool> {
-  global.almacenPool ??= (async () => {
-    const { Pool: PoolPg } = await import("pg");
-    const nuevo = new PoolPg({ connectionString: urlBase(), max: 3 });
-    await nuevo.query(`
-      CREATE TABLE IF NOT EXISTS almacen_registros (
-        coleccion   text        NOT NULL,
-        clave       text        NOT NULL,
-        datos       jsonb       NOT NULL,
-        actualizado timestamptz NOT NULL DEFAULT now(),
-        PRIMARY KEY (coleccion, clave)
-      )`);
-    return nuevo;
-  })().catch((error: unknown) => {
-    global.almacenPool = undefined;
-    throw error;
-  });
-  return global.almacenPool;
+  return postgresConfigurado();
 }
 
 async function leerPg<T>(nombre: string): Promise<Record<string, T>> {

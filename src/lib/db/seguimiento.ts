@@ -3,12 +3,13 @@ import { backendActivo } from "@/lib/db/repositorio";
 import type { Backend, RepositorioSeguimiento } from "@/lib/db/repositorio";
 import { RESPUESTAS } from "@/lib/seguimiento/respuestas";
 import type { RespuestaTipo } from "@/lib/seguimiento/respuestas";
-import type { CambiosConsulta, Consulta } from "@/types/seguimiento";
+import type { CambiosConsulta, Consulta, Relacion, Resultado } from "@/types/seguimiento";
 
 /**
  * Punto unico de acceso al seguimiento de clientes. Con DB_BACKEND="demo"
  * usa datos de ejemplo; con "sheets" lee la planilla del equipo de atencion
- * (SEGUIMIENTO_SHEETS_ID). Postgres todavia no tiene tabla de seguimiento.
+ * (SEGUIMIENTO_SHEETS_ID); con "postgres" la cola que carga el bot
+ * (consultas_seguimiento, ver db/schema.sql).
  *
  * SEGUIMIENTO_BACKEND permite que el seguimiento use la planilla aunque el
  * resto de la app siga en demo (o al reves).
@@ -23,9 +24,7 @@ async function repo(): Promise<RepositorioSeguimiento> {
     case "demo":
       return (await import("@/lib/db/demo/seguimiento")).default;
     case "postgres":
-      throw new Error(
-        'El seguimiento de clientes todavia no esta disponible con DB_BACKEND="postgres".',
-      );
+      return (await import("@/lib/db/postgres/seguimiento")).default;
     default:
       return (await import("@/lib/db/sheets/seguimiento")).default;
   }
@@ -39,8 +38,21 @@ export async function getById(id: string): Promise<Consulta | null> {
   return (await repo()).getById(id);
 }
 
-export async function update(id: string, cambios: CambiosConsulta): Promise<Consulta> {
-  return (await repo()).update(id, cambios);
+export async function update(
+  id: string,
+  cambios: CambiosConsulta,
+  cierre?: { resultado: Resultado | null; relacion: Relacion | null },
+): Promise<Consulta> {
+  return (await repo()).update(id, cambios, cierre);
+}
+
+/**
+ * Para el tablero del Resumen. Con Postgres la cola solo guarda lo reciente:
+ * se le suma lo ya archivado en el historial.
+ */
+export async function getParaTablero(): Promise<Consulta[]> {
+  if (backendSeguimiento() === "postgres") return (await import("@/lib/db/postgres/seguimiento")).getParaTablero();
+  return getAll();
 }
 
 /** Respuestas tipo de la planilla; si no hay, las que trae la app. */
@@ -54,6 +66,9 @@ export async function getRespuestas(): Promise<readonly RespuestaTipo[]> {
 export function origenSeguimiento(): { destino: string; aviso: string | null } {
   if (backendSeguimiento() === "demo") {
     return { destino: "la demo", aviso: null };
+  }
+  if (backendSeguimiento() === "postgres") {
+    return { destino: "la base de datos", aviso: null };
   }
   if (process.env.SEGUIMIENTO_ACCESO === "publico") {
     return {

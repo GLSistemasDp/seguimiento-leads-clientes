@@ -2,13 +2,14 @@ import { Suspense } from "react";
 import { ProximoEnvio } from "@/components/resumen/ProximoEnvio";
 import { BotonTelegram } from "@/components/ui/BotonTelegram";
 import { FiltrosSeguimiento } from "@/components/seguimiento/FiltrosSeguimiento";
+import { SimularBot } from "@/components/seguimiento/SimularBot";
 import { MetricasSeguimiento } from "@/components/seguimiento/MetricasSeguimiento";
 import { SeguimientoTable } from "@/components/seguimiento/SeguimientoTable";
 import { Paginacion } from "@/components/solicitudes/Paginacion";
 import { EncabezadoPagina } from "@/components/ui/EncabezadoPagina";
 import { porConsulta } from "@/lib/db/historial";
 import { getIndicaciones, idWhatsapp } from "@/lib/db/reclamos";
-import { getAll, getRespuestas, origenSeguimiento } from "@/lib/db/seguimiento";
+import { backendSeguimiento, getAll, getRespuestas, origenSeguimiento } from "@/lib/db/seguimiento";
 import { telegramConfigurado } from "@/lib/notificaciones/telegram";
 import { proximoEnvioCierre } from "@/lib/seguimiento/cierre-del-dia";
 import {
@@ -95,6 +96,7 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
           <>
             <ProximoEnvio proximo={proximo?.toISOString() ?? null} ahora={ahora.getTime()} telegramListo={telegramConfigurado()} />
             <BotonTelegram tipo="seguimiento" listo={telegramConfigurado()} />
+            {backendSeguimiento() === "postgres" ? <SimularBot /> : null}
           </>
         }
       />

@@ -65,7 +65,7 @@ export const PATCH = async (request: Request, contexto: Contexto) => {
   }
 
   try {
-    const consulta = await update(id, cambios);
+    const consulta = await update(id, cambios, { resultado: resultadoValido, relacion: relacionValida });
     await registrar({
       consultaId: id,
       cliente: actual.cliente,

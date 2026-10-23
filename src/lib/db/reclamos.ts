@@ -3,6 +3,7 @@ import { guardarAdjuntos } from "@/lib/db/adjuntos";
 import type { ArchivoAdjunto } from "@/lib/db/adjuntos";
 import { reclamosDemo } from "@/lib/db/demo/reclamos";
 import { leer, modificar } from "@/lib/db/local/almacen";
+import { postgresConfigurado } from "@/lib/db/postgres/pg";
 import { backendActivo } from "@/lib/db/repositorio";
 import { getAll as getConsultas } from "@/lib/db/seguimiento";
 import { esReclamo, estadoCliente, separarCliente } from "@/lib/seguimiento/presentacion";
@@ -23,9 +24,18 @@ import type { Consulta } from "@/types/seguimiento";
  * (o que carga el equipo). Los reclamos que el bot detecta en los grupos de
  * WhatsApp siguen en Seguimiento de clientes, no en este panel.
  *
- * Formularios, adjuntos e indicaciones se guardan en el almacen (Postgres en
- * produccion). Con DB_BACKEND="demo" se suman formularios de ejemplo.
+ * Con RECLAMOS_BACKEND="postgres" viven en las tablas relacionales de
+ * db/schema.sql (reclamos, reclamo_productos, lotes, indicaciones...). Si no,
+ * en el almacen generico, y con DB_BACKEND="demo" se suman formularios de
+ * ejemplo generados en memoria.
  */
+
+/** Tablas relacionales de Postgres o almacen generico. */
+export function reclamosEnPostgres(): boolean {
+  return process.env.RECLAMOS_BACKEND === "postgres" && postgresConfigurado();
+}
+
+const pg = () => import("@/lib/db/postgres/reclamos");
 
 const INDICACIONES = "reclamos-indicaciones";
 const FORMULARIOS = "reclamos-formularios";
@@ -48,9 +58,11 @@ export function gestionVacia(): Gestion {
     tipoEpp: null,
     canalIngreso: null,
     deposito: "",
+    transportista: "",
     motivoLogistico: null,
     diasDemora: null,
     montoNotaCredito: null,
+    numeroNotaCredito: "",
     costoAdicional: null,
     cerrado: false,
   };
@@ -60,6 +72,7 @@ const memoria = globalThis as typeof globalThis & { reclamosDemoV2?: Reclamo[] }
 
 /** Los de ejemplo solo existen en la demo; los guardados (nuevos o editados) pisan a los de ejemplo. */
 async function formularios(): Promise<Reclamo[]> {
+  if (reclamosEnPostgres()) return (await pg()).listar();
   const guardados = await leer<Reclamo>(FORMULARIOS);
   const demo = backendActivo() === "demo" ? (memoria.reclamosDemoV2 ??= reclamosDemo()) : [];
   const porId = new Map<string, Reclamo>();
@@ -103,6 +116,14 @@ export async function crearFormulario(
   archivos: ArchivoAdjunto[],
   canal: Reclamo["canal"] = "intranet",
 ): Promise<Reclamo> {
+  if (reclamosEnPostgres()) {
+    const base = await pg();
+    const reclamo = await base.crear(datos, canal);
+    if (archivos.length === 0) return reclamo;
+    const adjuntos = await guardarAdjuntos(archivos, `reclamo:${reclamo.id}`);
+    await base.guardarAdjuntos(reclamo.id, adjuntos);
+    return { ...reclamo, adjuntos };
+  }
   const base: Omit<Reclamo, "id" | "adjuntos"> = {
     ...datos,
     canal,
@@ -136,6 +157,7 @@ export async function actualizarCalidad(
   calidad: Calidad,
   cierre: Record<string, string | null>,
 ): Promise<Reclamo | null> {
+  if (reclamosEnPostgres()) return (await pg()).actualizarCalidad(id, calidad, cierre);
   const actual = (await formularios()).find((reclamo) => reclamo.id === id);
   if (!actual) return null;
   const respondido = Boolean(cierre["Respuesta al cliente"]?.trim());
@@ -151,6 +173,7 @@ export async function actualizarCalidad(
 
 /** Datos de gestion para el informe (responsable, severidad, montos, cierre). */
 export async function actualizarGestion(id: string, gestion: Gestion): Promise<Reclamo | null> {
+  if (reclamosEnPostgres()) return (await pg()).actualizarGestion(id, gestion);
   const actual = (await formularios()).find((reclamo) => reclamo.id === id);
   if (!actual) return null;
   const actualizado: Reclamo = {
@@ -165,6 +188,7 @@ export async function actualizarGestion(id: string, gestion: Gestion): Promise<R
 // --- Indicaciones del gerente ------------------------------------------------
 
 export async function getIndicaciones(): Promise<Record<string, Indicacion>> {
+  if (reclamosEnPostgres()) return (await pg()).indicaciones();
   return leer<Indicacion>(INDICACIONES);
 }
 
@@ -198,6 +222,10 @@ export async function guardarIndicacion(id: string, indicacion: Omit<Indicacion,
   if (!clave) return null;
 
   const completa: Indicacion = { ...indicacion, fecha: new Date().toISOString() };
+  if (reclamosEnPostgres()) {
+    await (await pg()).guardarIndicacion(clave, completa);
+    return completa;
+  }
   const destino = clave;
   await modificar<Indicacion, void>(INDICACIONES, (datos) => {
     datos[destino] = completa;

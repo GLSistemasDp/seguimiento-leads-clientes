@@ -1,6 +1,6 @@
 import type { DatosSolicitud, Estado, Solicitud } from "@/types/solicitud";
 import type { PlantillaEmail, TipoPlantilla } from "@/types/plantilla";
-import type { CambiosConsulta, Consulta } from "@/types/seguimiento";
+import type { CambiosConsulta, Consulta, Relacion, Resultado } from "@/types/seguimiento";
 import type { RespuestaTipo } from "@/lib/seguimiento/respuestas";
 
 /**
@@ -56,7 +56,8 @@ export type RepositorioPlantillas = {
 export type RepositorioSeguimiento = {
   getAll(): Promise<Consulta[]>;
   getById(id: string): Promise<Consulta | null>;
-  update(id: string, cambios: CambiosConsulta): Promise<Consulta>;
+  /** `cierre` (resultado y relacion) solo lo guarda Postgres: lo copia al historial del cliente. */
+  update(id: string, cambios: CambiosConsulta, cierre?: { resultado: Resultado | null; relacion: Relacion | null }): Promise<Consulta>;
   /** Respuestas tipo propias de la fuente (hojas "Rtas" de la planilla). */
   getRespuestas?(): Promise<RespuestaTipo[]>;
 };

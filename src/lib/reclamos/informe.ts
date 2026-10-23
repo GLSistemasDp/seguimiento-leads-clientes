@@ -110,6 +110,10 @@ function diasResolucion(reclamo: Reclamo): number | null {
   return final === null ? null : Math.max(0, (final - ingreso(reclamo)) / DIA);
 }
 
+export function transportistaDe(reclamo: Reclamo): string {
+  return reclamo.gestion.transportista.trim() || reclamo.transporte.trim() || "Sin informar";
+}
+
 export function costoDe(reclamo: Reclamo): number {
   return (reclamo.gestion.montoNotaCredito ?? 0) + (reclamo.gestion.costoAdicional ?? 0);
 }
@@ -135,17 +139,17 @@ function ordenado(conteo: Map<string, number>): { etiqueta: string; cantidad: nu
 
 // --- Meses ---------------------------------------------------------------------------
 
-const MES_CORTO = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+export const MES_CORTO = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
 export type Mes = { clave: string; etiqueta: string };
 
 /** "2026-10" en hora de Argentina. */
-function claveMes(momento: number): string {
+export function claveMes(momento: number): string {
   return new Date(momento - 3 * 3_600_000).toISOString().slice(0, 7);
 }
 
 /** Los ultimos `cantidad` meses, del mas viejo al actual. */
-function ultimosMeses(ahora: number, cantidad: number): Mes[] {
+export function ultimosMeses(ahora: number, cantidad: number): Mes[] {
   const [anio, mes] = claveMes(ahora).split("-").map(Number);
   return Array.from({ length: cantidad }, (_, indice) => {
     const fecha = new Date(Date.UTC(anio, mes - 1 - (cantidad - 1 - indice), 1));
@@ -243,8 +247,8 @@ export function calcularInforme(todos: readonly Reclamo[], ahoraFecha: Date, per
 
   // Seccion 3: logistica.
   const logistica = enPeriodo.filter((reclamo) => grupoDe(reclamo) === "LOGISTICA");
-  const transportistas = ordenado(contar(logistica, (reclamo) => reclamo.transporte.trim() || "Sin informar")).map((fila) => {
-    const delTransporte = logistica.filter((reclamo) => (reclamo.transporte.trim() || "Sin informar") === fila.etiqueta);
+  const transportistas = ordenado(contar(logistica, transportistaDe)).map((fila) => {
+    const delTransporte = logistica.filter((reclamo) => transportistaDe(reclamo) === fila.etiqueta);
     return {
       ...fila,
       demora: promedio(delTransporte.map((reclamo) => reclamo.gestion.diasDemora).filter((valor): valor is number => valor !== null)),

@@ -125,9 +125,11 @@ export function validarGestion(valor: unknown): Gestion {
     tipoEpp: tipoEpp || null,
     canalIngreso: opcion(datos.canalIngreso, CANALES_INGRESO, "Canal de ingreso"),
     deposito: texto(datos.deposito, 120),
+    transportista: texto(datos.transportista, 120),
     motivoLogistico: opcion(datos.motivoLogistico, MOTIVOS_LOGISTICOS, "Motivo logístico"),
     diasDemora: opcional(datos.diasDemora, "Días de demora", 365),
     montoNotaCredito: opcional(datos.montoNotaCredito, "Notas de crédito", 1e12),
+    numeroNotaCredito: texto(datos.numeroNotaCredito, 60),
     costoAdicional: opcional(datos.costoAdicional, "Otros costos", 1e12),
     cerrado: datos.cerrado === true,
   };

@@ -135,11 +135,14 @@ export type Gestion = {
   canalIngreso: CanalIngreso | null;
   /** Deposito desde el que se despacho. */
   deposito: string;
+  /** Transportista corregido por la gerencia; vacio = el que informo el cliente. */
+  transportista: string;
   /** Null = se deduce de la clasificacion (faltante / plazo de entrega). */
   motivoLogistico: MotivoLogistico | null;
   diasDemora: number | null;
   /** Monto de las notas de credito emitidas por este reclamo, en pesos. */
   montoNotaCredito: number | null;
+  numeroNotaCredito: string;
   /** Otros costos del reclamo (fletes, reposicion), en pesos. */
   costoAdicional: number | null;
   /** Cerrado: resuelto y con la documentacion terminada. */

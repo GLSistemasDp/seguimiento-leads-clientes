@@ -37,7 +37,7 @@ function azar(semilla: number) {
   };
 }
 
-const CLIENTES = [
+export const CLIENTES = [
   ["1200", "Distribuidora del Sur", 9],
   ["1201", "Seguridad Industrial Norte", 7],
   ["1202", "Ferretería Central", 4],
@@ -57,7 +57,7 @@ const CLIENTES = [
 ] as const;
 
 /** Productos con los lotes en circulacion; el primer lote de los dos primeros viene con problemas. */
-const PRODUCTOS = [
+export const PRODUCTOS = [
   { codigo: "85803E", descripcion: "Guante moteado talle 8", lotes: ["L2406-118", "L2409-031"], peso: 6 },
   { codigo: "RES-400", descripcion: "Semimáscara respiratoria doble filtro", lotes: ["L2506-090", "L2412-066"], peso: 4 },
   { codigo: "GUA-310", descripcion: "Guante anticorte nivel 5", lotes: ["L2411-207", "L2502-044"], peso: 3 },
@@ -73,7 +73,7 @@ const PRODUCTOS = [
   { codigo: "UCU0002PV", descripcion: "Cono vial reflectivo 70 cm", lotes: ["L2505-140"], peso: 1 },
 ] as const;
 
-const TRANSPORTES = [
+export const TRANSPORTES = [
   ["Vía Cargo", 4, 6],
   ["Andreani", 4, 3],
   ["Expreso Cruz del Sur", 3, 8],
@@ -81,7 +81,7 @@ const TRANSPORTES = [
   ["Retira el cliente", 1, 1],
 ] as const;
 
-const DEPOSITOS = [
+export const DEPOSITOS = [
   ["Depósito Central (Bs. As.)", 6],
   ["Depósito Córdoba", 2],
   ["Depósito Rosario", 2],
@@ -96,7 +96,7 @@ const CLASIFICACIONES = [
   ["Error de Cliente", 8],
 ] as const satisfies readonly (readonly [Reclamo["clasificacion"], number])[];
 
-const RESPONSABLES: Record<Reclamo["clasificacion"], string> = {
+export const RESPONSABLES: Record<Reclamo["clasificacion"], string> = {
   "Falla de Calidad": "Marcela Gómez (Calidad)",
   "Faltante de Mercadería": "Javier Ruiz (Logística)",
   "Plazo de Entrega": "Javier Ruiz (Logística)",
@@ -204,6 +204,7 @@ export function reclamosDemo(ahora = Date.now(), cantidad = 150): Reclamo[] {
       tipoEpp: null,
       canalIngreso: delCliente ? "PORTAL" : r.pesado([["MAIL", 5], ["TELEFONO", 3], ["COMERCIAL", 4]] as const),
       deposito: r.pesado(DEPOSITOS),
+      transportista: "",
       motivoLogistico:
         clasificacion === "Faltante de Mercadería"
           ? r.pesado([["FALTANTE", 70], ["SOBRANTE", 10], ["DANO_TRANSITO", 20]] as const)
@@ -212,6 +213,7 @@ export function reclamosDemo(ahora = Date.now(), cantidad = 150): Reclamo[] {
             : null,
       diasDemora: clasificacion === "Plazo de Entrega" ? Math.max(1, demoraBase + r.entre(-2, 4)) : null,
       montoNotaCredito: resuelto ? notaCredito : null,
+      numeroNotaCredito: resuelto && notaCredito ? `NC-0003-${String(18_000 + i).padStart(8, "0")}` : "",
       costoAdicional: clasificacion === "Falla de Calidad" && resuelto && r.si(0.5) ? r.entre(8, 40) * 1000 : null,
       cerrado: cerrado !== null,
     };

@@ -64,7 +64,8 @@ const FILAS: Fila[] = [
   [2, "bot", "6088 - SANCHEZ MEDINA GABRIEL DARIO", "D02EPP", "C", "FILTRO GRUPO IDP - MZA - cuyo", "OK", "EPP-VT SANCHEZ MEDINA (TECSAN) - MZA", "Quiere cotizar.", "Pedido nuevo", false, "Lo ve Exe"],
 ];
 
-function ejemplos(): Consulta[] {
+/** Las consultas de ejemplo (tambien las usa la semilla de Postgres). */
+export function consultasDemo(): Consulta[] {
   return FILAS.map(
     ([dia, encargado, cliente, listaPrecio, clasificacion, grupoVendedor, estadoCuenta, grupoWhatsapp, consulta, hito, respondida, observaciones = ""], orden) => ({
       // El orden entra en la huella: hay clientes con dos consultas el mismo dia.
@@ -92,7 +93,7 @@ function ejemplos(): Consulta[] {
 const almacen = globalThis as typeof globalThis & { __demoSeguimiento2026?: Consulta[] };
 
 function todas(): Consulta[] {
-  almacen.__demoSeguimiento2026 ??= ejemplos();
+  almacen.__demoSeguimiento2026 ??= consultasDemo();
   return almacen.__demoSeguimiento2026;
 }
 

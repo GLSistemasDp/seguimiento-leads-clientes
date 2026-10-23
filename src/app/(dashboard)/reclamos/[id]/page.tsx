@@ -7,7 +7,7 @@ import { FormularioGestion } from "@/components/reclamos/FormularioGestion";
 import { Icono } from "@/components/ui/Icono";
 import { urlAdjunto } from "@/lib/db/adjuntos";
 import { getFormulario } from "@/lib/db/reclamos";
-import { tipoEppDe } from "@/lib/reclamos/informe";
+import { GRUPOS, grupoDe, tipoEppDe } from "@/lib/reclamos/informe";
 import { CANALES_INGRESO, MOTIVOS_LOGISTICOS } from "@/types/reclamo";
 
 export const metadata = { title: "Formulario de reclamo · CRM De Pascale" };
@@ -174,6 +174,8 @@ export default async function ReclamoPage({ params }: { params: Promise<{ id: st
               tipoEpp: tipoEppDe(automatico),
               canalIngreso: CANALES_INGRESO[r.canal === "cliente" ? "PORTAL" : "COMERCIAL"],
               motivoLogistico: motivoDeducido,
+              transportista: r.transporte,
+              categoria: GRUPOS[grupoDe(r)].etiqueta,
             }}
           />
         </div>

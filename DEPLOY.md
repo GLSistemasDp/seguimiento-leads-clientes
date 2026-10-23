@@ -48,6 +48,66 @@ proteccion de acceso al despliegue.
 
 No subir `.env.local`, credenciales, `.data/` ni `node_modules/` al repositorio.
 
+## Base relacional del CRM (prototipo)
+
+`db/schema.sql` define la base completa: catalogos (grupos de vendedor, hitos,
+EPP, tipos de reclamo, transportistas, depositos, empleados), clientes,
+productos y lotes, el seguimiento en dos etapas, los reclamos y las vistas del
+informe. La app lo aplica sola la primera vez que se conecta (tabla
+`crm_migraciones`); no hace falta correr nada a mano.
+
+Para activarla en Vercel, con la base Neon ya conectada (`DATABASE_URL`):
+
+```dotenv
+SEGUIMIENTO_BACKEND=postgres
+RECLAMOS_BACKEND=postgres
+DB_SEMILLA=demo          # opcional: datos de ejemplo, se cargan una sola vez
+BOT_TOKEN=<texto largo y aleatorio>
+SEGUIMIENTO_DIAS_RETENCION=7
+```
+
+**Seguimiento en dos etapas**
+
+1. El bot de WhatsApp escribe en la cola `consultas_seguimiento` (lo que ve
+   /seguimiento). Mientras el bot real siga en la planilla, el boton
+   **Simular bot** del Seguimiento carga mensajes de prueba por el mismo
+   camino. El bot real tiene que llamar a:
+
+   ```http
+   POST /api/bot/consultas
+   Authorization: Bearer <BOT_TOKEN>
+   Content-Type: application/json
+
+   { "consultas": [ { "cliente": "1877 - BULONERIA BELGRANO", "consulta": "...",
+     "hito": "Pedido nuevo", "fecha": "2026-10-23T14:05:00-03:00",
+     "grupoWhatsapp": "DP-VT ...", "mensajeId": "<id del mensaje>" } ] }
+   ```
+
+   `mensajeId` evita duplicados si el bot reintenta. Si el cliente no existe
+   por su codigo, se crea con lo minimo.
+2. Al finalizar una consulta (`PATCH /api/seguimiento/:id` con
+   `respondida: true` y `resultado`), el trigger
+   `fn_archivar_consulta_finalizada` la copia a `chat_interacciones`, el
+   historial permanente del cliente (con `payload_ai` en `{}` para la IA).
+   Si se reabre antes de la purga, vuelve a pendientes y queda registrado.
+3. El cron diario `/api/cron/mantenimiento` (06:00 de Argentina) borra de la
+   cola lo archivado hace mas de `SEGUIMIENTO_DIAS_RETENCION` dias
+   (`fn_purgar_cola`) y refresca `mv_reclamos_evolucion_mensual`. La vista
+   materializada tambien se refresca despues de cada alta o cambio de un
+   reclamo.
+
+**Reclamos**: tablas `reclamos`, `reclamo_productos`, `lotes`,
+`indicaciones_reclamo` y `sustitutos_ofrecidos` (`detalle_ia` en `{}`). Las
+siete secciones del informe salen de las vistas `vw_reclamos_*`,
+`vw_top_lotes_reclamos`, `vw_logistica_*`, `vw_facturacion_resumen`,
+`vw_ranking_clientes_reclamos`, `vw_historico_trimestral` y
+`mv_reclamos_evolucion_mensual`; cada vista trae una fila por periodo
+(`periodo_dias` = 30, 90 o 365). Los tipos de las filas estan en
+`src/types/db.ts`.
+
+Sin estas variables todo sigue como antes (planilla, almacen generico y
+calculo del informe en memoria).
+
 ## Notificaciones por Telegram
 
 Cada pantalla tiene su notificacion. Todas se arman y se envian desde

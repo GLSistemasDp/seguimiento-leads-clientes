@@ -25,6 +25,8 @@ function aValores(gestion: Gestion): Valores {
     tipoEpp: gestion.tipoEpp ?? "",
     canalIngreso: gestion.canalIngreso ?? "",
     deposito: gestion.deposito,
+    transportista: gestion.transportista,
+    numeroNotaCredito: gestion.numeroNotaCredito,
     motivoLogistico: gestion.motivoLogistico ?? "",
     diasDemora: gestion.diasDemora === null ? "" : String(gestion.diasDemora),
     montoNotaCredito: gestion.montoNotaCredito === null ? "" : String(gestion.montoNotaCredito),
@@ -47,7 +49,7 @@ export function FormularioGestion({
   id: string;
   inicial: Gestion;
   /** Lo que se usa si el campo queda en "Automático". */
-  deducido: { tipoEpp: string; canalIngreso: string; motivoLogistico: string | null };
+  deducido: { tipoEpp: string; canalIngreso: string; motivoLogistico: string | null; transportista: string; categoria: string };
   cerradoEn: string | null;
 }) {
   const router = useRouter();
@@ -86,7 +88,10 @@ export function FormularioGestion({
     <form onSubmit={guardar} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
       <p className="text-xs font-semibold tracking-wide text-blue-700 uppercase">Gestión</p>
       <h2 className="mt-1 text-lg font-semibold">Datos para el informe</h2>
-      <p className="mt-1 mb-4 text-sm text-slate-500">Lo que se deja en &quot;Automático&quot; se deduce del formulario.</p>
+      <p className="mt-1 mb-4 text-sm text-slate-500">
+        Categoría: <span className="font-medium text-slate-800">{deducido.categoria}</span>. Lo que se deja vacío o en
+        &quot;Automático&quot; se deduce del formulario.
+      </p>
 
       <fieldset disabled={guardando} className="grid gap-3 sm:grid-cols-2">
         <label className="text-sm text-slate-700 sm:col-span-2">
@@ -131,6 +136,10 @@ export function FormularioGestion({
           <input maxLength={120} value={valores.deposito} onChange={(e) => cambiar("deposito", e.target.value)} className={campo} />
         </label>
         <label className="text-sm text-slate-700">
+          Transportista
+          <input maxLength={120} value={valores.transportista} onChange={(e) => cambiar("transportista", e.target.value)} placeholder={deducido.transportista || "Sin informar"} className={campo} />
+        </label>
+        <label className="text-sm text-slate-700">
           Motivo logístico
           <select value={valores.motivoLogistico} onChange={(e) => cambiar("motivoLogistico", e.target.value)} className={campo}>
             <option value="">{deducido.motivoLogistico ? `Automático: ${deducido.motivoLogistico}` : "No aplica"}</option>
@@ -148,6 +157,10 @@ export function FormularioGestion({
         <label className="text-sm text-slate-700">
           Notas de crédito ($)
           <input type="number" min={0} step="any" value={valores.montoNotaCredito} onChange={(e) => cambiar("montoNotaCredito", e.target.value)} className={campo} />
+        </label>
+        <label className="text-sm text-slate-700">
+          N° de nota de crédito
+          <input maxLength={60} value={valores.numeroNotaCredito} onChange={(e) => cambiar("numeroNotaCredito", e.target.value)} className={campo} />
         </label>
         <label className="text-sm text-slate-700">
           Otros costos ($)

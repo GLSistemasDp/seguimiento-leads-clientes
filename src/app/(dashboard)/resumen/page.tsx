@@ -9,7 +9,7 @@ import { Icono } from "@/components/ui/Icono";
 import type { NombreIcono } from "@/components/ui/Icono";
 import { delDia } from "@/lib/db/historial";
 import { getPanel } from "@/lib/db/reclamos";
-import { getAll } from "@/lib/db/seguimiento";
+import { getParaTablero } from "@/lib/db/seguimiento";
 import { getAll as getSolicitudes } from "@/lib/db/solicitudes";
 import { CATEGORIAS, evaluarPorReglas } from "@/lib/solicitudes/evaluacion";
 import { opciones } from "@/lib/seguimiento/presentacion";
@@ -137,7 +137,7 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
 
   const ahora = new Date();
   const [todas, panel, pendientesAlta, eventosHoy, proximo] = await Promise.all([
-    getAll(),
+    getParaTablero(),
     getPanel(ahora),
     getSolicitudes({ estado: "PENDIENTE" }).catch(() => []),
     delDia(diaLocal(ahora), diaLocal),
