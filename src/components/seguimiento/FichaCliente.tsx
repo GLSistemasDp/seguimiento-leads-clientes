@@ -1,10 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Icono } from "@/components/ui/Icono";
 import { Modal } from "@/components/ui/Modal";
-import { alertasCliente, separarCliente } from "@/lib/seguimiento/presentacion";
+import { alertasCliente, rutaPerfil, separarCliente } from "@/lib/seguimiento/presentacion";
 import { formatearFechaHora } from "@/lib/utils/dates";
 import { RELACIONES } from "@/types/seguimiento";
 import type { Consulta, EventoHistorial } from "@/types/seguimiento";
@@ -113,9 +114,17 @@ export function FichaCliente({
       titulo={`Ficha del cliente · ${nombre}`}
       onCerrar={onCerrar}
       acciones={
-        <Button variante="secundario" onClick={onCerrar}>
-          Cerrar
-        </Button>
+        <>
+          <Button variante="secundario" onClick={onCerrar}>
+            Cerrar
+          </Button>
+          <Link
+            href={rutaPerfil(consulta.cliente)}
+            className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+          >
+            Ver perfil y línea de tiempo →
+          </Link>
+        </>
       }
     >
       <div className="flex flex-col gap-4">

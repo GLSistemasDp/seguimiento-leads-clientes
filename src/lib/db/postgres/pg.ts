@@ -24,6 +24,7 @@ export function postgresConfigurado(): boolean {
 /** Version del esquema; si se cambia db/schema.sql en forma incompatible, se suma una migracion. */
 const MIGRACIONES: readonly { version: number; nombre: string; archivo: string }[] = [
   { version: 1, nombre: "esquema inicial del CRM", archivo: "db/schema.sql" },
+  { version: 2, nombre: "clasificacion de mensajes y relacion al cerrar", archivo: "db/migraciones/002_relacion_ia.sql" },
 ];
 
 const global = globalThis as typeof globalThis & { crmPool?: Promise<Pool> };

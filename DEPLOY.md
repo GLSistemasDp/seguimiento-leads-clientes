@@ -96,6 +96,15 @@ SEGUIMIENTO_DIAS_RETENCION=7
    materializada tambien se refresca despues de cada alta o cambio de un
    reclamo.
 
+**Clasificacion de mensajes (IA)**: cada mensaje que entra por
+`/api/bot/consultas` (o el simulador) pasa por `src/lib/ia/clasificador.ts`,
+que le pide a Claude (`claude-opus-5-5`, esfuerzo bajo, salida JSON validada)
+el estado de la relacion (Bien / Regular / En riesgo), el hito y un resumen.
+Se guarda en la cola (`relacion_ia`, `hito_ia`, `resumen_ia`) y al cerrar pasa
+a `chat_interacciones.payload_ai`. Necesita `ANTHROPIC_API_KEY`; sin clave, o
+si la llamada falla, se usan reglas en codigo con el mismo criterio. La
+relacion sugerida pre-carga el cierre, donde es obligatoria y se puede cambiar.
+
 **Reclamos**: tablas `reclamos`, `reclamo_productos`, `lotes`,
 `indicaciones_reclamo` y `sustitutos_ofrecidos` (`detalle_ia` en `{}`). Las
 siete secciones del informe salen de las vistas `vw_reclamos_*`,

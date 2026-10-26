@@ -292,3 +292,9 @@ export function resumirChats(consultas: readonly Consulta[]): Record<string, Res
   }
   return resumen;
 }
+
+/** Perfil del cliente: por su codigo, o por el nombre si la planilla no trae codigo. */
+export function rutaPerfil(cliente: string): string {
+  const { codigo, nombre } = separarCliente(cliente);
+  return `/clientes/${encodeURIComponent(codigo || nombre)}`;
+}

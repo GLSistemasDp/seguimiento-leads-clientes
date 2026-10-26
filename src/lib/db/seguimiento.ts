@@ -4,7 +4,7 @@ import { backendActivo } from "@/lib/db/repositorio";
 import type { Backend, RepositorioSeguimiento } from "@/lib/db/repositorio";
 import { RESPUESTAS } from "@/lib/seguimiento/respuestas";
 import type { RespuestaTipo } from "@/lib/seguimiento/respuestas";
-import type { CambiosConsulta, Consulta, Relacion, Resultado } from "@/types/seguimiento";
+import type { CambiosConsulta, Consulta, FichaCliente, Relacion, Resultado } from "@/types/seguimiento";
 
 /**
  * Punto unico de acceso al seguimiento de clientes. Con DB_BACKEND="demo"
@@ -68,6 +68,20 @@ export async function update(
 export async function getParaTablero(): Promise<Consulta[]> {
   if (backendSeguimiento() === "postgres") return (await import("@/lib/db/postgres/seguimiento")).getParaTablero();
   return getAll();
+}
+
+/**
+ * Ficha de un cliente por su codigo (o nombre): con Postgres sale de la
+ * tabla clientes; si no, de la planilla (la ficha que trae cualquier consulta).
+ */
+export async function fichaDeCliente(clave: string): Promise<FichaCliente | null> {
+  if (backendSeguimiento() === "postgres") return (await import("@/lib/db/postgres/seguimiento")).fichaDeCliente(clave);
+  const buscado = clave.trim().toUpperCase();
+  const consulta = (await getAll()).find((item) => {
+    const codigo = item.cliente.match(/^\s*(\d+)\s*-/)?.[1] ?? "";
+    return item.ficha && (codigo === buscado || item.ficha.nombre.toUpperCase() === buscado || item.cliente.toUpperCase() === buscado);
+  });
+  return consulta?.ficha ?? null;
 }
 
 /** Respuestas tipo de la planilla; si no hay, las que trae la app. */

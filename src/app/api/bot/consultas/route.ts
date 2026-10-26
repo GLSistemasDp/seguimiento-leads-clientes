@@ -70,11 +70,14 @@ export const POST = async (request: Request) => {
     });
   }
 
+  // Cada mensaje pasa por el clasificador (IA o reglas) antes de entrar a la cola.
+  const { clasificarVarios } = await import("@/lib/ia/clasificador");
+  const clasificaciones = await clasificarVarios(entradas.map((entrada) => ({ texto: entrada.consulta, hito: entrada.hito })));
   const { ingresarConsulta } = await import("@/lib/db/postgres/seguimiento");
   const ids: string[] = [];
   let duplicadas = 0;
-  for (const entrada of entradas) {
-    const id = await ingresarConsulta(entrada);
+  for (const [indice, entrada] of entradas.entries()) {
+    const id = await ingresarConsulta({ ...entrada, ia: clasificaciones[indice] });
     if (id) ids.push(id);
     else duplicadas += 1;
   }

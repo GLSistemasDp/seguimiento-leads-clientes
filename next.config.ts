@@ -2,8 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["192.168.123.77"],
-  // db/schema.sql se lee al conectarse a Postgres: tiene que viajar con las funciones.
-  outputFileTracingIncludes: { "/**": ["./db/schema.sql"] },
+  // db/schema.sql y db/migraciones se leen al conectarse a Postgres: tienen que viajar con las funciones.
+  outputFileTracingIncludes: { "/**": ["./db/schema.sql", "./db/migraciones/*.sql"] },
   // Inicio y Tablero se unieron en Resumen; Importar y Plantillas pasaron a
   // ser parte de Solicitudes de alta. Los links viejos siguen funcionando.
   async redirects() {

@@ -12,12 +12,12 @@ export function BotonGrupoWhatsapp({ grupo, link }: { grupo: string; link: strin
   const { mostrar } = useToast();
   const directo = linkGrupoValido(link);
   const clase =
-    "inline-flex max-w-full items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-800 hover:bg-emerald-100";
+    "inline-flex max-w-full items-center gap-1 rounded-md bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200 ring-inset hover:bg-slate-50";
 
   if (directo) {
     return (
       <a href={directo} target="_blank" rel="noopener noreferrer" title={`Abrir el grupo ${grupo}`} className={clase}>
-        <span aria-hidden="true">●</span>
+        <span aria-hidden="true" className="text-emerald-500">●</span>
         <span className="truncate">Abrir grupo</span>
       </a>
     );
@@ -36,7 +36,7 @@ export function BotonGrupoWhatsapp({ grupo, link }: { grupo: string; link: strin
 
   return (
     <button type="button" onClick={() => void buscar()} title={`${grupo} · copia el nombre y abre WhatsApp Web`} className={clase}>
-      <span aria-hidden="true">●</span>
+      <span aria-hidden="true" className="text-emerald-500">●</span>
       <span className="truncate">{grupo}</span>
     </button>
   );

@@ -78,6 +78,7 @@ const ALIAS_MAESTRO = {
   condicionPago: ["cond de pago", "condicion de pago"],
   limiteCredito: ["limite de credito"],
   deuda: ["deuda"],
+  cuit: ["cuit", "c.u.i.t.", "nro cuit", "cuit cliente"],
 } as const;
 
 function fichaVacia(cliente: string): FichaCliente {
@@ -153,6 +154,7 @@ export function armarFichas(desplegable: FilaSheet[], maestro: FilaSheet[]): Map
       completar(destino, "condicionPago", limpio(celda(fila, "condicionPago")));
       completar(destino, "limiteCredito", limpio(celda(fila, "limiteCredito")));
       completar(destino, "deuda", limpio(celda(fila, "deuda")));
+      completar(destino, "cuit", limpio(celda(fila, "cuit")));
     }
   }
 

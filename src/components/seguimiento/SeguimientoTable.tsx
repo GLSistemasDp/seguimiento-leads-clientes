@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Fragment, useState, useTransition } from "react";
 import { BotonGrupoWhatsapp } from "@/components/seguimiento/BotonGrupoWhatsapp";
@@ -10,14 +11,14 @@ import { Icono } from "@/components/ui/Icono";
 import { Modal } from "@/components/ui/Modal";
 import { Textarea } from "@/components/ui/Textarea";
 import { useToast } from "@/components/ui/Toast";
-import { claveChat, estadoCliente, separarCliente } from "@/lib/seguimiento/presentacion";
+import { claveChat, estadoCliente, rutaPerfil, separarCliente } from "@/lib/seguimiento/presentacion";
 import type { Prioridad, ResumenChat } from "@/lib/seguimiento/presentacion";
 import type { RespuestaTipo } from "@/lib/seguimiento/respuestas";
 import { formatearDiaCorto, formatearHora } from "@/lib/utils/dates";
 import { normalizarEncabezado } from "@/lib/utils/strings";
 import { ACCIONES } from "@/types/reclamo";
 import type { Indicacion } from "@/types/reclamo";
-import { RELACIONES, RESULTADOS } from "@/types/seguimiento";
+import { ICONO_RELACION, RELACIONES, RESULTADOS } from "@/types/seguimiento";
 import type { Consulta, EventoHistorial, Relacion, Resultado } from "@/types/seguimiento";
 
 export type FilaConsulta = Consulta & {
@@ -28,7 +29,13 @@ export type FilaConsulta = Consulta & {
   cierre: Pick<EventoHistorial, "resultado" | "relacion" | "fecha"> | null;
   /** Si es un reclamo y la gerencia ya dijo como seguir. */
   indicacion: Indicacion | null;
+  /** Relacion vigente y de donde sale (cierre, IA o reglas). */
+  relacion: { relacion: Relacion; origen: "cierre" | "ia" | "reglas" };
+  /** Ultimo cierre registrado con este cliente (cualquier consulta). */
+  ultimaGestion: EventoHistorial | null;
 };
+
+const ORIGEN_RELACION = { cierre: "al cerrar", ia: "sugerida por IA", reglas: "según el mensaje" } as const;
 
 /** Lo que manda la app al finalizar, reabrir o anotar. */
 type Cambios = {
@@ -39,54 +46,79 @@ type Cambios = {
 };
 
 const ESTILO_RELACION: Record<Relacion, string> = {
-  BUENA: "border-emerald-300 bg-emerald-50 text-emerald-800",
-  REGULAR: "border-amber-300 bg-amber-50 text-amber-800",
-  EN_RIESGO: "border-red-300 bg-red-50 text-red-700",
+  BUENA: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  REGULAR: "border-amber-200 bg-amber-50 text-amber-800",
+  EN_RIESGO: "border-red-200 bg-red-50 text-red-700",
 };
+
+/** Etiqueta suave (fondo claro, borde fino), como los estados de la lista. */
+const ETIQUETA = "inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium ring-1 ring-inset";
+
+const ESTILO_RELACION_BADGE: Record<Relacion, string> = {
+  BUENA: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  REGULAR: "bg-amber-50 text-amber-800 ring-amber-200",
+  EN_RIESGO: "bg-red-50 text-red-700 ring-red-200",
+};
+
+/** Badge de la relacion: semaforo + texto, nunca solo color. */
+function BadgeRelacion({ relacion }: { relacion: Relacion }) {
+  return (
+    <span className={`${ETIQUETA} gap-1 ${ESTILO_RELACION_BADGE[relacion]}`}>
+      <span aria-hidden="true">{ICONO_RELACION[relacion]}</span>
+      {RELACIONES[relacion]}
+    </span>
+  );
+}
 
 /** Lo secundario (lista, vendedor, fecha, encargado) va dentro de estas columnas, en chico. */
-const COLUMNAS = ["Cliente", "Consulta", "Demora", "Último estado", "Respondido"] as const;
+const COLUMNAS = ["Cliente", "Consulta", "Demora", "Relación · última gestión", "Respondido"] as const;
 
-const PRIORIDADES: Record<Prioridad, { etiqueta: string; estilo: string; borde: string }> = {
-  ALTA: { etiqueta: "Alta", estilo: "bg-red-600 text-white", borde: "border-l-red-600" },
-  MEDIA: { etiqueta: "Media", estilo: "bg-amber-100 text-amber-800", borde: "border-l-amber-400" },
-  BAJA: { etiqueta: "Baja", estilo: "bg-slate-100 text-slate-600", borde: "border-l-slate-300" },
-  RESUELTA: { etiqueta: "Resuelta", estilo: "bg-emerald-50 text-emerald-700", borde: "border-l-emerald-300" },
+const PRIORIDADES: Record<Prioridad, { etiqueta: string; estilo: string; punto: string }> = {
+  ALTA: { etiqueta: "Alta", estilo: "bg-red-50 text-red-700 ring-red-200", punto: "bg-red-500" },
+  MEDIA: { etiqueta: "Media", estilo: "bg-amber-50 text-amber-800 ring-amber-200", punto: "bg-amber-500" },
+  BAJA: { etiqueta: "Baja", estilo: "bg-slate-50 text-slate-600 ring-slate-200", punto: "bg-slate-400" },
+  RESUELTA: { etiqueta: "Resuelta", estilo: "bg-emerald-50 text-emerald-700 ring-emerald-200", punto: "bg-emerald-500" },
 };
 
-/** Colores de los hitos, como en la planilla: el reclamo resalta en rojo. */
+/** Colores de los hitos: el reclamo resalta, el resto en tonos suaves. */
 function estiloHito(hito: string): string {
   switch (normalizarEncabezado(hito)) {
     case "reclamo":
-      return "bg-red-600 font-semibold text-white";
+      return "bg-red-50 text-red-700 ring-red-200";
     case "pedido nuevo":
-      return "bg-blue-100 text-blue-800";
+      return "bg-sky-50 text-sky-700 ring-sky-200";
     case "estado de pedido":
-      return "bg-sky-100 text-sky-800";
+      return "bg-indigo-50 text-indigo-700 ring-indigo-200";
     case "enviar factura":
     case "estado de cuenta":
     case "informa pago":
-      return "bg-violet-100 text-violet-800";
+      return "bg-violet-50 text-violet-700 ring-violet-200";
     default:
-      return "bg-slate-100 text-slate-700";
+      return "bg-slate-50 text-slate-600 ring-slate-200";
   }
 }
 
-/** Situacion de la cuenta, como en la planilla maestra: OK verde, deuda naranja, no responder violeta. */
+/** Situacion de la cuenta: OK verde, deuda amarilla, judicializado rojo, no responder gris. */
 function estiloEstado(estado: string): string {
   const texto = normalizarEncabezado(estado);
-  if (texto === "ok") return "bg-emerald-600 text-white";
-  if (texto.includes("judicial")) return "bg-red-600 text-white";
-  if (texto.includes("deud")) return "bg-orange-500 text-white";
-  if (texto.includes("no responder")) return "bg-violet-100 text-violet-700";
-  return "bg-amber-100 text-amber-800";
+  if (texto === "ok") return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+  if (texto.includes("judicial")) return "bg-red-50 text-red-700 ring-red-200";
+  if (texto.includes("deud")) return "bg-amber-50 text-amber-800 ring-amber-200";
+  if (texto.includes("no responder")) return "bg-slate-100 text-slate-500 ring-slate-200";
+  return "bg-amber-50 text-amber-800 ring-amber-200";
 }
 
 const CLASIFICACIONES: Record<string, string> = {
-  A: "bg-emerald-600 text-white",
-  B: "bg-sky-100 text-sky-800",
-  C: "bg-slate-100 text-slate-600",
+  A: "bg-slate-900 text-white ring-slate-900",
+  B: "bg-slate-100 text-slate-700 ring-slate-200",
+  C: "bg-white text-slate-500 ring-slate-200",
 };
+
+/** "BULONERIA BELGRANO" -> "BB", para el circulo del cliente. */
+function iniciales(nombre: string): string {
+  const palabras = nombre.replace(/[^\p{L}\p{N} ]/gu, " ").split(/\s+/).filter(Boolean);
+  return ((palabras[0]?.[0] ?? "") + (palabras[1]?.[0] ?? "")).toUpperCase() || "?";
+}
 
 async function guardar(id: string, cambios: Cambios): Promise<string | null> {
   try {
@@ -110,8 +142,8 @@ export type SeguimientoTableProps = {
   chats?: Record<string, ResumenChat>;
   /** Respuestas tipo de la planilla para las sugerencias. */
   catalogo?: readonly RespuestaTipo[];
-  /** Aclara donde queda guardado lo que se marca (planilla o archivo local). */
-  destino?: string;
+  /** En "pendientes" la fila finalizada se va de la tabla con una transicion. */
+  vista?: "pendientes" | "respondidas" | "todas";
 };
 
 export function SeguimientoTable({
@@ -119,7 +151,7 @@ export function SeguimientoTable({
   agrupado = false,
   chats = {},
   catalogo,
-  destino = "la planilla",
+  vista = "pendientes",
 }: SeguimientoTableProps) {
   const router = useRouter();
   const { mostrar } = useToast();
@@ -127,8 +159,9 @@ export function SeguimientoTable({
   /** Cambios optimistas mientras la planilla confirma. */
   const [respondidas, setRespondidas] = useState<Record<string, boolean>>({});
   const [guardando, setGuardando] = useState<ReadonlySet<string>>(new Set());
-  const [editando, setEditando] = useState<FilaConsulta | null>(null);
-  const [borrador, setBorrador] = useState("");
+  /** Filas finalizadas que se estan yendo (fade-out) y las que ya se fueron. */
+  const [saliendo, setSaliendo] = useState<ReadonlySet<string>>(new Set());
+  const [ocultas, setOcultas] = useState<ReadonlySet<string>>(new Set());
   /** Consulta que se esta por dar por finalizada (con observacion opcional). */
   const [finalizando, setFinalizando] = useState<FilaConsulta | null>(null);
   const [nota, setNota] = useState("");
@@ -153,7 +186,8 @@ export function SeguimientoTable({
     }
     setNota("");
     setResultado("");
-    setRelacion(null);
+    // Pre-cargada con lo que sugirio el clasificador (IA o reglas); se puede cambiar.
+    setRelacion(consulta.relacion.relacion);
     setFinalizando(consulta);
   }
 
@@ -174,26 +208,19 @@ export function SeguimientoTable({
     }
     mostrar(
       valor
-        ? `Conversacion con ${separarCliente(consulta.cliente).nombre} finalizada.`
+        ? `Conversacion con ${separarCliente(consulta.cliente).nombre} finalizada: pasó a su historial.`
         : `${separarCliente(consulta.cliente).nombre} volvio a la cola.`,
       "exito",
     );
-    startTransition(() => router.refresh());
-  }
-
-  async function guardarObservaciones() {
-    if (!editando) return;
-    const consulta = editando;
-    setEditando(null);
-    marcarGuardando(consulta.id, true);
-    const error = await guardar(consulta.id, { observaciones: borrador.trim() });
-    marcarGuardando(consulta.id, false);
-
-    if (error) {
-      mostrar(`No se pudieron guardar las observaciones: ${error}`, "error");
+    if (valor && vista === "pendientes") {
+      // Inbox zero: la fila se desvanece y se va antes de recargar la lista.
+      setSaliendo((previo) => new Set(previo).add(consulta.id));
+      setTimeout(() => {
+        setOcultas((previo) => new Set(previo).add(consulta.id));
+        startTransition(() => router.refresh());
+      }, 350);
       return;
     }
-    mostrar("Observaciones guardadas.", "exito");
     startTransition(() => router.refresh());
   }
 
@@ -219,11 +246,11 @@ export function SeguimientoTable({
           <col className="w-24" />
         </colgroup>
         <thead>
-          <tr className="border-b border-slate-200 bg-blue-50/50 text-left">
+          <tr className="border-b border-slate-100 text-left">
             {COLUMNAS.map((columna) => (
               <th
                 key={columna}
-                className="px-3 py-3 text-xs font-semibold tracking-wide text-slate-600 uppercase first:pl-5 last:pr-4 last:text-center"
+                className="px-3 py-3 text-[11px] font-medium tracking-wider text-slate-400 uppercase first:pl-5 last:pr-4 last:text-center"
               >
                 {columna}
               </th>
@@ -232,6 +259,7 @@ export function SeguimientoTable({
         </thead>
         <tbody>
           {consultas.map((consulta, indice) => {
+            if (ocultas.has(consulta.id)) return null;
             const respondida = respondidas[consulta.id] ?? consulta.respondida;
             const ocupada = guardando.has(consulta.id);
             const { codigo, nombre } = separarCliente(consulta.cliente);
@@ -246,17 +274,17 @@ export function SeguimientoTable({
             return (
               <Fragment key={consulta.id}>
                 {nuevoChat ? (
-                  <tr className="border-b border-slate-200 bg-slate-100/80">
+                  <tr className="border-b border-slate-100 bg-slate-50/80">
                     <td colSpan={COLUMNAS.length} className="px-5 py-2">
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                        <Icono nombre="chat" className="size-4 text-emerald-700" />
+                        <Icono nombre="chat" className="size-4 text-slate-500" />
                         <span className="font-semibold text-slate-900">{nombre}</span>
                         {codigo ? <span className="text-xs text-slate-500">#{codigo}</span> : null}
                         <span className="truncate text-xs text-slate-500">{consulta.grupoWhatsapp || "Sin grupo de WhatsApp"}</span>
                         {resumen ? (
                           <span
-                            className={`ml-auto rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                              resumen.sinResponder > 0 ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"
+                            className={`ml-auto ${ETIQUETA} ${
+                              resumen.sinResponder > 0 ? "bg-red-50 text-red-700 ring-red-200" : "bg-emerald-50 text-emerald-700 ring-emerald-200"
                             }`}
                           >
                             {resumen.sinResponder > 0
@@ -269,44 +297,69 @@ export function SeguimientoTable({
                   </tr>
                 ) : null}
                 <tr
-                  className={`border-b border-slate-100 align-top last:border-0 ${
-                    respondida ? "bg-slate-50" : "hover:bg-blue-50/30"
-                  }`}
+                  className={`border-b border-slate-100 align-top transition-opacity duration-300 last:border-0 ${
+                    respondida ? "bg-slate-50/60" : "hover:bg-slate-50"
+                  } ${saliendo.has(consulta.id) ? "pointer-events-none opacity-0" : "opacity-100"}`}
                 >
-                  {/* Cliente: lo importante arriba, el resto en gris chico. */}
-                  <td className={`border-l-4 py-3 pr-3 pl-4 ${prioridad.borde}`}>
+                  {/* Cliente: circulo con iniciales, nombre y el resto en gris chico. */}
+                  <td className="py-3 pr-3 pl-5">
                     <button
                       type="button"
                       onClick={() => setFichaAbierta(consulta)}
                       title="Ver ficha e historial del cliente"
-                      className="group -m-1 flex max-w-full flex-col items-start rounded-md p-1 text-left hover:bg-blue-50"
+                      className="group -m-1 flex max-w-full items-start gap-2.5 rounded-md p-1 text-left hover:bg-slate-100/70"
                     >
                       <span
-                        className={`line-clamp-2 text-sm font-semibold group-hover:text-blue-800 ${
-                          respondida ? tachado : "text-slate-900"
-                        }`}
+                        aria-hidden="true"
+                        className="flex size-7 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500"
                       >
-                        {nombre}
+                        {iniciales(nombre)}
                       </span>
-                      <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
-                        {codigo ? <span>#{codigo}</span> : null}
-                        {consulta.clasificacion ? (
-                          <span
-                            className={`rounded px-1.5 font-semibold ${
-                              CLASIFICACIONES[consulta.clasificacion.toUpperCase()] ?? "bg-slate-100 text-slate-600"
-                            }`}
-                            title="Clasificacion de venta"
-                          >
-                            {consulta.clasificacion}
-                          </span>
-                        ) : null}
-                        {consulta.listaPrecio ? <span title="Lista de precio">{consulta.listaPrecio}</span> : null}
-                        <Icono nombre="ojo" className="size-3.5 text-slate-400 group-hover:text-blue-700" />
+                      <span className="flex min-w-0 flex-col">
+                        <span
+                          className={`line-clamp-2 text-sm font-medium ${
+                            respondida ? tachado : "text-slate-800 group-hover:text-slate-950"
+                          }`}
+                        >
+                          {nombre}
+                        </span>
+                        <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
+                          {codigo ? <span>#{codigo}</span> : null}
+                          {consulta.clasificacion ? (
+                            <span
+                              className={`rounded px-1.5 text-[11px] font-semibold ring-1 ring-inset ${
+                                CLASIFICACIONES[consulta.clasificacion.toUpperCase()] ?? "bg-white text-slate-500 ring-slate-200"
+                              }`}
+                              title="Clasificacion de venta"
+                            >
+                              {consulta.clasificacion}
+                            </span>
+                          ) : null}
+                          {consulta.listaPrecio ? <span title="Lista de precio">{consulta.listaPrecio}</span> : null}
+                          <Icono nombre="ojo" className="size-3.5 text-slate-300 group-hover:text-slate-600" />
+                        </span>
                       </span>
                     </button>
-                    {vendedor ? <p className="mt-1 truncate text-xs text-slate-500">{vendedor}</p> : null}
-                    <div className="mt-1">
-                      <BotonGrupoWhatsapp grupo={consulta.grupoWhatsapp} link={consulta.linkWhatsapp} />
+                    <div className="mt-1 pl-[2.375rem]">
+                      {vendedor ? <p className="truncate text-xs text-slate-400">{vendedor}</p> : null}
+                      {estados.length > 0 ? (
+                        <div className="mt-1 flex flex-wrap gap-1" title="Estado de cuenta">
+                          {estados.map((estado) => (
+                            <span key={estado} className={`${ETIQUETA} ${estiloEstado(estado)}`}>
+                              {estado}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                        <BotonGrupoWhatsapp grupo={consulta.grupoWhatsapp} link={consulta.linkWhatsapp} />
+                        <Link
+                          href={rutaPerfil(consulta.cliente)}
+                          className="text-[11px] font-medium text-slate-500 underline-offset-2 hover:text-slate-900 hover:underline"
+                        >
+                          Perfil e historial →
+                        </Link>
+                      </div>
                     </div>
                   </td>
 
@@ -314,26 +367,23 @@ export function SeguimientoTable({
                   <td className="px-3 py-3">
                     <div className="flex flex-wrap items-center gap-1.5">
                       {consulta.hito ? (
-                        <span
-                          className={`inline-flex rounded-md px-2 py-0.5 text-xs ${
-                            respondida ? "bg-slate-100 text-slate-400" : estiloHito(consulta.hito)
-                          }`}
-                        >
+                        <span className={`${ETIQUETA} ${respondida ? "bg-slate-50 text-slate-400 ring-slate-200" : estiloHito(consulta.hito)}`}>
                           {consulta.hito}
                         </span>
                       ) : null}
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${prioridad.estilo}`}>
+                      <span className={`${ETIQUETA} gap-1 ${prioridad.estilo}`}>
+                        <span className={`size-1.5 rounded-full ${prioridad.punto}`} aria-hidden="true" />
                         {prioridad.etiqueta}
                       </span>
                     </div>
                     <p
                       title={consulta.consulta}
-                      className={`mt-1 line-clamp-3 text-sm ${respondida ? tachado : "text-slate-800"}`}
+                      className={`mt-1 line-clamp-3 text-sm ${respondida ? tachado : "text-slate-700"}`}
                     >
                       {consulta.consulta}
                     </p>
                     {consulta.indicacion ? (
-                      <p className="mt-1.5 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-xs text-blue-900">
+                      <p className="mt-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700">
                         <span className="font-semibold">Gerencia:</span> {ACCIONES[consulta.indicacion.accion]}
                         {consulta.indicacion.sustitutos.length > 0
                           ? ` → ${consulta.indicacion.sustitutos.map((sustituto) => sustituto.producto).join(", ")}`
@@ -354,8 +404,8 @@ export function SeguimientoTable({
                   <td className="px-2 py-3 text-center">
                     {!respondida && consulta.diasAbierta !== null ? (
                       <span
-                        className={`inline-flex rounded-md px-2 py-0.5 text-xs font-semibold ${
-                          consulta.vencida ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-700"
+                        className={`${ETIQUETA} tabular-nums ${
+                          consulta.vencida ? "bg-red-50 text-red-700 ring-red-200" : "bg-slate-50 text-slate-600 ring-slate-200"
                         }`}
                       >
                         {consulta.diasAbierta === 0
@@ -367,47 +417,31 @@ export function SeguimientoTable({
                     )}
                   </td>
 
-                  {/* Ultimo estado: la situacion de la cuenta del cliente y como quedo la conversacion. */}
+                  {/* Relacion vigente (semaforo) y la ultima gestion con el cliente, en texto. */}
                   <td className="px-3 py-3">
-                    {estados.length > 0 ? (
-                      <div className="flex flex-wrap gap-1">
-                        {estados.map((estado) => (
-                          <span key={estado} className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${estiloEstado(estado)}`}>
-                            {estado}
-                          </span>
-                        ))}
-                      </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <BadgeRelacion relacion={consulta.relacion.relacion} />
+                      <span className="text-[11px] text-slate-400">{ORIGEN_RELACION[consulta.relacion.origen]}</span>
+                    </div>
+                    {consulta.ultimaGestion?.resultado ? (
+                      <p className="mt-1.5 text-xs text-slate-600">
+                        <span className="text-slate-400">Última gestión:</span>{" "}
+                        <span className="font-medium text-slate-800">{consulta.ultimaGestion.resultado}</span>
+                        {" · "}
+                        {formatearDiaCorto(new Date(consulta.ultimaGestion.fecha))}
+                      </p>
                     ) : (
-                      <span className="text-xs text-slate-400">Sin datos de la cuenta</span>
+                      <p className="mt-1.5 text-xs text-slate-400">Sin gestiones previas registradas</p>
                     )}
-                    {consulta.cierre?.resultado && respondida ? (
-                      <div className="mt-1.5 flex flex-wrap gap-1">
-                        <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-800">
-                          {consulta.cierre.resultado}
-                        </span>
-                        {consulta.cierre.relacion ? (
-                          <span
-                            className={`rounded border px-1.5 py-0.5 text-[11px] font-medium ${ESTILO_RELACION[consulta.cierre.relacion]}`}
-                          >
-                            {RELACIONES[consulta.cierre.relacion]}
-                          </span>
-                        ) : null}
-                      </div>
+                    {consulta.ultimaGestion?.observacion ? (
+                      <p className="mt-0.5 line-clamp-2 text-xs text-slate-500" title={consulta.ultimaGestion.observacion}>
+                        {consulta.ultimaGestion.observacion}
+                      </p>
+                    ) : consulta.observaciones ? (
+                      <p className="mt-0.5 line-clamp-2 text-xs text-slate-500" title={consulta.observaciones}>
+                        {consulta.observaciones}
+                      </p>
                     ) : null}
-                    <button
-                      type="button"
-                      disabled={ocupada}
-                      onClick={() => {
-                        setBorrador(consulta.observaciones);
-                        setEditando(consulta);
-                      }}
-                      title="Editar la observación"
-                      className="group mt-1 block w-full rounded-md text-left text-xs text-slate-500 hover:text-slate-800"
-                    >
-                      <span className="line-clamp-2">
-                        {consulta.observaciones || <span className="text-slate-400 group-hover:text-blue-700">+ Observación</span>}
-                      </span>
-                    </button>
                   </td>
 
                   <td className="py-3 pr-4 pl-2 text-center">
@@ -418,7 +452,7 @@ export function SeguimientoTable({
                       onChange={() => pedirCambio(consulta)}
                       aria-label={`Finalizar la conversacion con ${nombre}`}
                       title={respondida ? "Finalizada · destildar para volver a la cola" : "Finalizar conversacion"}
-                      className="mt-1 size-5 cursor-pointer accent-emerald-600 disabled:cursor-wait"
+                      className="mt-1 size-4 cursor-pointer rounded accent-slate-900 disabled:cursor-wait"
                     />
                   </td>
                 </tr>
@@ -427,37 +461,6 @@ export function SeguimientoTable({
           })}
         </tbody>
       </table>
-
-      <Modal
-        abierto={editando !== null}
-        titulo={editando ? `Observaciones · ${separarCliente(editando.cliente).nombre}` : ""}
-        onCerrar={() => setEditando(null)}
-        acciones={
-          <>
-            <Button variante="secundario" onClick={() => setEditando(null)}>
-              Cancelar
-            </Button>
-            <Button onClick={() => void guardarObservaciones()}>
-              <Icono nombre="check" className="size-3.5" />
-              Guardar en {destino}
-            </Button>
-          </>
-        }
-      >
-        {editando ? (
-          <div className="flex flex-col gap-3">
-            <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-700">{editando.consulta}</p>
-            <Textarea
-              label="Observaciones"
-              rows={4}
-              value={borrador}
-              onChange={(evento) => setBorrador(evento.target.value)}
-              placeholder="Que se le respondio, a quien se derivo, proximo paso…"
-              autoFocus
-            />
-          </div>
-        ) : null}
-      </Modal>
 
       <Modal
         abierto={finalizando !== null}
@@ -469,15 +472,15 @@ export function SeguimientoTable({
               Cancelar
             </Button>
             <Button
-              disabled={!resultado}
-              title={resultado ? undefined : "Elegí cómo quedó la conversación"}
+              disabled={!resultado || !relacion}
+              title={resultado && relacion ? undefined : "Elegí cómo quedó la conversación y la relación con el cliente"}
               onClick={() => {
                 const consulta = finalizando;
-                if (!consulta || !resultado) return;
+                if (!consulta || !resultado || !relacion) return;
                 setFinalizando(null);
                 void cambiarRespondida(consulta, true, {
                   resultado,
-                  relacion: relacion ?? undefined,
+                  relacion,
                   observaciones: nota.trim(),
                 });
               }}
@@ -524,18 +527,27 @@ export function SeguimientoTable({
               </div>
             </fieldset>
             <fieldset>
-              <legend className="text-sm font-medium text-slate-700">Relación con el cliente (opcional)</legend>
-              <div className="mt-2 flex flex-wrap gap-1.5">
+              <legend className="text-sm font-medium text-slate-700">
+                Relación con el cliente <span className="text-red-600">*</span>
+              </legend>
+              <p className="mt-0.5 text-xs text-slate-500">
+                {finalizando.relacion.origen === "ia"
+                  ? "Pre-cargada con lo que detectó la IA en el último mensaje. Cambiala si no coincide."
+                  : "Pre-cargada según el último mensaje. Cambiala si no coincide."}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1.5" role="radiogroup" aria-label="Relación con el cliente">
                 {(Object.keys(RELACIONES) as Relacion[]).map((clave) => (
                   <button
                     key={clave}
                     type="button"
-                    aria-pressed={relacion === clave}
-                    onClick={() => setRelacion(relacion === clave ? null : clave)}
-                    className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                    role="radio"
+                    aria-checked={relacion === clave}
+                    onClick={() => setRelacion(clave)}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${
                       relacion === clave ? ESTILO_RELACION[clave] : "border-slate-200 text-slate-600 hover:bg-slate-50"
                     }`}
                   >
+                    <span aria-hidden="true">{ICONO_RELACION[clave]}</span>
                     {RELACIONES[clave]}
                   </button>
                 ))}
@@ -549,8 +561,8 @@ export function SeguimientoTable({
               placeholder="Qué se le respondió, a quién se derivó, próximo paso…"
             />
             <p className="text-xs text-slate-500">
-              Se tilda RESPUESTA; el resultado y la observación quedan en {destino} y en el historial del
-              cliente. Si fue un error, destildá la casilla y la consulta vuelve a la cola.
+              La conversación sale de la bandeja y el cierre (resultado, relación y observación) queda en el
+              historial del cliente. Si fue un error, en &quot;Respondidas&quot; destildá la casilla y vuelve a la cola.
             </p>
           </div>
         ) : null}

@@ -77,10 +77,10 @@ export function FiltrosSeguimiento({
   }, [texto]);
 
   return (
-    <section className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <section className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div
-          className="flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1"
+          className="flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1"
           role="tablist"
         >
           {(Object.keys(VISTAS) as Vista[]).map((valor) => {
@@ -94,13 +94,14 @@ export function FiltrosSeguimiento({
                 onClick={() =>
                   navegar({ vista: valor === "pendientes" ? null : valor })
                 }
-                className={`rounded-lg px-4 py-1.5 text-sm transition-colors ${
+                className={`inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm transition-colors ${
                   activa
-                    ? "bg-white font-semibold text-blue-800 shadow-sm"
-                    : "text-slate-600 hover:text-slate-900"
+                    ? "bg-white font-medium text-slate-900 shadow-sm"
+                    : "text-slate-500 hover:text-slate-900"
                 }`}
               >
-                {VISTAS[valor]} ({conteos[valor]})
+                {VISTAS[valor]}
+                <span className="text-xs text-slate-400 tabular-nums">{conteos[valor]}</span>
               </button>
             );
           })}
@@ -111,10 +112,10 @@ export function FiltrosSeguimiento({
             type="button"
             aria-pressed={agrupado}
             onClick={() => navegar({ agrupar: agrupado ? null : "chat" })}
-            className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors ${
+            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${
               agrupado
-                ? "bg-emerald-700 font-medium text-white"
-                : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                ? "border-slate-900 bg-slate-900 font-medium text-white"
+                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
             }`}
           >
             <Icono nombre="chat" className="size-3.5" />
@@ -126,7 +127,7 @@ export function FiltrosSeguimiento({
               setTexto("");
               router.push(pathname);
             }}
-            className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-200"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
           >
             <Icono nombre="restablecer" className="size-3.5" />
             Restablecer filtros
@@ -138,7 +139,7 @@ export function FiltrosSeguimiento({
         <label className="relative flex items-center">
           <Icono
             nombre="buscar"
-            className="pointer-events-none absolute left-3 size-4 text-slate-500"
+            className="pointer-events-none absolute left-3 size-4 text-slate-400"
           />
           <input
             type="search"
@@ -146,7 +147,7 @@ export function FiltrosSeguimiento({
             onChange={(evento) => setTexto(evento.target.value)}
             placeholder="Buscar cliente, consulta, grupo de WhatsApp…"
             aria-label="Buscar consultas"
-            className="w-full rounded-lg border border-slate-200 bg-white py-2 pr-3 pl-9 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-lg border border-slate-200 bg-slate-50/60 py-2 pr-3 pl-9 text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-300"
           />
         </label>
         <Selector

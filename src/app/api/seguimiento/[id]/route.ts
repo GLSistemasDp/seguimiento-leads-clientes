@@ -14,6 +14,7 @@ type Contexto = { params: Promise<{ id: string }> };
  *
  * Cuerpo: { respondida?: boolean, observaciones?: string,
  *           resultado?: Resultado, relacion?: Relacion }
+ * Para finalizar (respondida: true) son obligatorios resultado y relacion.
  */
 export const PATCH = async (request: Request, contexto: Contexto) => {
   const { id } = await contexto.params;
@@ -40,6 +41,12 @@ export const PATCH = async (request: Request, contexto: Contexto) => {
   if (respondida === true && !resultadoValido) {
     return NextResponse.json(
       { error: "Para finalizar la conversacion indica como quedo (resultado)." },
+      { status: 400 },
+    );
+  }
+  if (respondida === true && !relacionValida) {
+    return NextResponse.json(
+      { error: "Para finalizar la conversacion indica como quedo la relacion con el cliente." },
       { status: 400 },
     );
   }
@@ -74,6 +81,9 @@ export const PATCH = async (request: Request, contexto: Contexto) => {
       resultado: resultadoValido,
       relacion: relacionValida,
       observacion: observacion ?? "",
+      consulta: actual.consulta,
+      encargado: actual.encargado,
+      resumen: actual.ia?.resumen,
     });
     return NextResponse.json({ consulta });
   } catch (error) {

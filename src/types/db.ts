@@ -75,6 +75,7 @@ export interface ClienteRow {
   condicion_pago: string;
   limite_credito: string;
   deuda: string;
+  cuit: string;
   creado_en: Date;
   actualizado_en: Date;
 }
@@ -116,6 +117,12 @@ export interface ConsultaSeguimientoRow {
   origen: string;
   mensaje_id: string | null;
   ingresada_en: Date;
+  /** Clasificacion del mensaje al entrar (migracion 2). */
+  relacion_ia: Relacion | null;
+  hito_ia: string;
+  resumen_ia: string;
+  /** "ia" o "reglas"; null si no se clasifico. */
+  clasificado_por: "ia" | "reglas" | null;
 }
 
 /** Historial permanente por cliente (finalizadas, reaperturas y notas). */
@@ -353,4 +360,5 @@ export interface VwSeguimientoKpisRow {
   reclamos_pendientes: string;
   finalizadas_hoy: string;
   archivadas_en_cola: string;
+  chats_en_riesgo: string;
 }

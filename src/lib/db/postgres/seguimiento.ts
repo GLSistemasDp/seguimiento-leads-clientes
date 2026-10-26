@@ -3,7 +3,15 @@ import type { RepositorioSeguimiento } from "@/lib/db/repositorio";
 import { consultar, transaccion } from "@/lib/db/postgres/pg";
 import { separarCliente } from "@/lib/seguimiento/presentacion";
 import type { ChatInteraccionRow, ClienteRow, ConsultaSeguimientoRow, VwSeguimientoKpisRow } from "@/types/db";
-import type { CambiosConsulta, Consulta, EventoHistorial, FichaCliente, Relacion, Resultado } from "@/types/seguimiento";
+import type {
+  CambiosConsulta,
+  ClasificacionMensaje,
+  Consulta,
+  EventoHistorial,
+  FichaCliente,
+  Relacion,
+  Resultado,
+} from "@/types/seguimiento";
 
 /**
  * Seguimiento sobre Postgres (SEGUIMIENTO_BACKEND="postgres"):
@@ -28,6 +36,7 @@ type FilaConsulta = ConsultaSeguimientoRow & {
   cl_condicion_pago: string | null;
   cl_limite_credito: string | null;
   cl_deuda: string | null;
+  cl_cuit: string | null;
   grupo_vendedor: string | null;
 };
 
@@ -38,7 +47,7 @@ const SELECT_CONSULTA = `
     cl.grupo_whatsapp2 AS cl_grupo_whatsapp2, cl.link_whatsapp AS cl_link_whatsapp,
     cl.situacion AS cl_situacion, cl.observacion AS cl_observacion, cl.actividad AS cl_actividad,
     cl.categoria AS cl_categoria, cl.condicion_pago AS cl_condicion_pago,
-    cl.limite_credito AS cl_limite_credito, cl.deuda AS cl_deuda,
+    cl.limite_credito AS cl_limite_credito, cl.deuda AS cl_deuda, cl.cuit AS cl_cuit,
     gv.nombre AS grupo_vendedor
   FROM consultas_seguimiento c
   LEFT JOIN clientes cl ON cl.id = c.cliente_id
@@ -49,6 +58,7 @@ function ficha(fila: FilaConsulta): FichaCliente | null {
   return {
     codigo: fila.cl_codigo ?? "",
     nombre: fila.cl_nombre,
+    cuit: fila.cl_cuit ?? "",
     listaPrecio: fila.cl_lista_precio ?? "",
     clasificacion: fila.cl_clasificacion ?? "",
     grupoVendedor: fila.grupo_vendedor ?? "",
@@ -84,6 +94,10 @@ function aConsulta(fila: FilaConsulta): Consulta {
     observaciones: fila.observaciones,
     tentativoRespuesta: fila.tentativo_respuesta,
     ficha: ficha(fila),
+    ia:
+      fila.clasificado_por && fila.relacion_ia
+        ? { relacion: fila.relacion_ia, hito: fila.hito_ia, resumen: fila.resumen_ia, origen: fila.clasificado_por }
+        : null,
   };
 }
 
@@ -193,6 +207,49 @@ function aEvento(fila: ChatInteraccionRow): EventoHistorial {
     resultado: fila.resultado,
     relacion: fila.relacion,
     observacion,
+    consulta: fila.consulta,
+    encargado: fila.encargado,
+    resumen: typeof fila.payload_ai.resumen === "string" ? fila.payload_ai.resumen : undefined,
+  };
+}
+
+/** El ultimo cierre de cada cliente (clave = cliente_texto). */
+export async function ultimasGestiones(): Promise<EventoHistorial[]> {
+  const filas = await consultar<ChatInteraccionRow>(
+    `SELECT DISTINCT ON (cliente_texto) * FROM chat_interacciones
+      WHERE tipo = 'finalizada'
+      ORDER BY cliente_texto, registrado_en DESC, id DESC`,
+  );
+  return filas.map(aEvento);
+}
+
+/** Ficha del cliente por codigo (o por nombre si no tiene). */
+export async function fichaDeCliente(clave: string): Promise<FichaCliente | null> {
+  const [fila] = await consultar<ClienteRow & { grupo_vendedor: string | null }>(
+    `SELECT cl.*, gv.nombre AS grupo_vendedor FROM clientes cl
+       LEFT JOIN grupos_vendedor gv ON gv.id = cl.grupo_vendedor_id
+      WHERE cl.codigo = $1 OR upper(cl.nombre) = upper($1)
+      LIMIT 1`,
+    [clave],
+  );
+  if (!fila) return null;
+  return {
+    codigo: fila.codigo ?? "",
+    nombre: fila.nombre,
+    cuit: fila.cuit,
+    listaPrecio: fila.lista_precio,
+    clasificacion: fila.clasificacion,
+    grupoVendedor: fila.grupo_vendedor ?? "",
+    grupoWhatsapp: fila.grupo_whatsapp,
+    grupoWhatsapp2: fila.grupo_whatsapp2,
+    linkWhatsapp: fila.link_whatsapp,
+    situacion: fila.situacion,
+    observacion: fila.observacion,
+    actividad: fila.actividad,
+    categoria: fila.categoria,
+    condicionPago: fila.condicion_pago,
+    limiteCredito: fila.limite_credito,
+    deuda: fila.deuda,
   };
 }
 
@@ -268,6 +325,8 @@ export type EntradaBot = {
   grupoWhatsapp?: string;
   /** Id del mensaje en WhatsApp, para no cargarlo dos veces. */
   mensajeId?: string;
+  /** Lo que devolvio el clasificador (IA o reglas) para este mensaje. */
+  ia?: ClasificacionMensaje;
 };
 
 /**
@@ -287,14 +346,16 @@ export async function ingresarConsulta(entrada: EntradaBot): Promise<string | nu
       );
       clienteId = rows[0].id;
     }
-    const hito = entrada.hito?.trim() || "Consulta General";
+    // El hito que manda el bot manda; si no trae, el que detecto el clasificador.
+    const hito = entrada.hito?.trim() || entrada.ia?.hito || "Consulta General";
     const { rows: hitos } = await cliente.query<{ id: number }>(
       `INSERT INTO hitos (nombre) VALUES ($1) ON CONFLICT (nombre) DO UPDATE SET nombre = EXCLUDED.nombre RETURNING id`,
       [hito],
     );
     const { rows } = await cliente.query<{ id: string }>(
-      `INSERT INTO consultas_seguimiento (cliente_id, cliente_texto, fecha, encargado, grupo_whatsapp, consulta, hito_id, hito, mensaje_id)
-       VALUES ($1, $2, coalesce($3::timestamptz, now()), $4, $5, $6, $7, $8, $9)
+      `INSERT INTO consultas_seguimiento (cliente_id, cliente_texto, fecha, encargado, grupo_whatsapp, consulta, hito_id, hito, mensaje_id,
+                                          relacion_ia, hito_ia, resumen_ia, clasificado_por)
+       VALUES ($1, $2, coalesce($3::timestamptz, now()), $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        ON CONFLICT (mensaje_id) DO NOTHING
        RETURNING id`,
       [
@@ -307,6 +368,10 @@ export async function ingresarConsulta(entrada: EntradaBot): Promise<string | nu
         hitos[0].id,
         hito,
         entrada.mensajeId ?? null,
+        entrada.ia?.relacion ?? null,
+        entrada.ia?.hito ?? "",
+        entrada.ia?.resumen ?? "",
+        entrada.ia?.origen ?? null,
       ],
     );
     return rows[0]?.id ?? null;

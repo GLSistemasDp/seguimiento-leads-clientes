@@ -29,6 +29,19 @@ export type Consulta = {
   tentativoRespuesta: string;
   /** Datos del cliente en las hojas maestras de la planilla, si se encontro. */
   ficha?: FichaCliente | null;
+  /**
+   * Clasificacion del ultimo mensaje: la que hizo la IA al entrar (bot) o,
+   * si no hay, la que sale de las reglas. Sugiere la relacion al cerrar.
+   */
+  ia?: ClasificacionMensaje | null;
+};
+
+/** Lo que devuelve el clasificador de mensajes (IA o reglas). */
+export type ClasificacionMensaje = {
+  relacion: Relacion;
+  hito: string;
+  resumen: string;
+  origen: "ia" | "reglas";
 };
 
 /**
@@ -40,6 +53,8 @@ export type FichaCliente = {
   /** "1877". */
   codigo: string;
   nombre: string;
+  /** Si la planilla (o la base) lo tiene. */
+  cuit?: string;
   listaPrecio: string;
   clasificacion: string;
   grupoVendedor: string;
@@ -73,10 +88,13 @@ export type Resultado = (typeof RESULTADOS)[number];
 
 /** Termometro opcional de la relacion con el cliente despues de la charla. */
 export const RELACIONES = {
-  BUENA: "Buena",
+  BUENA: "Bien",
   REGULAR: "Regular",
   EN_RIESGO: "En riesgo",
 } as const;
+
+/** Semaforo de la relacion, para mostrarla siempre con el mismo icono. */
+export const ICONO_RELACION = { BUENA: "🟢", REGULAR: "🟡", EN_RIESGO: "🔴" } as const;
 
 export type Relacion = keyof typeof RELACIONES;
 
@@ -96,6 +114,10 @@ export type EventoHistorial = {
   resultado: Resultado | null;
   relacion: Relacion | null;
   observacion: string;
+  /** Mensaje del cliente, quien lo atendia y el resumen de la IA (si se guardaron). */
+  consulta?: string;
+  encargado?: string;
+  resumen?: string;
 };
 
 /** Hitos conocidos, en orden de urgencia. Cualquier otro texto tambien se acepta. */

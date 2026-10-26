@@ -49,6 +49,24 @@ export async function porCliente(cliente: string): Promise<EventoHistorial[]> {
     .sort((a, b) => b.fecha.localeCompare(a.fecha));
 }
 
+/**
+ * El ultimo cierre de cada cliente, por su clave (codigo, o nombre si no
+ * tiene): es el "ultimo estado de gestion" que muestra la bandeja.
+ */
+export async function ultimasGestiones(): Promise<Record<string, EventoHistorial>> {
+  const eventos = conPostgres()
+    ? await (await pg()).ultimasGestiones()
+    : Object.values(await porConsulta())
+        .flat()
+        .filter((evento) => evento.tipo === "finalizada");
+  const porCliente: Record<string, EventoHistorial> = {};
+  for (const evento of eventos) {
+    const clave = claveCliente(evento.cliente);
+    if (!porCliente[clave] || porCliente[clave].fecha < evento.fecha) porCliente[clave] = evento;
+  }
+  return porCliente;
+}
+
 /** Lo que se registro en el dia (hora de Argentina), para el resumen diario. */
 export async function delDia(dia: string, diaLocal: (fecha: Date) => string): Promise<EventoHistorial[]> {
   if (conPostgres()) return (await pg()).delDia(dia);

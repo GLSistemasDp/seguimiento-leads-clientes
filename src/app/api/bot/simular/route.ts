@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { simularMensajes } from "@/lib/bot/simulador";
+import { clasificarVarios } from "@/lib/ia/clasificador";
 import { backendSeguimiento } from "@/lib/db/seguimiento";
 
 export const runtime = "nodejs";
@@ -30,6 +31,14 @@ export const POST = async (request: Request) => {
     clientes.map((fila) => ({ codigo: fila.codigo, nombre: fila.nombre, grupoWhatsapp: fila.grupo_whatsapp })),
     cantidad,
   );
-  for (const mensaje of mensajes) await ingresarConsulta(mensaje);
-  return NextResponse.json({ insertadas: mensajes.length, hitos: mensajes.map((mensaje) => mensaje.hito) }, { status: 201 });
+  // Mismo camino que el bot real: el clasificador decide relacion y resumen.
+  const clasificaciones = await clasificarVarios(mensajes.map((mensaje) => ({ texto: mensaje.consulta, hito: mensaje.hito })));
+  for (const [indice, mensaje] of mensajes.entries()) await ingresarConsulta({ ...mensaje, ia: clasificaciones[indice] });
+  return NextResponse.json(
+    {
+      insertadas: mensajes.length,
+      clasificacion: clasificaciones.map((item) => ({ relacion: item.relacion, origen: item.origen })),
+    },
+    { status: 201 },
+  );
 };
