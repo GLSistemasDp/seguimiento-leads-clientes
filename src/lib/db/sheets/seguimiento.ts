@@ -321,6 +321,19 @@ export async function getAll(): Promise<Consulta[]> {
   return consultasCompletas();
 }
 
+/**
+ * La planilla tal cual (sin los cambios guardados en la app), para la
+ * sincronizacion con Postgres: las consultas con su ficha y todas las fichas
+ * de "Desplegable" + "MaestroCliente", tengan o no consultas.
+ */
+export async function leerPlanilla(): Promise<{ consultas: Consulta[]; fichas: FichaCliente[] }> {
+  const [{ consultas }, { fichas }] = await Promise.all([leerTodas(), cargarMaestros()]);
+  return {
+    consultas: consultas.map(({ consulta }) => completarConFicha(consulta, fichas)),
+    fichas: [...fichas.values()],
+  };
+}
+
 export async function getById(id: string): Promise<Consulta | null> {
   return (await consultasCompletas()).find((consulta) => consulta.id === id) ?? null;
 }

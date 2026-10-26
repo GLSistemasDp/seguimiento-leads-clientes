@@ -16,6 +16,10 @@
     {
       "path": "/api/cron/mantenimiento",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/sync/planilla",
+      "schedule": "30 9 * * *"
     }
   ]
 }

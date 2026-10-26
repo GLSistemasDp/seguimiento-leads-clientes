@@ -117,6 +117,59 @@ siete secciones del informe salen de las vistas `vw_reclamos_*`,
 Sin estas variables todo sigue como antes (planilla, almacen generico y
 calculo del informe en memoria).
 
+## Datos reales: planilla de la empresa -> Postgres
+
+El bot de WhatsApp sigue cargando la planilla de la empresa. El CRM la
+sincroniza con la base y trabaja sobre la base:
+
+- **Clientes**: "Desplegable" + "MaestroCliente" actualizan la tabla
+  `clientes` (la planilla manda en esos datos).
+- **Consultas nuevas**: entran a la cola (`consultas_seguimiento`, id
+  `pl-<huella de la fila>`: nunca se duplican). Las pendientes se clasifican
+  con IA (hasta 40 por corrida); las que ya vienen tildadas pasan directo al
+  historial del cliente con la fecha de la consulta.
+- **Tildes**: si en la planilla se tilda RESPUESTA de una consulta que en el
+  CRM seguia pendiente, se finaliza. Si en el CRM se reabre, la planilla no la
+  vuelve a cerrar.
+- El CRM **no escribe** en la planilla.
+
+**1. Cuenta de servicio de Google** (la planilla de la empresa es privada):
+
+1. En Google Cloud Console: crear un proyecto (o usar uno), habilitar
+   **Google Sheets API**, crear una **cuenta de servicio** y una clave JSON.
+2. En la planilla: Compartir con el mail de la cuenta de servicio
+   (`...@...iam.gserviceaccount.com`) como **Lector**.
+3. En Vercel cargar `GOOGLE_SERVICE_ACCOUNT_EMAIL` y `GOOGLE_PRIVATE_KEY`
+   (el `private_key` del JSON, con los `
+`).
+
+**2. Variables en Vercel (Production)**:
+
+```dotenv
+DATABASE_URL=...                 # Neon
+SEGUIMIENTO_BACKEND=postgres
+SEGUIMIENTO_SHEETS_ID=1Bo5zBqgO2QTIjzob_PSnKaMeQ5BHzFdVd5scV035X54
+SEGUIMIENTO_HOJA=<nombre de la pestaña donde carga el bot>
+SEGUIMIENTO_ACCESO=              # vacio: usa la cuenta de servicio
+SEGUIMIENTO_FILA_INICIO=         # vacio = todo el historico; o la fila desde la que importar
+SYNC_TOKEN=<texto largo y aleatorio>
+ANTHROPIC_API_KEY=...            # opcional: clasificacion con IA
+# sin DB_SEMILLA: en produccion no se cargan datos de ejemplo
+```
+
+**3. Disparador**: en la planilla, Extensiones > Apps Script, pegar
+`scripts/google-apps-script/sincronizar-crm.gs` y seguir las instrucciones del
+archivo (propiedades `CRM_URL` y `CRM_SYNC_TOKEN`, y ejecutar
+`instalarActivador`). Sincroniza cada 2 horas (variable `HORAS` del script). Ademas:
+
+- La pantalla de Seguimiento sincroniza en segundo plano al abrirse si pasaron
+  mas de 2 minutos, y tiene el boton **Sincronizar ahora**.
+- `vercel.json` corre `/api/sync/planilla` una vez por dia como respaldo.
+- `/api/salud` muestra la ultima sincronizacion (filas leidas, nuevas, tildadas).
+
+La primera corrida trae todo el historico (puede tardar). A partir de ahi
+solo procesa lo nuevo.
+
 ## Notificaciones por Telegram
 
 Cada pantalla tiene su notificacion. Todas se arman y se envian desde

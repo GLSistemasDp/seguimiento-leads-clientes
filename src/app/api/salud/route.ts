@@ -3,6 +3,7 @@ import { reclamosEnPostgres } from "@/lib/db/reclamos";
 import { backendActivo } from "@/lib/db/repositorio";
 import { backendSeguimiento } from "@/lib/db/seguimiento";
 import { consultar, postgresConfigurado } from "@/lib/db/postgres/pg";
+import { sincronizacionConfigurada, ultimaSincronizacion } from "@/lib/sync/planilla";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,6 +27,10 @@ export const GET = async () => {
       "BOT_TOKEN",
       "CRON_SECRET",
       "SEGUIMIENTO_SHEETS_ID",
+      "GOOGLE_SERVICE_ACCOUNT_EMAIL",
+      "GOOGLE_PRIVATE_KEY",
+      "SYNC_TOKEN",
+      "ANTHROPIC_API_KEY",
       "TELEGRAM_BOT_TOKEN",
     ].map((nombre) => [nombre, definida(nombre)]),
   );
@@ -56,6 +61,11 @@ export const GET = async () => {
     }
   }
 
+  const sincronizacion = {
+    configurada: sincronizacionConfigurada(),
+    acceso: process.env.SEGUIMIENTO_ACCESO === "publico" ? "link publico" : "cuenta de servicio",
+    ultima: base.conecta ? await ultimaSincronizacion().catch(() => null) : null,
+  };
   const ok = !postgresConfigurado() || base.conecta === true;
-  return NextResponse.json({ ok, entorno: process.env.VERCEL_ENV ?? "local", motores, variables, base }, { status: ok ? 200 : 500 });
+  return NextResponse.json({ ok, entorno: process.env.VERCEL_ENV ?? "local", motores, variables, base, sincronizacion }, { status: ok ? 200 : 500 });
 };

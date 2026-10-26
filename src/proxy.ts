@@ -8,7 +8,7 @@ import type { NextRequest } from "next/server";
  *
  * Quedan afuera, por el `matcher`: los formularios publicos que completan los
  * clientes (/formularios/* y /api/publico/*), el cron y la entrada del bot
- * (/api/bot/consultas), que tienen su propia
+ * (/api/bot/consultas) y la sincronizacion de la planilla (/api/sync), que tienen su propia
  * clave, y los archivos estaticos de Next.
  *
  * Es una proteccion simple hasta tener el login del portal con roles.
@@ -43,5 +43,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!formularios|api/publico|api/cron|api/bot/consultas|_next/static|_next/image|favicon\\.ico).*)"],
+  matcher: ["/((?!formularios|api/publico|api/cron|api/bot/consultas|api/sync|_next/static|_next/image|favicon\\.ico).*)"],
 };

@@ -1,7 +1,9 @@
+import { after } from "next/server";
 import { Suspense } from "react";
 import { ProximoEnvio } from "@/components/resumen/ProximoEnvio";
 import { BotonTelegram } from "@/components/ui/BotonTelegram";
 import { FiltrosSeguimiento } from "@/components/seguimiento/FiltrosSeguimiento";
+import { EstadoSincronizacion } from "@/components/seguimiento/EstadoSincronizacion";
 import { SimularBot } from "@/components/seguimiento/SimularBot";
 import { SeguimientoTable } from "@/components/seguimiento/SeguimientoTable";
 import { TriajeSeguimiento } from "@/components/seguimiento/TriajeSeguimiento";
@@ -29,6 +31,7 @@ import {
   vencida,
 } from "@/lib/seguimiento/presentacion";
 import { relacionActual } from "@/lib/seguimiento/relacion";
+import { sincronizacionConfigurada, sincronizarSiHaceFalta, ultimaSincronizacion } from "@/lib/sync/planilla";
 import type { Consulta, EventoHistorial } from "@/types/seguimiento";
 
 export const metadata = { title: "Seguimiento de clientes · CRM De Pascale" };
@@ -60,13 +63,17 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
   };
 
   const ahora = new Date();
-  const [todas, catalogo, historial, gestiones, indicaciones, proximo] = await Promise.all([
+  // Con la base, la planilla de la empresa se trae en segundo plano si hace mas de 2 minutos que no se sincroniza.
+  const sincroniza = backendSeguimiento() === "postgres" && sincronizacionConfigurada();
+  if (sincroniza) after(() => sincronizarSiHaceFalta(2));
+  const [todas, catalogo, historial, gestiones, indicaciones, proximo, ultimaSync] = await Promise.all([
     getAll(),
     getRespuestas(),
     porConsulta(),
     ultimasGestiones(),
     getIndicaciones(),
     proximoEnvioCierre(ahora).catch(() => null),
+    sincroniza ? ultimaSincronizacion().catch(() => null) : Promise.resolve(null),
   ]);
 
   // Relacion vigente de cada consulta: la del cierre si ya se respondio, si no
@@ -122,7 +129,8 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
           <>
             <ProximoEnvio proximo={proximo?.toISOString() ?? null} ahora={ahora.getTime()} telegramListo={telegramConfigurado()} />
             <BotonTelegram tipo="seguimiento" listo={telegramConfigurado()} />
-            {backendSeguimiento() === "postgres" ? <SimularBot /> : null}
+            {sincroniza ? <EstadoSincronizacion ultima={ultimaSync} ahora={ahora.getTime()} /> : null}
+            {backendSeguimiento() === "postgres" && !sincroniza ? <SimularBot /> : null}
           </>
         }
       />
