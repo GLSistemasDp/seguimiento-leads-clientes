@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
+import { LineaDeTiempoCliente, type EventoLinea } from "@/components/clientes/LineaDeTiempoCliente";
 import { porCliente } from "@/lib/db/historial";
 import { fichaDeCliente, getParaTablero } from "@/lib/db/seguimiento";
 import { claveCliente } from "@/lib/db/sheets/maestros";
+import { historialSimulado } from "@/lib/seguimiento/historial-simulado";
 import { estadoCliente, separarCliente } from "@/lib/seguimiento/presentacion";
 import { clasificacionDe } from "@/lib/seguimiento/relacion";
-import { formatearFechaHora } from "@/lib/utils/dates";
 import { normalizarEncabezado } from "@/lib/utils/strings";
-import { ICONO_RELACION, RELACIONES, type Consulta, type EventoHistorial, type Relacion } from "@/types/seguimiento";
+import { ICONO_RELACION, RELACIONES, type Consulta, type Relacion } from "@/types/seguimiento";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,6 @@ const ESTILO_RELACION: Record<Relacion, string> = {
   REGULAR: "bg-amber-50 text-amber-800 ring-amber-200",
   EN_RIESGO: "bg-red-50 text-red-700 ring-red-200",
 };
-const PUNTO_RELACION: Record<Relacion, string> = { BUENA: "bg-emerald-500", REGULAR: "bg-amber-500", EN_RIESGO: "bg-red-500" };
 
 function BadgeRelacion({ relacion }: { relacion: Relacion }) {
   return (
@@ -50,19 +50,34 @@ function Dato({ etiqueta, children }: { etiqueta: string; children: ReactNode })
   );
 }
 
-export default async function PerfilClientePage({ params }: PageProps<"/clientes/[cliente]">) {
+export default async function PerfilClientePage({ params, searchParams }: PageProps<"/clientes/[cliente]">) {
   const clave = decodeURIComponent((await params).cliente).trim();
+  // ?simulacion=1: un año de historial inventado para este cliente (prototipo, no se guarda).
+  const simulacion = (await searchParams).simulacion === "1";
   const buscada = claveCliente(clave);
   const [ficha, todas] = await Promise.all([fichaDeCliente(clave), getParaTablero()]);
   const consultas = todas.filter((consulta) => claveCliente(consulta.cliente) === buscada);
 
   const texto = consultas[0]?.cliente ?? (ficha?.codigo ? `${ficha.codigo} - ${ficha.nombre}` : clave);
-  const eventos = await porCliente(texto);
-  if (!ficha && consultas.length === 0 && eventos.length === 0) notFound();
+  const reales = await porCliente(texto);
+  if (!ficha && consultas.length === 0 && reales.length === 0) notFound();
+  const eventos = simulacion ? historialSimulado(texto, new Date()) : reales;
 
   const { codigo, nombre } = separarCliente(texto);
   const porId = new Map(consultas.map((consulta) => [consulta.id, consulta]));
-  const cerradas = eventos.filter((evento) => evento.tipo === "finalizada");
+  const cerradas = eventos
+    .filter((evento) => evento.tipo === "finalizada")
+    .sort((a, b) => b.fecha.localeCompare(a.fecha));
+  // Lo que muestra la linea de tiempo: mensaje (o resumen) y agente ya resueltos.
+  const linea: EventoLinea[] = eventos.map((evento) => {
+    const origen = porId.get(evento.consultaId);
+    const agente = evento.encargado || origen?.encargado || "";
+    return {
+      ...evento,
+      mensaje: evento.resumen || evento.consulta || origen?.ia?.resumen || origen?.consulta || "",
+      agente: agente && agente.toLowerCase() !== "bot" ? agente : "Equipo comercial",
+    };
+  });
   const pendientes = consultas.filter((consulta) => !consulta.respondida);
   const conFicha: Consulta | undefined = consultas.find((consulta) => consulta.ficha) ?? consultas[0];
   const estados = conFicha ? estadoCliente(conFicha) : [ficha?.situacion, ficha?.deuda].filter((valor): valor is string => Boolean(valor));
@@ -72,7 +87,7 @@ export default async function PerfilClientePage({ params }: PageProps<"/clientes
 
   // Relacion de hoy: lo que sugiere el mensaje pendiente mas reciente o, si no hay, el ultimo cierre.
   const ultimoPendiente = [...pendientes].sort((a, b) => (b.fecha?.getTime() ?? 0) - (a.fecha?.getTime() ?? 0))[0];
-  const relacionHoy: Relacion | null = ultimoPendiente
+  const relacionHoy: Relacion | null = ultimoPendiente && !simulacion
     ? clasificacionDe(ultimoPendiente).relacion
     : (cerradas.find((evento) => evento.relacion)?.relacion ?? null);
 
@@ -165,59 +180,30 @@ export default async function PerfilClientePage({ params }: PageProps<"/clientes
 
         {/* --- Columna derecha: linea de tiempo (70%) --- */}
         <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="text-base font-semibold text-slate-900">Historial de chats resueltos</h2>
-            <p className="text-xs text-slate-400">
-              {cerradas.length} {cerradas.length === 1 ? "cierre" : "cierres"} · lo más reciente arriba
-            </p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">Historial del cliente</h2>
+              <p className="text-xs text-slate-400">Del más viejo al más nuevo · los episodios en riesgo quedan resaltados</p>
+            </div>
+            <Link
+              href={simulacion ? `/clientes/${encodeURIComponent(clave)}` : `/clientes/${encodeURIComponent(clave)}?simulacion=1`}
+              scroll={false}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium ${
+                simulacion ? "border-slate-900 bg-slate-900 text-white hover:bg-slate-800" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              {simulacion ? "Ver historial real" : "Simular historial"}
+            </Link>
           </div>
 
-          {cerradas.length === 0 ? (
-            <p className="mt-6 rounded-lg bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-              Todavía no hay conversaciones finalizadas con este cliente.
+          {simulacion ? (
+            <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              Simulación: un año de conversaciones inventadas para este cliente, para ver cómo se lee el historial. No
+              se guarda ni afecta los datos reales ({reales.length} {reales.length === 1 ? "evento real" : "eventos reales"}).
             </p>
-          ) : (
-            <ol className="relative mt-6 ml-2 border-l border-slate-200">
-              {cerradas.map((evento: EventoHistorial) => {
-                const origen = porId.get(evento.consultaId);
-                const mensaje = evento.resumen || evento.consulta || origen?.ia?.resumen || origen?.consulta || "";
-                const agente = evento.encargado || origen?.encargado || "";
-                return (
-                  <li key={evento.id} className="relative pb-6 pl-6 last:pb-0">
-                    <span
-                      aria-hidden="true"
-                      className={`absolute top-1.5 -left-[5px] size-2.5 rounded-full ring-4 ring-white ${
-                        evento.relacion ? PUNTO_RELACION[evento.relacion] : "bg-slate-300"
-                      }`}
-                    />
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
-                      <time dateTime={evento.fecha} className="font-medium text-slate-700">
-                        {formatearFechaHora(new Date(evento.fecha))}
-                      </time>
-                      <span aria-hidden="true">·</span>
-                      <span>{agente && agente.toLowerCase() !== "bot" ? agente : "Equipo comercial"}</span>
-                      {evento.hito ? (
-                        <span className="rounded-md bg-slate-50 px-1.5 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200 ring-inset">
-                          {evento.hito}
-                        </span>
-                      ) : null}
-                      {evento.relacion ? (
-                        <span className="ml-auto">
-                          <BadgeRelacion relacion={evento.relacion} />
-                        </span>
-                      ) : null}
-                    </div>
-                    {mensaje ? <p className="mt-1.5 text-sm text-slate-800">{mensaje}</p> : null}
-                    <p className="mt-1.5 text-sm text-slate-600">
-                      <span className="text-slate-400">Resolución:</span>{" "}
-                      <span className="font-medium text-slate-800">{evento.resultado ?? "Sin resultado"}</span>
-                      {evento.observacion ? ` — ${evento.observacion}` : ""}
-                    </p>
-                  </li>
-                );
-              })}
-            </ol>
-          )}
+          ) : null}
+
+          <LineaDeTiempoCliente key={simulacion ? "simulado" : "real"} eventos={linea} />
         </section>
       </div>
     </div>
