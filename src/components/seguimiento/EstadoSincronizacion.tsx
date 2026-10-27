@@ -53,7 +53,11 @@ export function EstadoSincronizacion({
   return (
     <span className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-500">
       <span className={`size-1.5 rounded-full ${ultima?.estado === "ok" ? "bg-emerald-500" : "bg-amber-500"}`} aria-hidden="true" />
-      {ultima ? `Planilla sincronizada ${hace(ultima.fecha, ahora)}` : "Planilla sin sincronizar"}
+      <span role={ultima?.estado === "error" ? "alert" : undefined}>
+        {ultima?.estado === "error"
+          ? "Hubo un problema con los datos de Sheets. Se muestran los datos guardados en la base."
+          : ultima ? `Planilla sincronizada ${hace(ultima.fecha, ahora)}` : "Planilla sin sincronizar"}
+      </span>
       <button
         type="button"
         onClick={() => void sincronizar()}

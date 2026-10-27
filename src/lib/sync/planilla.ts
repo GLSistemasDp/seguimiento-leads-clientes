@@ -61,6 +61,19 @@ const clasificacionValida = (valor: string) => (["A", "B", "C"].includes(valor.t
 
 export async function sincronizarPlanilla(): Promise<ResultadoSync> {
   const inicio = Date.now();
+  try {
+    return await ejecutarSincronizacion();
+  } catch (error) {
+    // La lectura anterior sigue disponible; el estado del ultimo intento debe avisar del fallo.
+    const resultado = vacio(inicio, "error", "No se pudo leer o sincronizar la planilla. Se conservan los datos de la base.");
+    const { guardar } = await import("@/lib/db/local/almacen");
+    await guardar(MARCA[0], { [MARCA[1]]: resultado }).catch(() => undefined);
+    throw error;
+  }
+}
+
+async function ejecutarSincronizacion(): Promise<ResultadoSync> {
+  const inicio = Date.now();
   if (!sincronizacionConfigurada()) return vacio(inicio, "omitida", "Falta DATABASE_URL o SEGUIMIENTO_SHEETS_ID.");
 
   // Se lee antes de tomar el lock: la planilla puede tardar unos segundos.

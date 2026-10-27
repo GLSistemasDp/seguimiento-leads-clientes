@@ -62,6 +62,7 @@ async function pedir<T>(
   }
 
   const respuesta = await fetch(`${BASE}/${planilla}${ruta}`, {
+    signal: AbortSignal.timeout(20_000),
     method: init.method ?? "GET",
     headers: {
       Authorization: `Bearer ${token.token}`,

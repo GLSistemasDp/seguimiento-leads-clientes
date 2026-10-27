@@ -29,7 +29,7 @@ function texto(valor: unknown): string {
 
 async function descargar(planilla: string): Promise<Libro> {
   const url = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(planilla)}/export?format=xlsx`;
-  const respuesta = await fetch(url, { cache: "no-store", redirect: "follow" });
+  const respuesta = await fetch(url, { cache: "no-store", redirect: "follow", signal: AbortSignal.timeout(20_000) });
   // Si la planilla es privada Google redirige a la pantalla de login (HTML).
   if (!respuesta.ok || (respuesta.headers.get("content-type") ?? "").includes("text/html")) {
     throw new ErrorSheets(

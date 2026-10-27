@@ -14,11 +14,14 @@ import { getAll as getSolicitudes } from "@/lib/db/solicitudes";
 import { CATEGORIAS, evaluarPorReglas } from "@/lib/solicitudes/evaluacion";
 import { opciones } from "@/lib/seguimiento/presentacion";
 import { proximoEnvioCierre } from "@/lib/seguimiento/cierre-del-dia";
-import { textosSeguimiento, urlBaseActual } from "@/lib/notificaciones/envios";
+import { urlBaseActual } from "@/lib/notificaciones/envios";
 import { armarResumenDiario } from "@/lib/seguimiento/resumen-diario";
 import { telegramConfigurado } from "@/lib/notificaciones/telegram";
 import { PERIODOS, calcularTablero, diaLocal, esPeriodo, vendedorCorto } from "@/lib/seguimiento/tablero";
 import { formatearDiaCorto } from "@/lib/utils/dates";
+import { mensajesSeguimiento } from "@/lib/notificaciones/mensajes";
+import { leerDatos } from "@/lib/db/lectura";
+import { ProblemaDatos } from "@/components/ui/ProblemaDatos";
 import { ACCIONES } from "@/types/reclamo";
 
 export const metadata = { title: "Resumen · CRM De Pascale" };
@@ -136,13 +139,19 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
   const vendedor = texto(params.vendedor);
 
   const ahora = new Date();
-  const [todas, panel, pendientesAlta, eventosHoy, proximo] = await Promise.all([
-    getParaTablero(),
-    getPanel(ahora),
-    getSolicitudes({ estado: "PENDIENTE" }).catch(() => []),
-    delDia(diaLocal(ahora), diaLocal),
+  const [seguimiento, reclamos, solicitudes, historial, proximo, base] = await Promise.all([
+    leerDatos("seguimiento", getParaTablero),
+    leerDatos("reclamos", () => getPanel(ahora)),
+    leerDatos("solicitudes", () => getSolicitudes({ estado: "PENDIENTE" })),
+    leerDatos("historial", () => delDia(diaLocal(ahora), diaLocal)),
     proximoEnvioCierre(ahora).catch(() => null),
+    urlBaseActual(),
   ]);
+  const todas = seguimiento.datos ?? [];
+  const panel = reclamos.datos ?? { reclamos: [], error: null };
+  const pendientesAlta = solicitudes.datos ?? [];
+  const eventosHoy = historial.datos ?? [];
+  const resumenDisponible = !seguimiento.error && !reclamos.error && !historial.error;
 
   // --- Para resolver hoy (no dependen de los filtros) ---
   const reclamosGerencia = panel.reclamos.filter((reclamo) => reclamo.estado === "SIN_DEFINIR");
@@ -174,47 +183,52 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
             resolver.
             <span className="mt-1 block text-xs text-slate-400">
               Última consulta cargada por el bot:{" "}
-              {tablero.ultimaCarga ? formatearDiaCorto(`${tablero.ultimaCarga}T12:00:00Z`) : "—"}
+              {seguimiento.error ? "No disponible" : tablero.ultimaCarga ? formatearDiaCorto(`${tablero.ultimaCarga}T12:00:00Z`) : "—"}
             </span>
           </>
         }
       />
 
+      {seguimiento.error ? <ProblemaDatos fuente="seguimiento de clientes" /> : null}
+      {reclamos.error ? <ProblemaDatos fuente="reclamos" /> : null}
+      {solicitudes.error ? <ProblemaDatos fuente="solicitudes de alta" /> : null}
+      {historial.error ? <ProblemaDatos fuente="historial de seguimiento" /> : null}
+
       <section className="flex flex-col gap-3">
         <h2 className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Para resolver hoy</h2>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <Pendiente
+          {!seguimiento.error ? <Pendiente
             href="/seguimiento?agrupar=chat"
             titulo="Chats sin responder"
             valor={tablero.chatsPendientes}
             detalle={`${tablero.sinResponder} consultas en la cola`}
             icono="chat"
             tono="azul"
-          />
-          <Pendiente
+          /> : null}
+          {!seguimiento.error ? <Pendiente
             href="/seguimiento?orden=antiguas"
             titulo="Con demora"
             valor={resumen.demoradas}
             detalle="1 día o más sin respuesta"
             icono="reloj"
             tono="ambar"
-          />
-          <Pendiente
+          /> : null}
+          {!reclamos.error ? <Pendiente
             href="/reclamos?estado=SIN_DEFINIR"
             titulo="Reclamos para gerencia"
             valor={reclamosGerencia.length}
             detalle={`${reclamosEnGestion.length} ya indicados, en gestión`}
             icono="alerta"
             tono="rojo"
-          />
-          <Pendiente
+          /> : null}
+          {!solicitudes.error ? <Pendiente
             href="/solicitudes?estado=PENDIENTE&orden=aptitud"
             titulo="Altas pendientes"
             valor={pendientesAlta.length}
             detalle={`${muyAptas} con el formulario completo`}
             icono="documento"
             tono="verde"
-          />
+          /> : null}
         </div>
       </section>
 
@@ -227,9 +241,7 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
             </Link>
           }
         >
-          {panel.error ? (
-            <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{panel.error}</p>
-          ) : reclamosGerencia.length === 0 ? (
+          {reclamos.error ? <p className="text-sm text-slate-500">Datos no disponibles.</p> : reclamosGerencia.length === 0 ? (
             <p className="py-6 text-center text-sm text-slate-500">
               No hay reclamos sin indicación. {reclamosEnGestion.length > 0 ? `${reclamosEnGestion.length} en gestión.` : ""}
             </p>
@@ -264,7 +276,7 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
             </Link>
           }
         >
-          {altas.length === 0 ? (
+          {solicitudes.error ? <p className="text-sm text-slate-500">Datos no disponibles.</p> : altas.length === 0 ? (
             <p className="py-6 text-center text-sm text-slate-500">No hay solicitudes de alta pendientes.</p>
           ) : (
             <ul className="flex flex-col divide-y divide-slate-100">
@@ -293,8 +305,8 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
           )}
         </Tarjeta>
 
-        <ResumenDiario
-          textos={(await textosSeguimiento(await urlBaseActual(), ahora)).textos}
+        {resumenDisponible ? <ResumenDiario
+          textos={mensajesSeguimiento(todas, base, ahora)}
           telegramListo={telegramConfigurado()}
           proximo={proximo?.toISOString() ?? null}
           ahora={ahora.getTime()}
@@ -304,9 +316,10 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
             { etiqueta: "Demoradas", valor: resumen.demoradas, color: "text-amber-700" },
             { etiqueta: "Reclamos sin indicar", valor: resumen.reclamosSinIndicacion, color: "text-red-600" },
           ]}
-        />
+        /> : <Tarjeta titulo="Seguimiento de chats por Telegram"><p className="text-sm text-slate-500">El resumen no está disponible hasta recuperar los datos.</p></Tarjeta>}
       </div>
 
+      {!seguimiento.error ? <>
       {/* --- Tablero de conversaciones --- */}
       <div className="flex flex-col gap-3 pt-2">
         <h2 className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Tablero de conversaciones de WhatsApp</h2>
@@ -514,6 +527,7 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
           <BarrasApiladas barras={tablero.porVendedor} encabezado="Grupo vendedor" />
         </Tarjeta>
       </div>
+      </> : null}
     </div>
   );
 }

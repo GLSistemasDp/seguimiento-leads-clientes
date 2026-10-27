@@ -1,3 +1,5 @@
+import { leerDatos } from "@/lib/db/lectura";
+import { ProblemaDatos } from "@/components/ui/ProblemaDatos";
 import { after } from "next/server";
 import { Suspense } from "react";
 import { ProximoEnvio } from "@/components/resumen/ProximoEnvio";
@@ -68,7 +70,7 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
   // Con la base, la planilla de la empresa se trae en segundo plano si hace mas de 2 minutos que no se sincroniza.
   const sincroniza = backendSeguimiento() === "postgres" && sincronizacionConfigurada();
   if (sincroniza) after(() => sincronizarSiHaceFalta(2));
-  const [todas, historico, catalogo, historial, gestiones, indicaciones, proximo, ultimaSync] = await Promise.all([
+  const lectura = await leerDatos("seguimiento y datos relacionados", () => Promise.all([
     getAll(),
     // El analisis mira tambien lo ya archivado (con Postgres la cola solo guarda lo reciente).
     getParaTablero(),
@@ -78,7 +80,16 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
     getIndicaciones(),
     proximoEnvioCierre(ahora).catch(() => null),
     sincroniza ? ultimaSincronizacion().catch(() => null) : Promise.resolve(null),
-  ]);
+  ]));
+  if (lectura.error) {
+    return (
+      <div className="flex flex-col gap-6">
+        <EncabezadoPagina titulo="Seguimiento de clientes" etiqueta="EQUIPO COMERCIAL" descripcion="Consultas y conversaciones de clientes." />
+        <ProblemaDatos fuente="seguimiento de clientes" />
+      </div>
+    );
+  }
+  const [todas, historico, catalogo, historial, gestiones, indicaciones, proximo, ultimaSync] = lectura.datos;
 
   // Relacion vigente de cada consulta: la del cierre si ya se respondio, si no
   // la que sugiere el ultimo mensaje (IA o reglas).

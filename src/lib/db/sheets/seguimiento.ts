@@ -118,7 +118,8 @@ async function maestros(): Promise<Maestros> {
 const ALIAS = {
   fecha: ["fecha", "f", "fecha consulta", "fecha de consulta", "fecha ingreso"],
   encargado: ["encargado", "encargada", "responsable"],
-  cliente: ["grupo cliente", "cliente", "razon social"],
+  // La planilla de consulta cliente 26 usa "grillo" para codigo y razon social.
+  cliente: ["grupo cliente", "cliente", "razon social", "grillo"],
   listaPrecio: ["lista de precio", "lista de precios", "lista precio", "lista"],
   clasificacion: ["clasificacion", "calificacion", "categoria", "clasif"],
   grupoVendedor: ["grupo vendedor", "vendedor"],
@@ -221,7 +222,7 @@ async function leerTodas(): Promise<{ consultas: ConsultaUbicada[]; columnas: Co
   const encabezados = buscarEncabezados(filas);
   if (!encabezados) {
     throw new ErrorSheets(
-      `No encontre los encabezados de seguimiento (Cliente, Consulta...) en la hoja "${hoja()}".`,
+      `No encontre los encabezados de seguimiento (Cliente, Grupo / Cliente o grillo, y Consulta) en la hoja "${hoja()}".`,
     );
   }
 

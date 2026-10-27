@@ -169,6 +169,38 @@ por import dinamico segun `DB_BACKEND`.
   - `email/` armado del HTML y copiado al portapapeles,
   - `utils/` helpers de HTML, strings y fechas.
 
+## Planilla modificada de seguimiento
+
+La pestaña `Seguimiento` de `consulta cliente 26` se integra con esta configuración:
+
+```dotenv
+SEGUIMIENTO_BACKEND="sheets"
+SEGUIMIENTO_SHEETS_ID="1vlLExkogxqDGqkxcrwX3JeczI16pwxFbs6wL0XFL6Xk"
+SEGUIMIENTO_HOJA="Seguimiento"
+SEGUIMIENTO_ACCESO="publico"
+```
+
+En Vercel, cargar estas variables en los entornos correspondientes y volver a desplegar.
+Si el seguimiento ya usa Postgres con sincronización, conservar `SEGUIMIENTO_BACKEND="postgres"`:
+la importación usa el mismo lector y admite el encabezado nuevo.
+La columna `grillo` contiene el código y nombre del cliente. También se admiten
+`Cliente`, `Grupo / Cliente` y `Razón social`; las columnas se ubican por nombre,
+incluso si cambia su orden. `Columna 2` se ignora. Las fechas pueden ser números
+de serie o texto como `9/25/2026`.
+
+El acceso público fue comprobado para esta planilla. En este modo la aplicación
+lee Sheets y guarda las gestiones en su almacén; para escribir directamente en
+Sheets, quitar `SEGUIMIENTO_ACCESO="publico"` y configurar la service account.
+`SEGUIMIENTO_FILA_INICIO` sigue permitiendo omitir filas históricas; vacío lee desde el inicio.
+
+Si una lectura falla, Resumen conserva las secciones disponibles y muestra un
+aviso con **Reintentar**. Seguimiento y Solicitudes mantienen la navegación y
+muestran el aviso en lugar de una tabla vacía o métricas en cero. Los detalles del
+error quedan en los logs del servidor. Si falla la sincronización a Postgres,
+se conservan los registros y se informa el fallo del último intento.
+
+Pruebas del lector: `node --test tests/sheets-seguimiento.test.mjs`.
+
 ## Decisiones a tener presentes
 
 - **Acceso directo para pruebas.** Se eliminaron el login, las sesiones y los

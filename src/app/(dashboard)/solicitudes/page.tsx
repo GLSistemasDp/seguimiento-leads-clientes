@@ -1,3 +1,5 @@
+import { leerDatos } from "@/lib/db/lectura";
+import { ProblemaDatos } from "@/components/ui/ProblemaDatos";
 import Link from "next/link";
 import { Suspense } from "react";
 import { EncabezadoAltas } from "@/components/solicitudes/EncabezadoAltas";
@@ -49,7 +51,16 @@ export default async function SolicitudesPage({ searchParams }: PageProps<"/soli
   const orden = esOrden(ordenParam) ? ordenParam : ORDEN_POR_DEFECTO;
 
   const ahora = new Date();
-  const todas = await getAll();
+  const lectura = await leerDatos("solicitudes", getAll);
+  if (lectura.error) {
+    return (
+      <div className="flex flex-col gap-6">
+        <EncabezadoAltas descripcion="Formularios de empresas que quieren ser clientes." />
+        <ProblemaDatos fuente="solicitudes de alta" />
+      </div>
+    );
+  }
+  const todas = lectura.datos;
   const evaluaciones = new Map(todas.map((solicitud) => [solicitud.id, evaluarPorReglas(solicitud)]));
   const puntaje = (id: string) => evaluaciones.get(id)?.puntaje ?? 0;
 
