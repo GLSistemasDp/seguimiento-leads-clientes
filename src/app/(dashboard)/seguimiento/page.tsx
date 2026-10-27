@@ -7,11 +7,13 @@ import { EstadoSincronizacion } from "@/components/seguimiento/EstadoSincronizac
 import { SimularBot } from "@/components/seguimiento/SimularBot";
 import { SeguimientoTable } from "@/components/seguimiento/SeguimientoTable";
 import { TriajeSeguimiento } from "@/components/seguimiento/TriajeSeguimiento";
+import { AnalisisSeguimiento } from "@/components/seguimiento/AnalisisSeguimiento";
 import { Paginacion } from "@/components/solicitudes/Paginacion";
 import { EncabezadoPagina } from "@/components/ui/EncabezadoPagina";
 import { porConsulta, ultimasGestiones } from "@/lib/db/historial";
 import { getIndicaciones, idWhatsapp } from "@/lib/db/reclamos";
-import { avisoConfiguracion, backendSeguimiento, getAll, getRespuestas } from "@/lib/db/seguimiento";
+import { avisoConfiguracion, backendSeguimiento, getAll, getParaTablero, getRespuestas } from "@/lib/db/seguimiento";
+import { calcularAnalisis, esPeriodoAnalisis } from "@/lib/seguimiento/analisis";
 import { claveCliente } from "@/lib/db/sheets/maestros";
 import { telegramConfigurado } from "@/lib/notificaciones/telegram";
 import { proximoEnvioCierre } from "@/lib/seguimiento/cierre-del-dia";
@@ -66,8 +68,10 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
   // Con la base, la planilla de la empresa se trae en segundo plano si hace mas de 2 minutos que no se sincroniza.
   const sincroniza = backendSeguimiento() === "postgres" && sincronizacionConfigurada();
   if (sincroniza) after(() => sincronizarSiHaceFalta(2));
-  const [todas, catalogo, historial, gestiones, indicaciones, proximo, ultimaSync] = await Promise.all([
+  const [todas, historico, catalogo, historial, gestiones, indicaciones, proximo, ultimaSync] = await Promise.all([
     getAll(),
+    // El analisis mira tambien lo ya archivado (con Postgres la cola solo guarda lo reciente).
+    getParaTablero(),
     getRespuestas(),
     porConsulta(),
     ultimasGestiones(),
@@ -140,6 +144,14 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
       ) : null}
 
       <TriajeSeguimiento datos={calcularTriaje(todas, relacionDe, ahora)} activo={triaje} enlaces={enlaces} />
+
+      <AnalisisSeguimiento
+        analisis={calcularAnalisis(historico, ahora, esPeriodoAnalisis(params.periodoAnalisis) ? params.periodoAnalisis : "todo")}
+        abierto={params.analisis === "1"}
+        parametros={Object.fromEntries(
+          Object.entries(paramsActuales).filter(([clave]) => clave !== "analisis" && clave !== "periodoAnalisis"),
+        )}
+      />
 
       <Suspense fallback={null}>
         <FiltrosSeguimiento
