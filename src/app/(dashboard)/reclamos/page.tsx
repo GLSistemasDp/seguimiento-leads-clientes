@@ -6,7 +6,7 @@ import { CopiarLink } from "@/components/ui/CopiarLink";
 import { EncabezadoPagina } from "@/components/ui/EncabezadoPagina";
 import { getPanel, getReclamos, reclamosEnPostgres } from "@/lib/db/reclamos";
 import { telegramConfigurado } from "@/lib/notificaciones/telegram";
-import { META_RESOLUCION_DIAS, calcularInforme, esPeriodoInforme } from "@/lib/reclamos/informe";
+import { META_RESOLUCION_DIAS, PERIODOS_INFORME, calcularInforme, esPeriodoInforme } from "@/lib/reclamos/informe";
 import { informeDesdeVistas } from "@/lib/reclamos/informe-db";
 import { HORARIOS_RECLAMOS, proximoEnvio } from "@/lib/seguimiento/cierre-del-dia";
 import { ESTADOS_RECLAMO, type EstadoReclamo } from "@/types/reclamo";
@@ -33,6 +33,21 @@ export default async function ReclamosPage({ searchParams }: PageProps<"/reclamo
   ]);
   const telegramListo = telegramConfigurado("reclamos");
   const pendientes = reclamos.filter((reclamo) => reclamo.estado === "SIN_DEFINIR").length;
+
+  // Tarjetas: formularios sin abrir y cuantos llegaron en el periodo contra el anterior.
+  const nuevos = reclamos.filter((reclamo) => !reclamo.visto);
+  const largo = PERIODOS_INFORME[periodo].dias * 86_400_000;
+  const entre = (desde: number, hasta: number) =>
+    reclamos.filter((reclamo) => {
+      const momento = reclamo.fecha ? Date.parse(reclamo.fecha) : Number.NaN;
+      return momento > desde && momento <= hasta;
+    }).length;
+  const resumen = {
+    nuevos: nuevos.length,
+    nuevoMasViejo: nuevos.map((reclamo) => reclamo.fecha ?? "").filter(Boolean).sort()[0] ?? null,
+    enPeriodo: entre(ahora.getTime() - largo, ahora.getTime() + 86_400_000),
+    periodoAnterior: entre(ahora.getTime() - 2 * largo, ahora.getTime() - largo),
+  };
   // Si no hay nada esperando a la gerencia se abre directo en "Todos".
   const estadoInicial = esFiltro(params.estado) ? params.estado : pendientes > 0 ? "SIN_DEFINIR" : "TODOS";
 
@@ -56,7 +71,7 @@ export default async function ReclamosPage({ searchParams }: PageProps<"/reclamo
         }
       />
 
-      <InformeReclamos informe={informe} abierto={params.informe === "1"} parametros={parametros} />
+      <InformeReclamos informe={informe} resumen={resumen} abierto={params.informe === "1"} parametros={parametros} />
 
       {error ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">

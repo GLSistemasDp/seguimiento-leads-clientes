@@ -1,5 +1,6 @@
+import { BotonNosis } from "@/components/solicitudes/BotonNosis";
 import { Icono } from "@/components/ui/Icono";
-import { CATEGORIAS, linkNosis } from "@/lib/solicitudes/evaluacion";
+import { CATEGORIAS } from "@/lib/solicitudes/evaluacion";
 import type { Evaluacion } from "@/lib/solicitudes/evaluacion";
 
 /** Puntaje + categoria, para el listado. */
@@ -13,29 +14,6 @@ export function InsigniaAptitud({ evaluacion, detalle = false }: { evaluacion: E
       </span>
       {detalle ? <span className="line-clamp-2 text-xs text-slate-500">{evaluacion.riesgos[0] ?? "Formulario completo"}</span> : null}
     </div>
-  );
-}
-
-/** Link a Nosis para ver el informe comercial del CUIT. */
-export function BotonNosis({ cuit, compacto = false }: { cuit: string; compacto?: boolean }) {
-  const url = linkNosis(cuit);
-  if (!url) return null;
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      title={`Buscar el CUIT ${cuit} en Nosis`}
-      onClick={(evento) => evento.stopPropagation()}
-      className={
-        compacto
-          ? "inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:underline"
-          : "inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-      }
-    >
-      {compacto ? "Nosis" : "Ver en Nosis"}
-      <Icono nombre="externo" className={compacto ? "size-3" : "size-3.5"} />
-    </a>
   );
 }
 

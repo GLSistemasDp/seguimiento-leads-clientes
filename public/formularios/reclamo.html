@@ -224,7 +224,11 @@
       <input data-campo="lote" maxlength="60" placeholder="Lote" aria-label="Lote del producto" title="El número de lote impreso en el producto o el envase" class="campo mt-0" />
       <input data-campo="cantidadFacturada" inputmode="decimal" placeholder="Facturada" aria-label="Cantidad facturada" class="campo mt-0" />
       <input data-campo="cantidadReclamo" inputmode="decimal" placeholder="Reclamada" aria-label="Cantidad reclamada" class="campo mt-0" />
-      <button type="button" data-quitar aria-label="Quitar producto" class="rounded-xl text-lg text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:invisible">×</button>
+      <button type="button" data-quitar aria-label="Quitar producto" title="Quitar este producto" class="flex items-center justify-center rounded-xl text-red-600 hover:bg-red-50 disabled:invisible">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-5" aria-hidden="true">
+          <path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6" /><path d="M14 11v6" />
+        </svg>
+      </button>
     </div>
   </template>
 

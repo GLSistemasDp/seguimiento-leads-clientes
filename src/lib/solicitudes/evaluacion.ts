@@ -182,8 +182,19 @@ export function evaluarPorReglas(solicitud: Pick<Solicitud, "nombre" | "email" |
   };
 }
 
-/** Link a Nosis con el CUIT cargado (busqueda de informes comerciales). */
-export function linkNosis(cuit: string): string | null {
+/** Cuenta de Nosis Manager de la empresa (pide login si no hay sesion abierta en el navegador). */
+export const NOSIS_MANAGER = "https://sac32.nosis.com/net/manager";
+
+/**
+ * Donde abrir Nosis para un CUIT. Manager no documenta un link de busqueda por
+ * CUIT: si algun dia se consigue, va en NEXT_PUBLIC_NOSIS_URL_CUIT con {cuit}
+ * donde va el numero y el boton abre la busqueda hecha. Si no, abre Manager.
+ */
+export function linkNosis(cuit: string): { url: string; conBusqueda: boolean } | null {
   const digitos = cuit.replace(/\D/g, "");
-  return digitos.length === 11 ? `https://informes.nosis.com/?q=${digitos}` : null;
+  if (digitos.length !== 11) return null;
+  const plantilla = process.env.NEXT_PUBLIC_NOSIS_URL_CUIT ?? "";
+  return plantilla.includes("{cuit}")
+    ? { url: plantilla.replaceAll("{cuit}", digitos), conBusqueda: true }
+    : { url: NOSIS_MANAGER, conBusqueda: false };
 }

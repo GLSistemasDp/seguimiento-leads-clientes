@@ -30,3 +30,31 @@ export type Solicitud = {
  * Se mantiene para no romper imports existentes.
  */
 export type SolicitudConDatos = Solicitud;
+
+/** Por que se rechaza un alta (lo elige quien rechaza; alimenta el informe). */
+export const MOTIVOS_RECHAZO = [
+  "Documentación incompleta o ilegible",
+  "CUIT inválido o inactivo",
+  "Informe comercial (Nosis) desfavorable",
+  "No es del rubro / no califica como mayorista",
+  "Zona sin cobertura o logística inviable",
+  "Ya es cliente (solicitud duplicada)",
+  "Referencias comerciales insuficientes",
+  "Datos falsos o inconsistentes",
+  "Otro",
+] as const;
+
+export type MotivoRechazo = (typeof MOTIVOS_RECHAZO)[number];
+
+export function esMotivoRechazo(valor: unknown): valor is MotivoRechazo {
+  return typeof valor === "string" && (MOTIVOS_RECHAZO as readonly string[]).includes(valor);
+}
+
+/** Un cambio de estado de una solicitud, con el motivo si fue un rechazo. */
+export type DecisionAlta = {
+  estado: Estado;
+  motivo: MotivoRechazo | null;
+  comentario: string;
+  /** ISO. */
+  fecha: string;
+};

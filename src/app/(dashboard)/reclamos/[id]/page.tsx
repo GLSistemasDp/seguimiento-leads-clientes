@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { after } from "next/server";
 import type { ReactNode } from "react";
 import { AccionReclamo } from "@/components/reclamos/AccionReclamo";
 import { FormularioCalidad } from "@/components/reclamos/FormularioCalidad";
@@ -7,6 +8,7 @@ import { FormularioGestion } from "@/components/reclamos/FormularioGestion";
 import { Icono } from "@/components/ui/Icono";
 import { urlAdjunto } from "@/lib/db/adjuntos";
 import { getFormulario } from "@/lib/db/reclamos";
+import { marcarVisto } from "@/lib/db/reclamos-vistos";
 import { GRUPOS, grupoDe, tipoEppDe } from "@/lib/reclamos/informe";
 import { CANALES_INGRESO, MOTIVOS_LOGISTICOS } from "@/types/reclamo";
 
@@ -40,6 +42,8 @@ function Datos({ valores }: { valores: Record<string, string | null | undefined>
 export default async function ReclamoPage({ params }: { params: Promise<{ id: string }> }) {
   const r = await getFormulario((await params).id);
   if (!r) notFound();
+  // Abrir el formulario lo saca de "nuevos".
+  after(() => marcarVisto(r.id).catch(() => undefined));
   const fecha = r.fecha.split("-").reverse().join("/");
   const automatico = { ...r, gestion: { ...r.gestion, tipoEpp: null, canalIngreso: null, motivoLogistico: null } };
   const clasificacion = r.calidad.clasificacion ?? r.clasificacion;

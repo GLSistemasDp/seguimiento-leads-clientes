@@ -1,35 +1,31 @@
 import { leerDatos } from "@/lib/db/lectura";
 import { ProblemaDatos } from "@/components/ui/ProblemaDatos";
 import Link from "next/link";
-import { Suspense } from "react";
 import { EncabezadoAltas } from "@/components/solicitudes/EncabezadoAltas";
-import { FiltrosSolicitudes } from "@/components/solicitudes/FiltrosSolicitudes";
+import { InformeAltas } from "@/components/solicitudes/InformeAltas";
 import { MetricasAlta } from "@/components/solicitudes/MetricasAlta";
 import { Paginacion } from "@/components/solicitudes/Paginacion";
 import { SolicitudesTable } from "@/components/solicitudes/SolicitudesTable";
 import { BotonTelegram } from "@/components/ui/BotonTelegram";
 import { CopiarLink } from "@/components/ui/CopiarLink";
 import { Icono } from "@/components/ui/Icono";
-import { contarLista } from "@/lib/db/repositorio";
+import { ultimasDecisiones } from "@/lib/db/decisiones-alta";
 import { getAll } from "@/lib/db/solicitudes";
 import { telegramConfigurado } from "@/lib/notificaciones/telegram";
 import { contarDocumentos } from "@/lib/solicitudes/documentos";
 import { evaluarPorReglas } from "@/lib/solicitudes/evaluacion";
+import { calcularInformeAltas, esPeriodoInformeAltas } from "@/lib/solicitudes/informe";
 import {
-  ORDEN_POR_DEFECTO,
-  RANGO_POR_DEFECTO,
-  buscar,
+  VISTAS,
   calcularMetricas,
   completitud,
   cuitValido,
-  esOrden,
-  esRango,
-  etiquetaRango,
-  filtrarPorRango,
+  esVista,
+  fechaDecidida,
   leerCampo,
-  ordenar,
 } from "@/lib/solicitudes/presentacion";
-import { esEstado } from "@/types/solicitud";
+import type { Vista } from "@/lib/solicitudes/presentacion";
+import type { DecisionAlta } from "@/types/solicitud";
 
 export const metadata = { title: "Solicitudes de alta · CRM De Pascale" };
 export const dynamic = "force-dynamic";
@@ -42,16 +38,15 @@ function texto(valor: string | string[] | undefined): string | undefined {
 
 export default async function SolicitudesPage({ searchParams }: PageProps<"/solicitudes">) {
   const params = await searchParams;
-  const estadoParam = texto(params.estado);
-  const estado = esEstado(estadoParam) ? estadoParam : undefined;
-  const busqueda = texto(params.q) ?? "";
-  const rangoParam = texto(params.rango);
-  const rango = esRango(rangoParam) ? rangoParam : RANGO_POR_DEFECTO;
-  const ordenParam = texto(params.orden);
-  const orden = esOrden(ordenParam) ? ordenParam : ORDEN_POR_DEFECTO;
+  const vistaParam = texto(params.vista);
+  const vista: Vista = esVista(vistaParam) ? vistaParam : "pendientes";
 
   const ahora = new Date();
-  const lectura = await leerDatos("solicitudes", getAll);
+  const [lectura, decisiones] = await Promise.all([
+    leerDatos("solicitudes", getAll),
+    // Sin el historial de decisiones la pantalla anda igual, solo sin motivos de rechazo.
+    ultimasDecisiones().catch((): Record<string, DecisionAlta> => ({})),
+  ]);
   if (lectura.error) {
     return (
       <div className="flex flex-col gap-6">
@@ -64,26 +59,15 @@ export default async function SolicitudesPage({ searchParams }: PageProps<"/soli
   const evaluaciones = new Map(todas.map((solicitud) => [solicitud.id, evaluarPorReglas(solicitud)]));
   const puntaje = (id: string) => evaluaciones.get(id)?.puntaje ?? 0;
 
-  // El rango define el universo: metricas y pestanas cuentan sobre el. La
-  // pestana y la busqueda solo recortan lo que se ve en la tabla.
-  const enRango = filtrarPorRango(todas, rango, ahora);
-  const conteos = contarLista(enRango);
-  const metricas = calcularMetricas(enRango, todas, ahora);
-  const ordenadas = ordenar(
-    buscar(
-      estado ? enRango.filter((solicitud) => solicitud.estado === estado) : enRango,
-      busqueda,
-    ),
-    orden,
-  );
-  // Mas aptas primero, pero las pendientes antes que las ya decididas.
+  const pendientes = todas.filter((solicitud) => solicitud.estado === "PENDIENTE");
+  const decididas = todas.filter((solicitud) => solicitud.estado !== "PENDIENTE");
+  const conteos: Record<Vista, number> = { pendientes: pendientes.length, historial: decididas.length };
+  // Pendientes: las mas completas primero (son las que se pueden resolver ya).
+  // Historial: la ultima decision arriba.
   const filtradas =
-    orden === "aptitud"
-      ? ordenadas.sort(
-          (a, b) =>
-            Number(b.estado === "PENDIENTE") - Number(a.estado === "PENDIENTE") || puntaje(b.id) - puntaje(a.id),
-        )
-      : ordenadas;
+    vista === "pendientes"
+      ? [...pendientes].sort((a, b) => puntaje(b.id) - puntaje(a.id) || b.fechaImportacion.getTime() - a.fechaImportacion.getTime())
+      : [...decididas].sort((a, b) => fechaDecidida(b).getTime() - fechaDecidida(a).getTime());
 
   const totalPaginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
   const paginaPedida = Number.parseInt(texto(params.pagina) ?? "1", 10);
@@ -122,30 +106,39 @@ export default async function SolicitudesPage({ searchParams }: PageProps<"/soli
         }
       />
 
-      <MetricasAlta metricas={metricas} filtroActivo={etiquetaRango(rango, ahora)} />
+      <MetricasAlta metricas={calcularMetricas(todas, ahora)} />
 
-      <Suspense fallback={null}>
-        <FiltrosSolicitudes
-          estado={estado}
-          busqueda={busqueda}
-          rango={rango}
-          orden={orden}
-          etiquetasRango={{
-            "7": etiquetaRango("7", ahora),
-            "30": etiquetaRango("30", ahora),
-            "90": etiquetaRango("90", ahora),
-            todo: etiquetaRango("todo", ahora),
-          }}
-          conteos={conteos}
-        />
-      </Suspense>
+      <InformeAltas
+        informe={calcularInformeAltas(todas, decisiones, ahora, esPeriodoInformeAltas(params.periodoInforme) ? params.periodoInforme : "todo")}
+        abierto={params.informe === "1"}
+        parametros={Object.fromEntries(
+          Object.entries(paramsActuales).filter(([clave]) => clave !== "informe" && clave !== "periodoInforme" && clave !== "pagina"),
+        )}
+      />
+
+      <nav aria-label="Vista" className="flex w-fit gap-1 rounded-xl bg-slate-100 p-1">
+        {(Object.keys(VISTAS) as Vista[]).map((clave) => (
+          <Link
+            key={clave}
+            href={clave === "pendientes" ? "/solicitudes" : `/solicitudes?vista=${clave}`}
+            aria-current={vista === clave ? "page" : undefined}
+            className={`rounded-lg px-4 py-1.5 text-sm transition-colors ${
+              vista === clave ? "bg-white font-semibold text-blue-800 shadow-sm" : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            {VISTAS[clave]} ({conteos[clave]})
+          </Link>
+        ))}
+      </nav>
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <SolicitudesTable
           // Al cambiar de pagina o de filtro se arranca con la seleccion vacia.
           key={JSON.stringify(paramsActuales)}
+          vista={vista}
           solicitudes={visibles.map((solicitud) => {
             const cuit = leerCampo(solicitud.datos, "cuit");
+            const decision = decisiones[solicitud.id];
             return {
               id: solicitud.id,
               nombre: solicitud.nombre,
@@ -160,6 +153,9 @@ export default async function SolicitudesPage({ searchParams }: PageProps<"/soli
               datos: solicitud.datos,
               documentos: contarDocumentos(solicitud.datos),
               evaluacion: evaluaciones.get(solicitud.id)!,
+              fechaDecision: solicitud.estado === "PENDIENTE" ? null : fechaDecidida(solicitud),
+              motivoRechazo: solicitud.estado === "RECHAZADO" && decision?.estado === "RECHAZADO" ? decision.motivo : null,
+              comentarioDecision: decision?.estado === solicitud.estado ? decision.comentario : "",
             };
           })}
         />

@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { Icono, type NombreIcono } from "@/components/ui/Icono";
 import { GRUPOS, PERIODOS_INFORME, type Grupo, type Informe, type PeriodoInforme } from "@/lib/reclamos/informe";
+import { formatearDiaCorto } from "@/lib/utils/dates";
 import { MOTIVOS_LOGISTICOS, type MotivoLogistico } from "@/types/reclamo";
 import {
   Apiladas100,
@@ -94,6 +95,49 @@ function Dato({ etiqueta, valor, detalle }: { etiqueta: string; valor: string; d
 
 // --- Cards -------------------------------------------------------------------------------
 
+/** Lo que se calcula sobre la lista del panel: formularios sin abrir y volumen del periodo. */
+export type ResumenReclamos = {
+  nuevos: number;
+  /** ISO del formulario nuevo mas viejo (null si no hay nuevos). */
+  nuevoMasViejo: string | null;
+  enPeriodo: number;
+  /** Los del periodo anterior de igual largo. */
+  periodoAnterior: number;
+};
+
+function CardNuevos({ resumen }: { resumen: ResumenReclamos }) {
+  return (
+    <Card titulo="Formularios nuevos" icono="documento">
+      <p className={`text-5xl leading-none font-black tabular-nums ${resumen.nuevos ? "text-blue-700" : "text-slate-300"}`}>{resumen.nuevos}</p>
+      <p className="text-sm text-slate-600">{resumen.nuevos === 1 ? "formulario sin abrir" : "formularios sin abrir"}</p>
+      <p className="text-[11px] text-slate-400">
+        {resumen.nuevoMasViejo
+          ? `El más antiguo llegó el ${formatearDiaCorto(resumen.nuevoMasViejo)}. Se marcan como vistos al abrirlos o indicar una acción.`
+          : "Todo visto: no hay formularios sin abrir."}
+      </p>
+    </Card>
+  );
+}
+
+function CardPeriodo({ resumen, etiqueta }: { resumen: ResumenReclamos; etiqueta: string }) {
+  const diferencia = resumen.enPeriodo - resumen.periodoAnterior;
+  const estilo = diferencia > 0 ? "bg-red-50 text-red-700" : diferencia < 0 ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600";
+  return (
+    <Card titulo={`Reclamos en los últimos ${etiqueta}`} icono="alerta">
+      <p className="text-5xl leading-none font-black text-[#1b2b5e] tabular-nums">{resumen.enPeriodo}</p>
+      <p className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
+        <span className={`rounded-md px-1.5 py-0.5 text-xs font-semibold tabular-nums ${estilo}`}>
+          {diferencia > 0 ? "▲" : diferencia < 0 ? "▼" : "="} {diferencia === 0 ? "igual" : Math.abs(diferencia)}
+        </span>
+        <span>
+          {etiqueta} anteriores: <span className="font-medium text-slate-700 tabular-nums">{resumen.periodoAnterior}</span>
+        </span>
+      </p>
+      <p className="text-[11px] text-slate-400">Formularios FOR-03 recibidos, por fecha del reclamo</p>
+    </Card>
+  );
+}
+
 function CardActivos({ informe }: { informe: Informe }) {
   const { total, variacion, serie, mesPasado } = informe.activos;
   const sube = variacion !== null && variacion > 0;
@@ -148,15 +192,15 @@ function CardCausa({ informe }: { informe: Informe }) {
   const principal = informe.principal;
   if (!principal) {
     return (
-      <Card titulo="Causa principal" icono="grafico">
+      <Card titulo="Motivo principal" icono="grafico">
         <p className="text-sm text-slate-500">Sin reclamos en los últimos {informe.periodo.etiqueta}.</p>
       </Card>
     );
   }
   const { color } = GRUPOS[principal.grupo];
   return (
-    <Card titulo="Causa principal" icono="grafico">
-      <p className="text-4xl font-black tabular-nums" style={{ color }}>
+    <Card titulo="Motivo principal" icono="grafico">
+      <p className="text-5xl leading-none font-black tabular-nums" style={{ color }}>
         {porcentaje(principal.porcentaje)}
       </p>
       <p className="flex items-center gap-2 text-sm font-semibold text-slate-900">
@@ -526,10 +570,12 @@ function Periodos({
  */
 export function InformeReclamos({
   informe,
+  resumen,
   abierto,
   parametros,
 }: {
   informe: Informe;
+  resumen: ResumenReclamos;
   /** El desplegable arranca abierto (al cambiar de periodo desde adentro). */
   abierto: boolean;
   /** Los demas parametros de la URL, para no perderlos al cambiar el periodo. */
@@ -538,15 +584,13 @@ export function InformeReclamos({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-slate-600">
-          <strong className="text-slate-900">{informe.total}</strong> reclamos por formulario en los últimos {informe.periodo.etiqueta}
-        </p>
+        <p className="text-sm text-slate-600">Período de las tarjetas y del informe</p>
         <Periodos actual={informe.periodo.clave} parametros={parametros} conInforme={false} />
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <CardActivos informe={informe} />
-        <CardResolucion informe={informe} />
+        <CardNuevos resumen={resumen} />
+        <CardPeriodo resumen={resumen} etiqueta={informe.periodo.etiqueta} />
         <CardCausa informe={informe} />
       </div>
 
@@ -558,13 +602,17 @@ export function InformeReclamos({
             <span className="hidden group-open:inline">Ocultar informe</span>
           </span>
           <span className="flex items-center gap-2 text-xs text-slate-500">
-            <span className="hidden sm:inline">Tipos, calidad, logística, facturación, clientes, operativo e histórico</span>
+            <span className="hidden sm:inline">Activos, resolución, tipos, calidad, logística, facturación, clientes e histórico</span>
             <Icono nombre="abajo" className="size-4 transition-transform group-open:rotate-180" />
           </span>
         </summary>
         <div className="flex flex-col gap-6 border-t border-slate-200 p-5">
           <div className="flex justify-end">
             <Periodos actual={informe.periodo.clave} parametros={parametros} conInforme />
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <CardActivos informe={informe} />
+            <CardResolucion informe={informe} />
           </div>
           <PorTipo informe={informe} />
           <Calidad informe={informe} />

@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { cambiarEstado } from "@/components/solicitudes/cambiar-estado";
+import type { DatosRechazo } from "@/components/solicitudes/cambiar-estado";
+import { ModalDecision, requiereConfirmacion } from "@/components/solicitudes/ModalDecision";
 import { DocumentacionAlta } from "@/components/solicitudes/DocumentacionAlta";
 import { etiquetaEstado } from "@/components/solicitudes/EstadoBadge";
 import { SolicitudRow } from "@/components/solicitudes/SolicitudRow";
@@ -11,6 +13,7 @@ import { Button } from "@/components/ui/Button";
 import { Icono } from "@/components/ui/Icono";
 import { Modal } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
+import type { Vista } from "@/lib/solicitudes/presentacion";
 import { formatearFechaHora } from "@/lib/utils/dates";
 import type { Estado } from "@/types/solicitud";
 
@@ -27,7 +30,7 @@ function celdaCsv(valor: string): string {
 }
 
 function exportarCsv(filas: readonly FilaSolicitud[]) {
-  const encabezados = ["Fecha", "Razon social", "CUIT", "Puntaje", "Aptitud", "Rubro", "Email", "Provincia", "Datos", "Estado"];
+  const encabezados = ["Fecha", "Razon social", "CUIT", "Puntaje", "Aptitud", "Rubro", "Email", "Provincia", "Datos", "Estado", "Fecha decision", "Motivo de rechazo"];
   const lineas = filas.map((fila) =>
     [
       formatearFechaHora(fila.fechaImportacion),
@@ -40,6 +43,8 @@ function exportarCsv(filas: readonly FilaSolicitud[]) {
       fila.provincia,
       fila.completitud,
       etiquetaEstado(fila.estado),
+      fila.fechaDecision ? formatearFechaHora(fila.fechaDecision) : "",
+      fila.motivoRechazo ?? "",
     ]
       .map(celdaCsv)
       .join(";"),
@@ -54,7 +59,7 @@ function exportarCsv(filas: readonly FilaSolicitud[]) {
   URL.revokeObjectURL(url);
 }
 
-export function SolicitudesTable({ solicitudes }: { solicitudes: readonly FilaSolicitud[] }) {
+export function SolicitudesTable({ solicitudes, vista }: { solicitudes: readonly FilaSolicitud[]; vista: Vista }) {
   const router = useRouter();
   const { mostrar } = useToast();
   const [pendiente, setPendiente] = useState<Pendiente | null>(null);
@@ -92,9 +97,9 @@ export function SolicitudesTable({ solicitudes }: { solicitudes: readonly FilaSo
     setSeleccion(todasMarcadas ? new Set() : new Set(solicitudes.map((solicitud) => solicitud.id)));
   }
 
-  async function aplicar(solicitud: FilaSolicitud, nuevoEstado: Estado) {
+  async function aplicar(solicitud: FilaSolicitud, nuevoEstado: Estado, rechazo?: DatosRechazo) {
     setGuardandoId(solicitud.id);
-    const resultado = await cambiarEstado(solicitud.id, nuevoEstado);
+    const resultado = await cambiarEstado(solicitud.id, nuevoEstado, rechazo);
     setGuardandoId(null);
 
     if (!resultado.ok) {
@@ -129,11 +134,11 @@ export function SolicitudesTable({ solicitudes }: { solicitudes: readonly FilaSo
   }
 
   /**
-   * Si la solicitud ya tenia una decision tomada, pide confirmacion antes de
-   * pisarla; si estaba pendiente, aplica el cambio directo.
+   * Rechazar siempre pide el motivo, y pisar una decision ya tomada pide
+   * confirmacion; aprobar una pendiente se aplica directo.
    */
   function pedirCambio(solicitud: FilaSolicitud, nuevoEstado: Estado) {
-    if (solicitud.estado === "PENDIENTE") {
+    if (!requiereConfirmacion(solicitud.estado, nuevoEstado)) {
       void aplicar(solicitud, nuevoEstado);
       return;
     }
@@ -143,9 +148,13 @@ export function SolicitudesTable({ solicitudes }: { solicitudes: readonly FilaSo
   if (solicitudes.length === 0) {
     return (
       <div className="p-12 text-center">
-        <p className="text-sm text-slate-600">No hay solicitudes que coincidan con el filtro.</p>
+        <p className="text-sm text-slate-600">
+          {vista === "pendientes" ? "No hay solicitudes pendientes: está todo al día." : "Todavía no se decidió ninguna solicitud."}
+        </p>
         <p className="mt-1 text-xs text-slate-500">
-          Proba restablecer los filtros o importar un archivo nuevo.
+          {vista === "pendientes"
+            ? "Las nuevas llegan desde el formulario de alta o importando un Excel."
+            : "Las aprobadas y rechazadas aparecen acá, con la fecha y el motivo."}
         </p>
       </div>
     );
@@ -286,36 +295,20 @@ export function SolicitudesTable({ solicitudes }: { solicitudes: readonly FilaSo
         </p>
       </Modal>
 
-      <Modal
-        abierto={pendiente !== null}
-        titulo="Cambiar el estado"
-        onCerrar={() => setPendiente(null)}
-        acciones={
-          <>
-            <Button variante="secundario" onClick={() => setPendiente(null)}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={() => {
-                if (!pendiente) return;
-                const { solicitud, nuevoEstado } = pendiente;
-                setPendiente(null);
-                void aplicar(solicitud, nuevoEstado);
-              }}
-            >
-              Si, cambiar
-            </Button>
-          </>
+      <ModalDecision
+        cambio={
+          pendiente
+            ? { nombre: pendiente.solicitud.nombre, estadoActual: pendiente.solicitud.estado, nuevoEstado: pendiente.nuevoEstado }
+            : null
         }
-      >
-        {pendiente ? (
-          <p>
-            <strong>{pendiente.solicitud.nombre}</strong> ya figura como{" "}
-            {etiquetaEstado(pendiente.solicitud.estado).toLowerCase()}. Queres pasarla a{" "}
-            {etiquetaEstado(pendiente.nuevoEstado).toLowerCase()}?
-          </p>
-        ) : null}
-      </Modal>
+        onCancelar={() => setPendiente(null)}
+        onConfirmar={(rechazo) => {
+          if (!pendiente) return;
+          const { solicitud, nuevoEstado } = pendiente;
+          setPendiente(null);
+          void aplicar(solicitud, nuevoEstado, rechazo);
+        }}
+      />
     </>
   );
 }

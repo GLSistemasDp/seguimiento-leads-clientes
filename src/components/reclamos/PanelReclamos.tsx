@@ -142,7 +142,12 @@ export function PanelReclamos({ reclamos, estadoInicial }: { reclamos: ReclamoPa
                 <tr key={reclamo.id} className="border-b border-slate-100 align-top last:border-0 hover:bg-slate-50/60">
                   {/* Columna 1: fecha, cliente y su clasificacion */}
                   <td className={`border-l-4 py-3 pr-3 pl-4 ${BORDE_ESTADO[reclamo.estado]}`}>
-                    <p className="text-xs text-slate-400">{formatearDiaCorto(reclamo.fecha)}</p>
+                    <p className="flex items-center gap-1.5 text-xs text-slate-400">
+                      {formatearDiaCorto(reclamo.fecha)}
+                      {reclamo.visto ? null : (
+                        <span className="rounded-full bg-blue-700 px-1.5 py-px text-[10px] font-semibold tracking-wide text-white uppercase">Nuevo</span>
+                      )}
+                    </p>
                     <p className="mt-0.5 line-clamp-2 text-sm font-semibold text-slate-900">{reclamo.cliente}</p>
                     <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
                       {reclamo.codigo ? <span>N° {reclamo.codigo}</span> : <span>Sin N° de cliente</span>}

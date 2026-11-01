@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { EstadoBadge } from "@/components/solicitudes/EstadoBadge";
-import { BotonNosis, InsigniaAptitud } from "@/components/solicitudes/Evaluacion";
+import { BotonNosis } from "@/components/solicitudes/BotonNosis";
+import { InsigniaAptitud } from "@/components/solicitudes/Evaluacion";
 import type { Evaluacion } from "@/lib/solicitudes/evaluacion";
 import { Icono } from "@/components/ui/Icono";
 import { colorAvatar, iniciales } from "@/lib/solicitudes/presentacion";
@@ -28,6 +29,11 @@ export type FilaSolicitud = {
   documentos: number;
   /** Puntaje de aptitud vigente (IA o reglas). */
   evaluacion: Evaluacion;
+  /** Cuando se decidio (null si esta pendiente). */
+  fechaDecision: string | Date | null;
+  /** Motivo elegido al rechazar (null si no se rechazo o fue antes del selector). */
+  motivoRechazo: string | null;
+  comentarioDecision: string;
 };
 
 export type SolicitudRowProps = {
@@ -104,9 +110,22 @@ export function SolicitudRow({
       </td>
       <td className="px-3 py-3.5">
         <EstadoBadge estado={solicitud.estado} />
-        <p className="mt-1 text-xs text-slate-400">
-          {formatearDiaCorto(solicitud.fechaImportacion)} · {formatearHora(solicitud.fechaImportacion)}
-        </p>
+        {solicitud.fechaDecision ? (
+          <>
+            <p className="mt-1 text-xs text-slate-500">Decidida el {formatearDiaCorto(solicitud.fechaDecision)}</p>
+            {solicitud.motivoRechazo ? (
+              <p className="mt-0.5 line-clamp-2 text-xs font-medium text-red-700" title={solicitud.comentarioDecision || solicitud.motivoRechazo}>
+                {solicitud.motivoRechazo}
+              </p>
+            ) : solicitud.estado === "RECHAZADO" ? (
+              <p className="mt-0.5 text-xs text-slate-400">Sin motivo registrado</p>
+            ) : null}
+          </>
+        ) : (
+          <p className="mt-1 text-xs text-slate-400">
+            {formatearDiaCorto(solicitud.fechaImportacion)} · {formatearHora(solicitud.fechaImportacion)}
+          </p>
+        )}
       </td>
       <td className="py-3.5 pr-5 pl-3" onClick={(evento) => evento.stopPropagation()}>
         <div className="flex flex-wrap items-center gap-1">

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { EstadoBadge } from "@/components/solicitudes/EstadoBadge";
+import { DescargasAlta } from "@/components/solicitudes/DescargasAlta";
 import { PanelEvaluacion } from "@/components/solicitudes/Evaluacion";
 import type { FilaSolicitud } from "@/components/solicitudes/SolicitudRow";
 import { Button } from "@/components/ui/Button";
@@ -50,6 +51,7 @@ export function DocumentacionAlta({ solicitud, guardando, onCerrar, onPedirCambi
           <Button variante="secundario" onClick={onCerrar}>
             Cerrar
           </Button>
+          <DescargasAlta id={solicitud.id} />
           <Button
             variante="peligro"
             disabled={guardando || solicitud.estado === "RECHAZADO"}
@@ -85,6 +87,12 @@ export function DocumentacionAlta({ solicitud, guardando, onCerrar, onPedirCambi
                 <dt className="text-xs text-slate-500">Ingreso</dt>
                 <dd className="text-slate-900">{formatearFechaHora(solicitud.fechaImportacion)}</dd>
               </div>
+              {solicitud.motivoRechazo ? (
+                <div>
+                  <dt className="text-xs text-slate-500">Motivo de rechazo</dt>
+                  <dd className="font-medium text-red-700">{solicitud.motivoRechazo}</dd>
+                </div>
+              ) : null}
               {textos.map((dato) => (
                 <div key={dato.campo}>
                   <dt className="text-xs text-slate-500">{dato.campo}</dt>

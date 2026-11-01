@@ -1,109 +1,88 @@
-import type { ReactNode } from "react";
 import { Icono } from "@/components/ui/Icono";
 import type { NombreIcono } from "@/components/ui/Icono";
-import { formatearDuracion } from "@/lib/solicitudes/presentacion";
-import type { Metricas } from "@/lib/solicitudes/presentacion";
+import { formatearDuracion, nombreMes } from "@/lib/solicitudes/presentacion";
+import type { Comparacion, Metricas } from "@/lib/solicitudes/presentacion";
 
 type TarjetaProps = {
   titulo: string;
   icono: NombreIcono;
   colorIcono: string;
-  valor: number;
   colorValor: string;
-  descripcion: string;
-  pie: ReactNode;
+  comparacion: Comparacion;
+  /** Texto de la comparacion: "vs octubre", "al cierre de octubre". */
+  referencia: string;
+  /** true si que suba es bueno (aprobadas); false si es malo (pendientes, descartadas). */
+  subirEsBueno: boolean;
+  pie?: string;
 };
 
-function Tarjeta({ titulo, icono, colorIcono, valor, colorValor, descripcion, pie }: TarjetaProps) {
+function Tarjeta({ titulo, icono, colorIcono, colorValor, comparacion, referencia, subirEsBueno, pie }: TarjetaProps) {
+  const { actual, anterior } = comparacion;
+  const diferencia = actual - anterior;
+  const bien = diferencia === 0 ? null : diferencia > 0 === subirEsBueno;
+  const estilo = bien === null ? "bg-slate-100 text-slate-600" : bien ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700";
+
   return (
-    <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-5">
-      <div className="flex items-start justify-between gap-3">
-        <h3 className="text-sm font-medium text-slate-700">{titulo}</h3>
+    <div className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-medium text-slate-600">{titulo}</h3>
         <span className={`flex size-9 items-center justify-center rounded-lg ${colorIcono}`}>
           <Icono nombre={icono} className="size-5" />
         </span>
       </div>
-      <p className="mt-3 text-sm text-slate-700">
-        <span className={`mr-1.5 font-semibold ${colorValor}`}>{valor}</span>
-        {descripcion}
+      <p className={`mt-2 text-5xl leading-none font-bold tracking-tight tabular-nums ${colorValor}`}>{actual}</p>
+      <p className="mt-3 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+        <span className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-xs font-semibold tabular-nums ${estilo}`}>
+          {diferencia > 0 ? "▲" : diferencia < 0 ? "▼" : "="} {diferencia === 0 ? "igual" : Math.abs(diferencia)}
+        </span>
+        <span>
+          {referencia}: <span className="font-medium text-slate-700 tabular-nums">{anterior}</span>
+        </span>
       </p>
-      <div className="mt-3 text-sm">{pie}</div>
+      {pie ? <p className="mt-1 text-xs text-slate-400">{pie}</p> : null}
     </div>
   );
 }
 
-export function MetricasAlta({
-  metricas,
-  filtroActivo,
-}: {
-  metricas: Metricas;
-  filtroActivo: string;
-}) {
-  const variacion = metricas.variacionAprobadas;
+/** Tres numeros grandes del mes, cada uno contra el mes anterior. */
+export function MetricasAlta({ metricas }: { metricas: Metricas }) {
+  const mes = nombreMes(metricas.mes);
+  const anterior = nombreMes(metricas.mesAnterior);
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="flex items-center gap-2 text-base font-medium text-slate-900">
-          <Icono nombre="grafico" className="size-5 text-blue-700" />
-          Metricas de flujo de alta
-        </h2>
-        <span className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm text-slate-700">
-          <Icono nombre="calendario" className="size-3.5 text-blue-700" />
-          Filtro activo: <span className="font-mono text-blue-800">{filtroActivo}</span>
-          <span className="size-1.5 rounded-full bg-emerald-600" />
-        </span>
-      </div>
-
-      <div className="mt-5 grid gap-4 md:grid-cols-3">
-        <Tarjeta
-          titulo="Solicitudes pendientes"
-          icono="portapapeles"
-          colorIcono="bg-blue-100 text-blue-700"
-          valor={metricas.pendientes}
-          colorValor="text-slate-900"
-          descripcion="empresas en cola"
-          pie={
-            <span className="flex items-center gap-1.5 text-blue-700">
-              <Icono nombre="reloj" className="size-3.5" />
-              Tiempo de resolucion prom.:{" "}
-              {metricas.horasResolucion === null
-                ? "sin datos"
-                : formatearDuracion(metricas.horasResolucion)}
-            </span>
-          }
-        />
-        <Tarjeta
-          titulo="Aprobados"
-          icono="check"
-          colorIcono="bg-emerald-200 text-emerald-800"
-          valor={metricas.aprobadas}
-          colorValor="text-emerald-700"
-          descripcion="activaciones exitosas"
-          pie={
-            <span className="flex items-center gap-1.5 text-emerald-700">
-              <Icono nombre="tendencia" className="size-3.5" />
-              {variacion === null
-                ? `${metricas.aprobadasUltimos30} aprobadas en los ultimos 30 dias`
-                : `${variacion >= 0 ? "+" : ""}${variacion.toFixed(1)}% respecto al mes anterior`}
-            </span>
-          }
-        />
-        <Tarjeta
-          titulo="Descartados"
-          icono="cruz"
-          colorIcono="bg-red-100 text-red-600"
-          valor={metricas.rechazadas}
-          colorValor="text-red-600"
-          descripcion="inconsistencia o spam"
-          pie={
-            <span className="flex items-center gap-1.5 text-red-600">
-              <Icono nombre="escudo" className="size-3.5" />
-              {metricas.rechazadasSinCuit} sin CUIT valido / datos incompletos
-            </span>
-          }
-        />
-      </div>
+    <section className="grid gap-4 md:grid-cols-3">
+      <Tarjeta
+        titulo={`Altas aprobadas en ${mes}`}
+        icono="check"
+        colorIcono="bg-emerald-100 text-emerald-700"
+        colorValor="text-emerald-700"
+        comparacion={metricas.aprobadas}
+        referencia={`vs ${anterior}`}
+        subirEsBueno
+      />
+      <Tarjeta
+        titulo="Pendientes de revisar"
+        icono="portapapeles"
+        colorIcono="bg-blue-100 text-blue-700"
+        colorValor="text-[#1b2b5e]"
+        comparacion={metricas.pendientes}
+        referencia={`al cierre de ${anterior}`}
+        subirEsBueno={false}
+        pie={
+          metricas.horasResolucion === null
+            ? undefined
+            : `Se resuelven en ${formatearDuracion(metricas.horasResolucion)} en promedio`
+        }
+      />
+      <Tarjeta
+        titulo={`Descartadas en ${mes}`}
+        icono="cruz"
+        colorIcono="bg-red-100 text-red-600"
+        colorValor="text-red-600"
+        comparacion={metricas.rechazadas}
+        referencia={`vs ${anterior}`}
+        subirEsBueno={false}
+      />
     </section>
   );
 }

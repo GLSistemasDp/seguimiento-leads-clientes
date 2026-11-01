@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AccionesEstado } from "@/components/solicitudes/AccionesEstado";
+import { DescargasAlta } from "@/components/solicitudes/DescargasAlta";
+import { etiquetaEstado } from "@/components/solicitudes/EstadoBadge";
 import { EstadoBadge } from "@/components/solicitudes/EstadoBadge";
 import { PanelEvaluacion } from "@/components/solicitudes/Evaluacion";
 import { Icono } from "@/components/ui/Icono";
+import { getDecisiones } from "@/lib/db/decisiones-alta";
 import { getById } from "@/lib/db/solicitudes";
 import { evaluarPorReglas } from "@/lib/solicitudes/evaluacion";
 import { leerCampo } from "@/lib/solicitudes/presentacion";
@@ -32,6 +35,8 @@ export default async function SolicitudDetallePage({
 
   const camposExtra = Object.entries(solicitud.datos);
   const evaluacion = evaluarPorReglas(solicitud);
+  const decisiones = (await getDecisiones())[id] ?? [];
+  const vigente = decisiones.at(-1)?.estado === solicitud.estado ? decisiones.at(-1) : undefined;
 
   return (
     <div className="flex flex-col gap-5">
@@ -47,13 +52,16 @@ export default async function SolicitudDetallePage({
           </div>
           <p className="font-mono text-sm text-slate-500">{solicitud.email}</p>
         </div>
-        <Link
-          href={`/generador/${solicitud.id}`}
-          className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800"
-        >
-          <Icono nombre="mail" />
-          Comunicar resultado por mail
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <DescargasAlta id={solicitud.id} />
+          <Link
+            href={`/generador/${solicitud.id}`}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800"
+          >
+            <Icono nombre="mail" />
+            Comunicar resultado por mail
+          </Link>
+        </div>
       </section>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
@@ -70,7 +78,21 @@ export default async function SolicitudDetallePage({
               <Dato etiqueta="Importada" valor={formatearFechaHora(solicitud.fechaImportacion)} />
               <Dato etiqueta="Decidida" valor={formatearFechaHora(solicitud.fechaDecision)} />
               <Dato etiqueta="Decidida por" valor={solicitud.usuarioDecisor ?? ""} />
+              {solicitud.estado === "RECHAZADO" ? (
+                <Dato etiqueta="Motivo de rechazo" valor={vigente?.motivo ?? "Sin motivo registrado"} />
+              ) : null}
+              {vigente?.comentario ? <Dato etiqueta="Comentario" valor={vigente.comentario} /> : null}
             </dl>
+            {decisiones.length > 1 ? (
+              <ol className="mt-3 flex flex-col gap-1 border-t border-slate-100 pt-3 text-xs text-slate-500">
+                {decisiones.toReversed().map((decision) => (
+                  <li key={decision.fecha}>
+                    {formatearFechaHora(decision.fecha)} · <span className="font-medium text-slate-700">{etiquetaEstado(decision.estado)}</span>
+                    {decision.motivo ? ` · ${decision.motivo}` : ""}
+                  </li>
+                ))}
+              </ol>
+            ) : null}
           </div>
         </div>
 

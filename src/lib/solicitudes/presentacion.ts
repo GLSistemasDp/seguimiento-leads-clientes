@@ -1,14 +1,11 @@
 import { normalizarEncabezado } from "@/lib/utils/strings";
-import { formatearFecha } from "@/lib/utils/dates";
-import type { DatosSolicitud, Solicitud } from "@/types/solicitud";
+import type { DatosSolicitud, Estado, Solicitud } from "@/types/solicitud";
 
 /**
  * Logica de presentacion del listado de solicitudes: lectura de los campos
- * sueltos de `datos`, completitud, filtros por fecha, orden y metricas.
+ * sueltos de `datos`, completitud, vistas y metricas del mes.
  * Todo corre en memoria sobre la lista ya cargada, igual que `filtrarEnMemoria`.
  */
-
-const DIA_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Los campos extra llegan con el encabezado tal cual vino en la planilla, asi
@@ -28,6 +25,17 @@ export function leerCampo(datos: DatosSolicitud, campo: CampoConocido): string {
   for (const [encabezado, valor] of Object.entries(datos)) {
     if (valor === null || valor === undefined) continue;
     if (!alias.includes(normalizarEncabezado(encabezado))) continue;
+    const texto = String(valor).trim();
+    if (texto) return texto;
+  }
+  return "";
+}
+
+/** Un campo del formulario por su nombre exacto (sin tildes ni mayusculas); vacio si no esta. */
+export function leerDato(datos: DatosSolicitud, nombre: string): string {
+  const buscado = normalizarEncabezado(nombre);
+  for (const [encabezado, valor] of Object.entries(datos)) {
+    if (normalizarEncabezado(encabezado) !== buscado || valor === null || valor === undefined) continue;
     const texto = String(valor).trim();
     if (texto) return texto;
   }
@@ -83,149 +91,85 @@ export function buscar(solicitudes: readonly Solicitud[], texto: string): Solici
   });
 }
 
-// --- Rango de fechas -------------------------------------------------------
+// --- Vistas ----------------------------------------------------------------
 
-export const RANGOS = {
-  "7": { dias: 7, etiqueta: "Ultimos 7 dias" },
-  "30": { dias: 30, etiqueta: "Ultimos 30 dias" },
-  "90": { dias: 90, etiqueta: "Ultimos 90 dias" },
-  todo: { dias: null, etiqueta: "Todo el historial" },
-} as const;
+/** Pendientes es la cola de trabajo; historial, lo ya decidido (para revisarlo o cambiarlo). */
+export const VISTAS = { pendientes: "Pendientes", historial: "Historial" } as const;
+export type Vista = keyof typeof VISTAS;
 
-export type Rango = keyof typeof RANGOS;
-
-/**
- * Por defecto se ve todo: un filtro de 30 dias esconderia pendientes viejas
- * que todavia hay que resolver.
- */
-export const RANGO_POR_DEFECTO: Rango = "todo";
-
-export function esRango(valor: unknown): valor is Rango {
-  return typeof valor === "string" && valor in RANGOS;
+export function esVista(valor: unknown): valor is Vista {
+  return typeof valor === "string" && Object.hasOwn(VISTAS, valor);
 }
 
-export function etiquetaRango(rango: Rango, ahora = new Date()): string {
-  const { dias, etiqueta } = RANGOS[rango];
-  if (dias === null) return etiqueta;
-  const desde = new Date(ahora.getTime() - dias * DIA_MS);
-  return `${etiqueta} (${formatearFecha(desde)} - ${formatearFecha(ahora)})`;
+/** Cuando se decidio. Las importadas ya decididas pueden no tener fecha: cuenta la de ingreso. */
+export function fechaDecidida(solicitud: Solicitud): Date {
+  return solicitud.fechaDecision ?? solicitud.fechaImportacion;
 }
 
-export function filtrarPorRango(
-  solicitudes: readonly Solicitud[],
-  rango: Rango,
-  ahora = new Date(),
-): Solicitud[] {
-  const { dias } = RANGOS[rango];
-  if (dias === null) return [...solicitudes];
-  const desde = ahora.getTime() - dias * DIA_MS;
-  return solicitudes.filter((solicitud) => solicitud.fechaImportacion.getTime() >= desde);
+// --- Metricas del mes --------------------------------------------------------
+
+const ZONA = "America/Argentina/Buenos_Aires";
+const FORMATO_MES = new Intl.DateTimeFormat("en-CA", { timeZone: ZONA, year: "numeric", month: "2-digit" });
+const NOMBRE_MES = new Intl.DateTimeFormat("es-AR", { timeZone: ZONA, month: "long" });
+
+/** "2026-10" en hora de Argentina. */
+export function mesLocal(fecha: Date): string {
+  return FORMATO_MES.format(fecha).slice(0, 7);
 }
 
-// --- Orden -----------------------------------------------------------------
-
-export const ORDENES = {
-  aptitud: "Más completas primero",
-  recientes: "Mas recientes primero",
-  antiguas: "Mas antiguas primero",
-  datos: "Datos mas completos primero",
-  nombre: "Razon social (A a Z)",
-} as const;
-
-export type Orden = keyof typeof ORDENES;
-
-/** Por defecto, las mas prometedoras arriba: son las que hay que resolver antes. */
-export const ORDEN_POR_DEFECTO: Orden = "aptitud";
-
-export function esOrden(valor: unknown): valor is Orden {
-  return typeof valor === "string" && valor in ORDENES;
+/** Mes anterior a "AAAA-MM". */
+export function mesAnterior(mes: string): string {
+  const [anio, numero] = mes.split("-").map(Number);
+  return numero === 1 ? `${anio - 1}-12` : `${anio}-${String(numero - 1).padStart(2, "0")}`;
 }
 
-export function ordenar(solicitudes: readonly Solicitud[], orden: Orden): Solicitud[] {
-  const porFecha = (a: Solicitud, b: Solicitud) =>
-    b.fechaImportacion.getTime() - a.fechaImportacion.getTime();
-
-  return [...solicitudes].sort((a, b) => {
-    switch (orden) {
-      case "antiguas":
-        return -porFecha(a, b);
-      case "nombre":
-        return a.nombre.localeCompare(b.nombre, "es");
-      case "datos":
-        return puntajeDatos(b.datos) - puntajeDatos(a.datos) || porFecha(a, b);
-      // "aptitud" necesita el puntaje: lo ordena la pagina, que lo tiene.
-      default:
-        return porFecha(a, b);
-    }
-  });
+/** "octubre" para "2026-10". */
+export function nombreMes(mes: string): string {
+  const [anio, numero] = mes.split("-").map(Number);
+  return NOMBRE_MES.format(new Date(Date.UTC(anio, numero - 1, 15)));
 }
 
-// --- Metricas --------------------------------------------------------------
+export type Comparacion = { actual: number; anterior: number };
 
 export type Metricas = {
-  pendientes: number;
-  aprobadas: number;
-  rechazadas: number;
-  /** Promedio entre la importacion y la decision, en horas. null si no hay decididas. */
+  mes: string;
+  mesAnterior: string;
+  /** Aprobadas en el mes contra las del mes anterior (por fecha de decision). */
+  aprobadas: Comparacion;
+  /** Pendientes hoy contra las que habia al cerrar el mes anterior. */
+  pendientes: Comparacion;
+  rechazadas: Comparacion;
+  /** Promedio entre el ingreso y la decision, en horas. null si no hay decididas. */
   horasResolucion: number | null;
-  /** Aprobaciones de los ultimos 30 dias contra los 30 anteriores, en %. */
-  variacionAprobadas: number | null;
-  aprobadasUltimos30: number;
-  rechazadasSinCuit: number;
 };
 
-/**
- * `periodo` es la lista ya filtrada por rango (lo que muestran las tarjetas);
- * `historial` es todo, para comparar las aprobaciones contra el mes anterior.
- */
-export function calcularMetricas(
-  periodo: readonly Solicitud[],
-  historial: readonly Solicitud[],
-  ahora = new Date(),
-): Metricas {
-  let pendientes = 0;
-  let aprobadas = 0;
-  let rechazadas = 0;
-  let rechazadasSinCuit = 0;
-  let horasTotales = 0;
-  let decididas = 0;
+export function calcularMetricas(todas: readonly Solicitud[], ahora = new Date()): Metricas {
+  const mes = mesLocal(ahora);
+  const anterior = mesAnterior(mes);
+  const contar = (estado: Estado, enMes: string) =>
+    todas.filter((solicitud) => solicitud.estado === estado && mesLocal(fechaDecidida(solicitud)) === enMes).length;
 
-  for (const solicitud of periodo) {
-    if (solicitud.estado === "PENDIENTE") pendientes += 1;
-    if (solicitud.estado === "APROBADO") aprobadas += 1;
-    if (solicitud.estado === "RECHAZADO") {
-      rechazadas += 1;
-      if (!cuitValido(leerCampo(solicitud.datos, "cuit"))) rechazadasSinCuit += 1;
-    }
-    if (solicitud.fechaDecision) {
-      horasTotales +=
-        (solicitud.fechaDecision.getTime() - solicitud.fechaImportacion.getTime()) / 3_600_000;
-      decididas += 1;
-    }
-  }
+  // Pendientes al cierre del mes anterior: ya habian entrado y o siguen
+  // pendientes o se decidieron recien este mes.
+  const pendientesAlCierre = todas.filter(
+    (solicitud) =>
+      mesLocal(solicitud.fechaImportacion) < mes &&
+      (solicitud.estado === "PENDIENTE" || mesLocal(fechaDecidida(solicitud)) >= mes),
+  ).length;
 
-  const corte = ahora.getTime() - 30 * DIA_MS;
-  const corteAnterior = ahora.getTime() - 60 * DIA_MS;
-  let aprobadasUltimos30 = 0;
-  let aprobadasAnteriores = 0;
-  for (const solicitud of historial) {
-    if (solicitud.estado !== "APROBADO" || !solicitud.fechaDecision) continue;
-    const momento = solicitud.fechaDecision.getTime();
-    if (momento >= corte) aprobadasUltimos30 += 1;
-    else if (momento >= corteAnterior) aprobadasAnteriores += 1;
-  }
+  const decididas = todas.filter((solicitud) => solicitud.estado !== "PENDIENTE" && solicitud.fechaDecision);
+  const horas = decididas.reduce(
+    (total, solicitud) => total + ((solicitud.fechaDecision as Date).getTime() - solicitud.fechaImportacion.getTime()) / 3_600_000,
+    0,
+  );
 
   return {
-    pendientes,
-    aprobadas,
-    rechazadas,
-    horasResolucion: decididas > 0 ? horasTotales / decididas : null,
-    variacionAprobadas:
-      aprobadasAnteriores > 0
-        ? ((aprobadasUltimos30 - aprobadasAnteriores) / aprobadasAnteriores) * 100
-        : null,
-    aprobadasUltimos30,
-    rechazadasSinCuit,
+    mes,
+    mesAnterior: anterior,
+    aprobadas: { actual: contar("APROBADO", mes), anterior: contar("APROBADO", anterior) },
+    pendientes: { actual: todas.filter((solicitud) => solicitud.estado === "PENDIENTE").length, anterior: pendientesAlCierre },
+    rechazadas: { actual: contar("RECHAZADO", mes), anterior: contar("RECHAZADO", anterior) },
+    horasResolucion: decididas.length > 0 ? horas / decididas.length : null,
   };
 }
 

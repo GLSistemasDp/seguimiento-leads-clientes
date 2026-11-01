@@ -3,9 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { cambiarEstado } from "@/components/solicitudes/cambiar-estado";
+import type { DatosRechazo } from "@/components/solicitudes/cambiar-estado";
 import { etiquetaEstado } from "@/components/solicitudes/EstadoBadge";
+import { ModalDecision, requiereConfirmacion } from "@/components/solicitudes/ModalDecision";
 import { Button } from "@/components/ui/Button";
-import { Modal } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
 import type { Estado } from "@/types/solicitud";
 
@@ -21,9 +22,9 @@ export function AccionesEstado({ id, nombre, estado }: AccionesEstadoProps) {
   const [pendiente, setPendiente] = useState<Estado | null>(null);
   const [guardando, setGuardando] = useState(false);
 
-  async function aplicar(nuevoEstado: Estado) {
+  async function aplicar(nuevoEstado: Estado, rechazo?: DatosRechazo) {
     setGuardando(true);
-    const resultado = await cambiarEstado(id, nuevoEstado);
+    const resultado = await cambiarEstado(id, nuevoEstado, rechazo);
     setGuardando(false);
 
     if (!resultado.ok) {
@@ -35,7 +36,7 @@ export function AccionesEstado({ id, nombre, estado }: AccionesEstadoProps) {
   }
 
   function pedirCambio(nuevoEstado: Estado) {
-    if (estado === "PENDIENTE") {
+    if (!requiereConfirmacion(estado, nuevoEstado)) {
       void aplicar(nuevoEstado);
       return;
     }
@@ -69,35 +70,16 @@ export function AccionesEstado({ id, nombre, estado }: AccionesEstadoProps) {
         ) : null}
       </div>
 
-      <Modal
-        abierto={pendiente !== null}
-        titulo="Cambiar el estado"
-        onCerrar={() => setPendiente(null)}
-        acciones={
-          <>
-            <Button variante="secundario" onClick={() => setPendiente(null)}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={() => {
-                if (!pendiente) return;
-                const nuevoEstado = pendiente;
-                setPendiente(null);
-                void aplicar(nuevoEstado);
-              }}
-            >
-              Si, cambiar
-            </Button>
-          </>
-        }
-      >
-        {pendiente ? (
-          <p>
-            Esta solicitud ya figura como {etiquetaEstado(estado).toLowerCase()}. Queres pasarla a{" "}
-            {etiquetaEstado(pendiente).toLowerCase()}?
-          </p>
-        ) : null}
-      </Modal>
+      <ModalDecision
+        cambio={pendiente ? { nombre, estadoActual: estado, nuevoEstado: pendiente } : null}
+        onCancelar={() => setPendiente(null)}
+        onConfirmar={(rechazo) => {
+          if (!pendiente) return;
+          const nuevoEstado = pendiente;
+          setPendiente(null);
+          void aplicar(nuevoEstado, rechazo);
+        }}
+      />
     </>
   );
 }

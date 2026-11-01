@@ -248,4 +248,6 @@ export type ReclamoPanel = {
   indicacion: Indicacion | null;
   estado: EstadoReclamo;
   responsable: string;
+  /** false mientras nadie lo abrio, le indico una accion ni se respondio. */
+  visto: boolean;
 };

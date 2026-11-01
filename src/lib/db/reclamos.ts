@@ -4,6 +4,7 @@ import type { ArchivoAdjunto } from "@/lib/db/adjuntos";
 import { reclamosDemo } from "@/lib/db/demo/reclamos";
 import { leer, modificar } from "@/lib/db/local/almacen";
 import { postgresConfigurado } from "@/lib/db/postgres/pg";
+import { getVistos } from "@/lib/db/reclamos-vistos";
 import { backendActivo } from "@/lib/db/repositorio";
 import { getAll as getConsultas } from "@/lib/db/seguimiento";
 import { esReclamo, estadoCliente, separarCliente } from "@/lib/seguimiento/presentacion";
@@ -263,6 +264,7 @@ function desdeFormulario(
   indicacion: Indicacion | null,
   cliente: DatosCliente | undefined,
   ahora: Date,
+  abierto: boolean,
 ): ReclamoPanel {
   const fecha = new Date(`${reclamo.fecha}T12:00:00-03:00`);
   // Con la respuesta al cliente cargada (o cerrado) el reclamo se considera respondido.
@@ -286,6 +288,7 @@ function desdeFormulario(
     indicacion,
     estado: estado(indicacion, respondido),
     responsable: reclamo.gestion.responsable,
+    visto: abierto || indicacion !== null || respondido,
   };
 }
 
@@ -336,7 +339,7 @@ export type PanelReclamos = {
  * cuenta y el grupo del cliente salen de la planilla de seguimiento.
  */
 export async function getPanel(ahora = new Date()): Promise<PanelReclamos> {
-  const [indicaciones, todosFormularios] = await Promise.all([getIndicaciones(), formularios()]);
+  const [indicaciones, todosFormularios, vistos] = await Promise.all([getIndicaciones(), formularios(), getVistos()]);
   let consultas: Consulta[] = [];
   let error: string | null = null;
   try {
@@ -353,6 +356,7 @@ export async function getPanel(ahora = new Date()): Promise<PanelReclamos> {
         indicacionDe(reclamo, indicaciones),
         clientes.get(reclamo.numeroCliente.replace(/\D/g, "")),
         ahora,
+        vistos.has(reclamo.id),
       ),
     )
     .sort(
