@@ -170,17 +170,18 @@ const FilaSeguimiento = memo(function FilaSeguimiento({
   return (
     <>
     {nuevoChat ? (
-      <tr className="border-b border-slate-100 bg-slate-50/80">
-        <td colSpan={COLUMNAS.length} className="px-5 py-2">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-            <Icono nombre="chat" className="size-4 text-slate-500" />
-            <span className="font-semibold text-slate-900">{nombre}</span>
-            {codigo ? <span className="text-xs text-slate-500">#{codigo}</span> : null}
-            <span className="truncate text-xs text-slate-500">{consulta.grupoWhatsapp || "Sin grupo de WhatsApp"}</span>
+      // Separador de cada chat: azul de la marca para que no se confunda con las consultas.
+      <tr className="bg-[#1b2b5e]">
+        <td colSpan={COLUMNAS.length} className="px-5 py-2.5">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white">
+            <Icono nombre="chat" className="size-4 text-white/80" />
+            <span className="font-semibold">{nombre}</span>
+            {codigo ? <span className="text-xs text-white/75">#{codigo}</span> : null}
+            <span className="truncate text-xs text-white/75">{consulta.grupoWhatsapp || "Sin grupo de WhatsApp"}</span>
             {resumen ? (
               <span
                 className={`ml-auto ${ETIQUETA} ${
-                  resumen.sinResponder > 0 ? "bg-red-50 text-red-700 ring-red-200" : "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                  resumen.sinResponder > 0 ? "bg-red-600 text-white ring-red-400" : "bg-emerald-600 text-white ring-emerald-400"
                 }`}
               >
                 {resumen.sinResponder > 0
