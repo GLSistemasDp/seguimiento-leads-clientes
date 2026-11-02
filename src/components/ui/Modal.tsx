@@ -22,24 +22,33 @@ const ANCHOS = {
 
 export function Modal({ abierto, titulo, onCerrar, children, acciones, ancho = "md" }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  // onCerrar suele llegar como funcion nueva en cada render: con la ref, el
+  // efecto (foco y bloqueo del scroll) corre solo al abrir y al cerrar.
+  const cerrarRef = useRef(onCerrar);
+  useEffect(() => {
+    cerrarRef.current = onCerrar;
+  });
 
   useEffect(() => {
     if (!abierto) return;
 
     function alPresionar(evento: KeyboardEvent) {
-      if (evento.key === "Escape") onCerrar();
+      if (evento.key === "Escape") cerrarRef.current();
     }
     document.addEventListener("keydown", alPresionar);
-    panelRef.current?.focus();
+    // focus() obliga a calcular el diseño de toda la pagina en el momento: en el
+    // cuadro siguiente se calcula una sola vez, junto con el dibujo del modal.
+    const cuadro = requestAnimationFrame(() => panelRef.current?.focus({ preventScroll: true }));
 
     const overflowPrevio = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
     return () => {
+      cancelAnimationFrame(cuadro);
       document.removeEventListener("keydown", alPresionar);
       document.body.style.overflow = overflowPrevio;
     };
-  }, [abierto, onCerrar]);
+  }, [abierto]);
 
   if (!abierto) return null;
 

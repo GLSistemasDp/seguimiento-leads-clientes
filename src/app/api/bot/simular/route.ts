@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { simularMensajes } from "@/lib/bot/simulador";
 import { clasificarVarios } from "@/lib/ia/clasificador";
 import { backendSeguimiento } from "@/lib/db/seguimiento";
+import { herramientasDePrueba } from "@/lib/herramientas-prueba";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +13,8 @@ export const dynamic = "force-dynamic";
  * bot real (`ingresarConsulta`). Cuerpo opcional: { cantidad: 1..20 }.
  */
 export const POST = async (request: Request) => {
+  // Carga mensajes inventados en la base real: en produccion, apagado.
+  if (!herramientasDePrueba()) return NextResponse.json({ error: "No disponible" }, { status: 404 });
   if (backendSeguimiento() !== "postgres") {
     return NextResponse.json({ error: 'El simulador necesita SEGUIMIENTO_BACKEND="postgres".' }, { status: 409 });
   }

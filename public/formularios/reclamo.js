@@ -222,7 +222,7 @@
   // --- Borrador en este dispositivo (los archivos no se guardan) ---
   var CAMPOS_BORRADOR = ["razonSocial", "numeroCliente", "sucursal", "contacto", "cargo", "telefono", "email", "detalle", "factura", "remito", "pedido", "ordenCompra", "transporte"];
   function guardarBorrador() {
-    var datos = { productos: leerProductos(), clasificacion: (clasificacionElegida() || {}).valor || "" };
+    var datos = { productos: leerProductos(), clasificacion: (clasificacionElegida() || {}).valor || "", ref: referencia || "" };
     CAMPOS_BORRADOR.forEach(function (campo) { datos[campo] = formulario[campo].value; });
     try {
       localStorage.setItem(CLAVE_BORRADOR, JSON.stringify(datos));
@@ -245,8 +245,11 @@
     }
   }
 
+  // Link desde un reclamo de WhatsApp (?ref=...): un borrador de otro reclamo no se mezcla.
+  var referencia = DP.parametro("ref");
   var borrador = leerBorrador();
-  var conBorrador = borrador && CAMPOS_BORRADOR.some(function (campo) { return borrador[campo]; });
+  var conBorrador = borrador && CAMPOS_BORRADOR.some(function (campo) { return borrador[campo]; }) &&
+    (!referencia || borrador.ref === referencia);
   if (conBorrador) {
     CAMPOS_BORRADOR.forEach(function (campo) { formulario[campo].value = borrador[campo] || ""; });
     var radio = borrador.clasificacion && $('input[name="clasificacion"][value="' + borrador.clasificacion + '"]');
@@ -262,10 +265,11 @@
   });
 
   // El equipo puede compartir el link con el cliente ya identificado:
-  // /formularios/reclamo?razon=...&cliente=...&ref=...
-  var referencia = DP.parametro("ref");
+  // /formularios/reclamo?razon=...&cliente=...&ref=...&detalle=...
   if (DP.parametro("razon")) formulario.razonSocial.value = DP.parametro("razon");
   if (DP.parametro("cliente")) formulario.numeroCliente.value = DP.parametro("cliente");
+  // El detalle se precarga una vez: si ya lo editaron (borrador del mismo reclamo), queda lo editado.
+  if (DP.parametro("detalle") && !formulario.detalle.value.trim()) formulario.detalle.value = DP.parametro("detalle");
   if (DP.parametro("razon") || DP.parametro("cliente")) document.getElementById("precargado").classList.remove("hidden");
 
   aplicarConsejos();

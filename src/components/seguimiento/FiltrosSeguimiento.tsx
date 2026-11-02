@@ -111,7 +111,8 @@ export function FiltrosSeguimiento({
           <button
             type="button"
             aria-pressed={agrupado}
-            onClick={() => navegar({ agrupar: agrupado ? null : "chat" })}
+            // Agrupado es lo de entrada: apagarlo deja "agrupar=no" en la URL.
+            onClick={() => navegar({ agrupar: agrupado ? "no" : null })}
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${
               agrupado
                 ? "border-slate-900 bg-slate-900 font-medium text-white"

@@ -1,5 +1,5 @@
 import { normalizarEncabezado } from "@/lib/utils/strings";
-import type { Consulta } from "@/types/seguimiento";
+import type { Consulta, EventoHistorial, Relacion, Resultado } from "@/types/seguimiento";
 
 /**
  * Prioridad, filtros y metricas del seguimiento de clientes. Corre en memoria
@@ -53,14 +53,56 @@ export function puntajePrioridad(consulta: Consulta, ahora = new Date()): number
 
 export type Prioridad = "ALTA" | "MEDIA" | "BAJA" | "RESUELTA";
 
+/**
+ * Palabras del mensaje que muestran apuro o un problema que frena al cliente
+ * (sobre el texto sin tildes ni mayusculas). "Reclamo" no esta: ya cuenta el hito.
+ */
+const URGENCIA =
+  /\b(urgen\w*|ya mismo|cuanto antes|lo antes posible|asap|para hoy|necesito hoy|parad[oa]s?|sin stock|no (me |nos )?(llego|llegaron|llega)|sigo esperando|seguimos esperando|todavia no|cancel\w*|dar de baja|devolucion\w*|rot[oa]s?|fallad[oa]s?|defectuos[oa]s?)\b/;
+
+/** Dias sin respuesta desde los que la demora cuenta como señal. */
+const DIAS_DEMORA = 3;
+
+export type SenalPrioridad = { etiqueta: string; puntos: number };
+
+/**
+ * Por que una consulta pendiente pesa: tipo de hito, cliente A, apuro en el
+ * mensaje y demora. Cada señal suma; ninguna sola alcanza para "Alta".
+ */
+export function senalesPrioridad(consulta: Consulta, ahora = new Date()): SenalPrioridad[] {
+  const senales: SenalPrioridad[] = [];
+  const hito = normalizarEncabezado(consulta.hito);
+  if (hito === "reclamo") senales.push({ etiqueta: "Reclamo", puntos: 2 });
+  else if (hito === "pedido nuevo") senales.push({ etiqueta: "Pedido nuevo", puntos: 1 });
+  if ((consulta.clasificacion || consulta.ficha?.clasificacion || "").trim().toUpperCase() === "A") {
+    senales.push({ etiqueta: "Cliente A", puntos: 1 });
+  }
+  if (URGENCIA.test(normalizarEncabezado(consulta.consulta))) senales.push({ etiqueta: "Pide urgencia", puntos: 1 });
+  const dias = diasAbierta(consulta, ahora) ?? 0;
+  if (dias >= DIAS_DEMORA) senales.push({ etiqueta: `${dias} días sin respuesta`, puntos: 1 });
+  return senales;
+}
+
+/**
+ * Alta: 3 puntos o mas (un reclamo de un cliente A, o un reclamo demorado, o
+ * un pedido nuevo de un cliente A que pide urgencia). Media: 2. Baja: el resto.
+ */
 export function prioridad(consulta: Consulta, ahora = new Date()): Prioridad {
   if (consulta.respondida) return "RESUELTA";
-  // Un reclamo siempre es urgente, sin importar cuando entro.
-  if (esReclamo(consulta)) return "ALTA";
-  const puntaje = puntajePrioridad(consulta, ahora);
-  if (puntaje >= 50) return "ALTA";
-  if (puntaje >= 30) return "MEDIA";
+  const puntos = senalesPrioridad(consulta, ahora).reduce((suma, senal) => suma + senal.puntos, 0);
+  if (puntos >= 3) return "ALTA";
+  if (puntos >= 2) return "MEDIA";
   return "BAJA";
+}
+
+const RANGO_PRIORIDAD: Record<Prioridad, number> = { ALTA: 0, MEDIA: 1, BAJA: 2, RESUELTA: 3 };
+
+/** Para ordenar: primero por la etiqueta que se ve (Alta, Media, Baja), despues por puntaje. */
+function compararPrioridad(a: Consulta, b: Consulta, ahora: Date): number {
+  return (
+    RANGO_PRIORIDAD[prioridad(a, ahora)] - RANGO_PRIORIDAD[prioridad(b, ahora)] ||
+    puntajePrioridad(b, ahora) - puntajePrioridad(a, ahora)
+  );
 }
 
 /** Sin respuesta hace 2 dias o mas. */
@@ -164,12 +206,12 @@ export function ordenar(
       case "clasificacion":
         return (
           rangoClasificacion(a) - rangoClasificacion(b) ||
-          puntajePrioridad(b, ahora) - puntajePrioridad(a, ahora) ||
+          compararPrioridad(a, b, ahora) ||
           tiempo(a) - tiempo(b)
         );
       default:
         // A igual prioridad, primero la que espera hace mas tiempo.
-        return puntajePrioridad(b, ahora) - puntajePrioridad(a, ahora) || tiempo(a) - tiempo(b);
+        return compararPrioridad(a, b, ahora) || tiempo(a) - tiempo(b);
     }
   });
 }
@@ -251,6 +293,44 @@ export function estadoCliente(consulta: Pick<Consulta, "ficha" | "estadoCuenta">
   const deuda = consulta.ficha?.deuda?.trim().toUpperCase();
   if (deuda && !estados.includes(deuda)) estados.push(deuda);
   return estados;
+}
+
+/**
+ * Que significa cada estado de cuenta de la planilla, en una linea para quien
+ * no conoce la jerga de cobranzas. Null si no hay explicacion para ese texto.
+ */
+export function explicarEstado(estado: string): string | null {
+  const texto = normalizarEncabezado(estado);
+  if (texto === "ok") return "Cuenta al día: sin observaciones de cobranza.";
+  if (texto.includes("judicial")) return "La deuda del cliente está en gestión judicial.";
+  if (texto.includes("revisar") && texto.includes("deud")) return "El cliente tiene saldo vencido o en gestión de cobranza.";
+  if (texto.includes("deud")) return "El cliente tiene deuda registrada en su cuenta corriente.";
+  if (texto.includes("no responder")) return "Marcado en la planilla como “no responder”.";
+  return null;
+}
+
+export type CierreFrecuente = { resultado: Resultado; relacion: Relacion; veces: number; total: number };
+
+/**
+ * El cierre (resultado + relacion) que mas se usa en el historial, para el
+ * boton de un click del modal. Sin cierres registrados: "Resuelto" y "Bien".
+ */
+export function cierreMasFrecuente(eventos: Iterable<EventoHistorial>): CierreFrecuente {
+  const conteo = new Map<string, number>();
+  let total = 0;
+  for (const evento of eventos) {
+    if (evento.tipo !== "finalizada" || !evento.resultado || !evento.relacion) continue;
+    const clave = `${evento.resultado}|${evento.relacion}`;
+    conteo.set(clave, (conteo.get(clave) ?? 0) + 1);
+    total += 1;
+  }
+  let elegido: CierreFrecuente = { resultado: "Resuelto", relacion: "BUENA", veces: 0, total };
+  for (const [clave, veces] of conteo) {
+    if (veces <= elegido.veces) continue;
+    const [resultado, relacion] = clave.split("|") as [Resultado, Relacion];
+    elegido = { resultado, relacion, veces, total };
+  }
+  return elegido;
 }
 
 /** Solo links de invitacion de WhatsApp: cualquier otra cosa se ignora. */

@@ -14,4 +14,7 @@
 */
 :root {
   color-scheme: light;
+  /* Al abrir un modal se oculta el scroll: con el lugar reservado la pagina no
+     cambia de ancho y no hay que volver a calcular toda la tabla de abajo. */
+  scrollbar-gutter: stable;
 }

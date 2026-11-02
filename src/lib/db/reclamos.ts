@@ -254,6 +254,30 @@ export async function formularioDeConsulta(consultaId: string): Promise<string |
   return (await formularios()).find((reclamo) => reclamo.consultaId === consultaId)?.id ?? null;
 }
 
+/** El FOR-03 que salio de cada consulta de WhatsApp: { consultaId: N° de reclamo }. */
+export async function formulariosPorConsulta(): Promise<Record<string, string>> {
+  const salida: Record<string, string> = {};
+  for (const reclamo of await formularios()) {
+    if (reclamo.consultaId) salida[reclamo.consultaId] ??= reclamo.id;
+  }
+  return salida;
+}
+
+export type FormularioDeCliente = Pick<Reclamo, "id" | "fecha" | "clasificacion" | "consultaId">;
+
+/** Los FOR-03 de un cliente: por su N° o porque salieron de una de sus consultas. Mas nuevos primero. */
+export async function formulariosDeCliente(codigo: string, consultaIds: ReadonlySet<string>): Promise<FormularioDeCliente[]> {
+  const numero = codigo.replace(/\D/g, "");
+  return (await formularios())
+    .filter(
+      (reclamo) =>
+        (reclamo.consultaId !== null && consultaIds.has(reclamo.consultaId)) ||
+        (numero !== "" && reclamo.numeroCliente.replace(/\D/g, "") === numero),
+    )
+    .map(({ id, fecha, clasificacion, consultaId }) => ({ id, fecha, clasificacion, consultaId }))
+    .sort((a, b) => b.fecha.localeCompare(a.fecha));
+}
+
 function estado(indicacion: Indicacion | null, respondido: boolean): EstadoReclamo {
   if (respondido) return "RESUELTO";
   return indicacion ? "EN_GESTION" : "SIN_DEFINIR";

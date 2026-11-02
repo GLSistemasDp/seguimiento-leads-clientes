@@ -2,11 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { LineaDeTiempoCliente, type EventoLinea } from "@/components/clientes/LineaDeTiempoCliente";
+import { Pista } from "@/components/ui/Pista";
 import { porCliente } from "@/lib/db/historial";
+import { formulariosDeCliente } from "@/lib/db/reclamos";
 import { fichaDeCliente, getParaTablero } from "@/lib/db/seguimiento";
 import { claveCliente } from "@/lib/db/sheets/maestros";
+import { herramientasDePrueba } from "@/lib/herramientas-prueba";
 import { historialSimulado } from "@/lib/seguimiento/historial-simulado";
-import { estadoCliente, separarCliente } from "@/lib/seguimiento/presentacion";
+import { estadoCliente, explicarEstado, separarCliente } from "@/lib/seguimiento/presentacion";
 import { clasificacionDe } from "@/lib/seguimiento/relacion";
 import { normalizarEncabezado } from "@/lib/utils/strings";
 import { ICONO_RELACION, RELACIONES, type Consulta, type Relacion } from "@/types/seguimiento";
@@ -53,7 +56,9 @@ function Dato({ etiqueta, children }: { etiqueta: string; children: ReactNode })
 export default async function PerfilClientePage({ params, searchParams }: PageProps<"/clientes/[cliente]">) {
   const clave = decodeURIComponent((await params).cliente).trim();
   // ?simulacion=1: un año de historial inventado para este cliente (prototipo, no se guarda).
-  const simulacion = (await searchParams).simulacion === "1";
+  // Es una herramienta de prueba: en produccion no aparece y el parametro se ignora.
+  const conSimulacion = herramientasDePrueba();
+  const simulacion = conSimulacion && (await searchParams).simulacion === "1";
   const buscada = claveCliente(clave);
   const [ficha, todas] = await Promise.all([fichaDeCliente(clave), getParaTablero()]);
   const consultas = todas.filter((consulta) => claveCliente(consulta.cliente) === buscada);
@@ -65,6 +70,8 @@ export default async function PerfilClientePage({ params, searchParams }: PagePr
 
   const { codigo, nombre } = separarCliente(texto);
   const porId = new Map(consultas.map((consulta) => [consulta.id, consulta]));
+  // Reclamos que escalaron al formulario formal (desde una consulta suya o con su N° de cliente).
+  const reclamosFormales = await formulariosDeCliente(codigo || ficha?.codigo || "", new Set(porId.keys())).catch(() => []);
   const cerradas = eventos
     .filter((evento) => evento.tipo === "finalizada")
     .sort((a, b) => b.fecha.localeCompare(a.fecha));
@@ -136,11 +143,19 @@ export default async function PerfilClientePage({ params, searchParams }: PagePr
               <Dato etiqueta="Estado financiero">
                 {estados.length > 0 ? (
                   <span className="flex flex-wrap gap-1">
-                    {estados.map((estado) => (
-                      <span key={estado} className={`rounded-md px-1.5 py-0.5 text-[11px] font-medium ring-1 ring-inset ${estiloEstado(estado)}`}>
-                        {estado}
-                      </span>
-                    ))}
+                    {estados.map((estado) => {
+                      const etiqueta = (
+                        <span className={`rounded-md px-1.5 py-0.5 text-[11px] font-medium ring-1 ring-inset ${estiloEstado(estado)}`}>{estado}</span>
+                      );
+                      const explicacion = explicarEstado(estado);
+                      return explicacion ? (
+                        <Pista key={estado} texto={explicacion}>
+                          {etiqueta}
+                        </Pista>
+                      ) : (
+                        <span key={estado}>{etiqueta}</span>
+                      );
+                    })}
                   </span>
                 ) : (
                   <span className="text-slate-400">Sin datos de la cuenta</span>
@@ -176,6 +191,29 @@ export default async function PerfilClientePage({ params, searchParams }: PagePr
               </Link>
             ) : null}
           </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-5">
+            <p className="text-xs text-slate-500">Reclamos formales (FOR-03)</p>
+            {reclamosFormales.length > 0 ? (
+              <ul className="mt-2 flex flex-col gap-2">
+                {reclamosFormales.map((reclamo) => (
+                  <li key={reclamo.id}>
+                    <Link href={`/reclamos/${encodeURIComponent(reclamo.id)}`} className="group flex flex-col text-sm">
+                      <span className="font-medium text-slate-900 group-hover:underline">
+                        {reclamo.id} · {reclamo.clasificacion}
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        {reclamo.fecha.split("-").reverse().join("/")}
+                        {reclamo.consultaId ? " · escaló desde WhatsApp" : ""}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-1 text-sm text-slate-400">Ningún reclamo escaló al formulario formal.</p>
+            )}
+          </section>
         </aside>
 
         {/* --- Columna derecha: linea de tiempo (70%) --- */}
@@ -185,15 +223,17 @@ export default async function PerfilClientePage({ params, searchParams }: PagePr
               <h2 className="text-base font-semibold text-slate-900">Historial del cliente</h2>
               <p className="text-xs text-slate-400">Del más viejo al más nuevo · los episodios en riesgo quedan resaltados</p>
             </div>
-            <Link
-              href={simulacion ? `/clientes/${encodeURIComponent(clave)}` : `/clientes/${encodeURIComponent(clave)}?simulacion=1`}
-              scroll={false}
-              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium ${
-                simulacion ? "border-slate-900 bg-slate-900 text-white hover:bg-slate-800" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              {simulacion ? "Ver historial real" : "Simular historial"}
-            </Link>
+            {conSimulacion ? (
+              <Link
+                href={simulacion ? `/clientes/${encodeURIComponent(clave)}` : `/clientes/${encodeURIComponent(clave)}?simulacion=1`}
+                scroll={false}
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium ${
+                  simulacion ? "border-slate-900 bg-slate-900 text-white hover:bg-slate-800" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                {simulacion ? "Ver historial real" : "Simular historial"}
+              </Link>
+            ) : null}
           </div>
 
           {simulacion ? (

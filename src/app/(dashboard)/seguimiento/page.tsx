@@ -13,8 +13,9 @@ import { AnalisisSeguimiento } from "@/components/seguimiento/AnalisisSeguimient
 import { Paginacion } from "@/components/solicitudes/Paginacion";
 import { EncabezadoPagina } from "@/components/ui/EncabezadoPagina";
 import { porConsulta, ultimasGestiones } from "@/lib/db/historial";
-import { getIndicaciones, idWhatsapp } from "@/lib/db/reclamos";
+import { formulariosPorConsulta, getIndicaciones, idWhatsapp } from "@/lib/db/reclamos";
 import { avisoConfiguracion, backendSeguimiento, getAll, getParaTablero, getRespuestas } from "@/lib/db/seguimiento";
+import { herramientasDePrueba } from "@/lib/herramientas-prueba";
 import { calcularAnalisis, esPeriodoAnalisis } from "@/lib/seguimiento/analisis";
 import { claveCliente } from "@/lib/db/sheets/maestros";
 import { telegramConfigurado } from "@/lib/notificaciones/telegram";
@@ -22,6 +23,7 @@ import { proximoEnvioCierre } from "@/lib/seguimiento/cierre-del-dia";
 import { TRIAJES, calcularTriaje, enTriaje, esTriaje, type Triaje } from "@/lib/seguimiento/indicadores";
 import {
   agruparPorChat,
+  cierreMasFrecuente,
   diasAbierta,
   ORDEN_CONSULTA_POR_DEFECTO,
   esOrdenConsulta,
@@ -32,6 +34,7 @@ import {
   ordenar,
   prioridad,
   resumirChats,
+  senalesPrioridad,
   vencida,
 } from "@/lib/seguimiento/presentacion";
 import { relacionActual } from "@/lib/seguimiento/relacion";
@@ -57,8 +60,9 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
   const vista = triaje ? "pendientes" : esVista(vistaParam) ? vistaParam : "pendientes";
   const ordenParam = texto(params.orden);
   const orden = esOrdenConsulta(ordenParam) ? ordenParam : ORDEN_CONSULTA_POR_DEFECTO;
-  // Agrupado: cada chat (cliente + grupo de WhatsApp) junto, para ver quien quedo sin respuesta.
-  const agrupado = texto(params.agrupar) === "chat";
+  // Agrupado (por defecto): cada chat (cliente + grupo de WhatsApp) junto, para
+  // ver quien quedo sin respuesta. "agrupar=no" muestra la lista suelta.
+  const agrupado = texto(params.agrupar) !== "no";
   const filtros = {
     busqueda: texto(params.q) ?? "",
     hito: texto(params.hito) ?? "",
@@ -78,6 +82,8 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
     porConsulta(),
     ultimasGestiones(),
     getIndicaciones(),
+    // Sin los FOR-03 la tabla anda igual, solo sin la referencia al reclamo formal.
+    formulariosPorConsulta().catch((): Record<string, string> => ({})),
     proximoEnvioCierre(ahora).catch(() => null),
     sincroniza ? ultimaSincronizacion().catch(() => null) : Promise.resolve(null),
   ]));
@@ -89,7 +95,7 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
       </div>
     );
   }
-  const [todas, historico, catalogo, historial, gestiones, indicaciones, proximo, ultimaSync] = lectura.datos;
+  const [todas, historico, catalogo, historial, gestiones, indicaciones, formulariosReclamo, proximo, ultimaSync] = lectura.datos;
 
   // Relacion vigente de cada consulta: la del cierre si ya se respondio, si no
   // la que sugiere el ultimo mensaje (IA o reglas).
@@ -145,7 +151,7 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
             <ProximoEnvio proximo={proximo?.toISOString() ?? null} ahora={ahora.getTime()} telegramListo={telegramConfigurado()} />
             <BotonTelegram tipo="seguimiento" listo={telegramConfigurado()} />
             {sincroniza ? <EstadoSincronizacion ultima={ultimaSync} ahora={ahora.getTime()} /> : null}
-            {backendSeguimiento() === "postgres" && !sincroniza ? <SimularBot /> : null}
+            {backendSeguimiento() === "postgres" && !sincroniza && herramientasDePrueba() ? <SimularBot /> : null}
           </>
         }
       />
@@ -183,15 +189,18 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
         <SeguimientoTable
           agrupado={agrupado}
           vista={vista}
+          atajo={cierreMasFrecuente(Object.values(historial).flat())}
           chats={resumirChats(filtradasSinVista)}
           catalogo={catalogo}
           consultas={visibles.map((consulta) => ({
             ...consulta,
             diasAbierta: diasAbierta(consulta, ahora),
             prioridad: prioridad(consulta, ahora),
+            motivosPrioridad: senalesPrioridad(consulta, ahora).map((senal) => senal.etiqueta),
             vencida: vencida(consulta, ahora),
             cierre: cierreDe(consulta),
             indicacion: indicaciones[idWhatsapp(consulta.id)] ?? null,
+            formularioReclamo: formulariosReclamo[consulta.id] ?? null,
             relacion: relaciones.get(consulta.id) ?? { relacion: "BUENA", origen: "reglas" },
             ultimaGestion: gestiones[claveCliente(consulta.cliente)] ?? null,
           }))}
