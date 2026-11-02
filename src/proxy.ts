@@ -7,7 +7,8 @@ import type { NextRequest } from "next/server";
  * (como la demo actual).
  *
  * Quedan afuera, por el `matcher`: los formularios publicos que completan los
- * clientes (/formularios/* y /api/publico/*), el cron y la entrada del bot
+ * clientes (/formularios/* y /api/publico/*), el script de Tampermonkey para
+ * Nosis (/herramientas/*, sin datos), el cron y la entrada del bot
  * (/api/bot/consultas) y la sincronizacion de la planilla (/api/sync), que tienen su propia
  * clave, y los archivos estaticos de Next.
  *
@@ -43,5 +44,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!formularios|api/publico|api/cron|api/bot/consultas|api/sync|_next/static|_next/image|favicon\\.ico).*)"],
+  matcher: ["/((?!formularios|herramientas|api/publico|api/cron|api/bot/consultas|api/sync|_next/static|_next/image|favicon\\.ico).*)"],
 };

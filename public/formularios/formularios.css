@@ -69,6 +69,12 @@ textarea:focus {
   z-index: 10 !important;
 }
 
+/* La barra flotante de Vercel (vercel.live) que aparece abajo, centrada, a
+   quienes tienen sesion en Vercel: no es parte del formulario. */
+vercel-live-feedback {
+  display: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   body {
     animation: none;

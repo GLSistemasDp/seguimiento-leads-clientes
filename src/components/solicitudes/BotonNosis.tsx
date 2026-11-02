@@ -2,12 +2,13 @@
 
 import { Icono } from "@/components/ui/Icono";
 import { useToast } from "@/components/ui/Toast";
-import { linkNosis } from "@/lib/solicitudes/evaluacion";
+import { AUTOCOMPLETADO_NOSIS, linkNosis } from "@/lib/solicitudes/evaluacion";
 
 /**
- * Abre la cuenta de Nosis Manager de la empresa en otra pestaña y deja el
- * CUIT copiado para pegarlo en el buscador. El login lo guarda el navegador:
- * con la sesion abierta entra directo.
+ * Abre la cuenta de Nosis Manager de la empresa en otra pestaña. Con el
+ * autocompletado instalado (Tampermonkey), el CUIT aparece solo en el campo
+ * Documento; por las dudas tambien queda copiado. El login lo guarda el
+ * navegador: con la sesion abierta entra directo.
  */
 export function BotonNosis({ cuit, compacto = false }: { cuit: string; compacto?: boolean }) {
   const { mostrar } = useToast();
@@ -15,7 +16,7 @@ export function BotonNosis({ cuit, compacto = false }: { cuit: string; compacto?
   if (!destino) return null;
   const digitos = cuit.replace(/\D/g, "");
 
-  return (
+  const boton = (
     <a
       href={destino.url}
       target="_blank"
@@ -26,7 +27,7 @@ export function BotonNosis({ cuit, compacto = false }: { cuit: string; compacto?
         if (destino.conBusqueda) return;
         navigator.clipboard
           ?.writeText(digitos)
-          .then(() => mostrar(`CUIT ${digitos} copiado: pegalo en el buscador de Nosis Manager (Ctrl+V).`, "info"))
+          .then(() => mostrar(`CUIT ${digitos} copiado. Si Nosis no lo carga solo en Documento, pegalo con Ctrl+V.`, "info"))
           .catch(() => mostrar(`Buscá el CUIT ${digitos} en Nosis Manager.`, "info"));
       }}
       className={
@@ -38,5 +39,19 @@ export function BotonNosis({ cuit, compacto = false }: { cuit: string; compacto?
       {compacto ? "Nosis" : "Ver en Nosis Manager"}
       <Icono nombre="externo" className={compacto ? "size-3" : "size-3.5"} />
     </a>
+  );
+  if (compacto || destino.conBusqueda) return boton;
+
+  return (
+    <span className="inline-flex flex-col items-end gap-1">
+      {boton}
+      <a
+        href={AUTOCOMPLETADO_NOSIS}
+        title="Se instala una vez por computadora, con la extensión Tampermonkey"
+        className="text-xs text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline"
+      >
+        Instalar autocompletado del CUIT
+      </a>
+    </span>
   );
 }

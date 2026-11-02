@@ -185,10 +185,15 @@ export function evaluarPorReglas(solicitud: Pick<Solicitud, "nombre" | "email" |
 /** Cuenta de Nosis Manager de la empresa (pide login si no hay sesion abierta en el navegador). */
 export const NOSIS_MANAGER = "https://sac32.nosis.com/net/manager";
 
+/** Extension de Tampermonkey que carga el CUIT en el campo Documento de Manager. */
+export const AUTOCOMPLETADO_NOSIS = "/herramientas/nosis-cuit.user.js";
+
 /**
  * Donde abrir Nosis para un CUIT. Manager no documenta un link de busqueda por
  * CUIT: si algun dia se consigue, va en NEXT_PUBLIC_NOSIS_URL_CUIT con {cuit}
- * donde va el numero y el boton abre la busqueda hecha. Si no, abre Manager.
+ * donde va el numero y el boton abre la busqueda hecha. Si no, abre Manager con
+ * "#cuit=" al final, que lee AUTOCOMPLETADO_NOSIS (el numero no llega a Nosis:
+ * lo que va despues de # no sale del navegador).
  */
 export function linkNosis(cuit: string): { url: string; conBusqueda: boolean } | null {
   const digitos = cuit.replace(/\D/g, "");
@@ -196,5 +201,5 @@ export function linkNosis(cuit: string): { url: string; conBusqueda: boolean } |
   const plantilla = process.env.NEXT_PUBLIC_NOSIS_URL_CUIT ?? "";
   return plantilla.includes("{cuit}")
     ? { url: plantilla.replaceAll("{cuit}", digitos), conBusqueda: true }
-    : { url: NOSIS_MANAGER, conBusqueda: false };
+    : { url: `${NOSIS_MANAGER}#cuit=${digitos}`, conBusqueda: false };
 }

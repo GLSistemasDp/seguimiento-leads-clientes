@@ -1,11 +1,15 @@
 import "server-only";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import type { PDFFont, PDFPage } from "pdf-lib";
 import { etiquetaEstado } from "@/components/solicitudes/EstadoBadge";
+import { getAdjunto } from "@/lib/db/adjuntos";
 import { CATEGORIAS, evaluarPorReglas } from "@/lib/solicitudes/evaluacion";
 import { separarDocumentos } from "@/lib/solicitudes/documentos";
 import { cuitValido, leerCampo, leerDato } from "@/lib/solicitudes/presentacion";
 import { formatearFechaHora } from "@/lib/utils/dates";
+import { normalizarEncabezado } from "@/lib/utils/strings";
 import type { DecisionAlta, Solicitud } from "@/types/solicitud";
 
 /**
@@ -156,9 +160,51 @@ const AZUL = rgb(0.106, 0.169, 0.369);
 const GRIS = rgb(0.39, 0.45, 0.55);
 const NEGRO = rgb(0.06, 0.09, 0.16);
 const LINEA = rgb(0.89, 0.91, 0.94);
+const ROJO = rgb(0.73, 0.11, 0.11);
+const FONDO_ROJO = rgb(0.996, 0.949, 0.949);
+const BORDE_ROJO = rgb(0.996, 0.792, 0.792);
+
+/** Los campos del formulario de alta en el orden de sus pasos; lo que no este aca va a "Otros datos". */
+const SECCIONES_FORMULARIO: readonly { titulo: string; campos: readonly string[] }[] = [
+  {
+    titulo: "Datos del cliente",
+    campos: ["Razón social", "Nombre de fantasía", "CUIT", "CUIT a verificar", "Responsable", "Teléfono", "Cómo nos conoció"],
+  },
+  {
+    titulo: "Direcciones",
+    campos: ["Dirección legal", "Provincia", "Ubicación legal (lat, lng)", "Dirección comercial", "Dirección de sucursal"],
+  },
+  {
+    titulo: "Empresa",
+    campos: ["Tipo de industria", "Puntos de venta", "Antigüedad (años)", "Cantidad de empleados", "Tipo de compra", "Referencias comerciales"],
+  },
+  { titulo: "Envío", campos: ["Envío", "Transportista"] },
+];
+
+/** El logo de los formularios publicos; sin el, el PDF sale igual. */
+async function leerLogo(): Promise<Uint8Array | null> {
+  try {
+    return await readFile(path.join(process.cwd(), "public", "formularios", "logo-depascale.png"));
+  } catch {
+    return null;
+  }
+}
+
+/** La firma dibujada en el formulario (un PNG guardado como adjunto). */
+async function leerFirma(solicitud: Solicitud): Promise<{ datos: Uint8Array; tipo: string } | null> {
+  const id = leerDato(solicitud.datos, "Firma").match(/\/api\/adjuntos\/([^/?#]+)/)?.[1];
+  if (!id) return null;
+  try {
+    const adjunto = await getAdjunto(decodeURIComponent(id));
+    return adjunto && /^image\/(png|jpe?g)$/.test(adjunto.tipo) ? { datos: adjunto.datos, tipo: adjunto.tipo } : null;
+  } catch {
+    return null;
+  }
+}
 
 export async function pdfAlta(solicitud: Solicitud, decisiones: readonly DecisionAlta[], base: string): Promise<Uint8Array> {
   const ficha = fichaAlta(solicitud, decisiones, base);
+  const [logo, firma] = await Promise.all([leerLogo(), leerFirma(solicitud)]);
   const documento = await PDFDocument.create();
   documento.setTitle(limpiar(`Solicitud de alta - ${solicitud.nombre}`));
   documento.setAuthor("Industrias De Pascale - CRM");
@@ -182,6 +228,10 @@ export async function pdfAlta(solicitud: Solicitud, decisiones: readonly Decisio
       pagina.drawText(linea, { x, y: y - tamano, size: tamano, font: fuente, color });
       y -= tamano + 4;
     }
+  };
+  const alDerecha = (texto: string, alto: number, fuente: PDFFont, tamano: number, color: ReturnType<typeof rgb>) => {
+    const limpio = limpiar(texto);
+    pagina.drawText(limpio, { x: A4.ancho - MARGEN - fuente.widthOfTextAtSize(limpio, tamano), y: alto, size: tamano, font: fuente, color });
   };
   const titulo = (texto: string) => {
     // Lugar para el titulo y al menos un par de filas: que no quede solo al pie.
@@ -212,39 +262,91 @@ export async function pdfAlta(solicitud: Solicitud, decisiones: readonly Decisio
     y = Math.min(y, yValor) - 3;
   };
 
-  // Encabezado
+  // Encabezado: logo a la izquierda, tipo de documento y fechas a la derecha.
   pagina.drawRectangle({ x: 0, y: A4.alto - 6, width: A4.ancho, height: 6, color: AZUL });
-  escribir("Industrias De Pascale - Solicitud de alta de cliente", { fuente: negrita, tamano: 9, color: GRIS });
-  y -= 4;
+  const altoLogo = 52;
+  if (logo) {
+    const imagen = await documento.embedPng(logo);
+    pagina.drawImage(imagen, { x: MARGEN, y: y - altoLogo, width: (imagen.width * altoLogo) / imagen.height, height: altoLogo });
+  }
+  alDerecha("SOLICITUD DE ALTA DE CLIENTE", y - 14, negrita, 12, AZUL);
+  alDerecha("Industrias De Pascale", y - 29, normal, 9, GRIS);
+  alDerecha(`Ingreso: ${formatearFechaHora(solicitud.fechaImportacion)}`, y - 42, normal, 9, GRIS);
+  y -= altoLogo + 12;
+  pagina.drawLine({ start: { x: MARGEN, y }, end: { x: A4.ancho - MARGEN, y }, thickness: 0.8, color: LINEA });
+  y -= 10;
   escribir(solicitud.nombre, { fuente: negrita, tamano: 18, color: AZUL });
   escribir(
-    `Estado: ${etiquetaEstado(solicitud.estado)}  |  Ingreso: ${formatearFechaHora(solicitud.fechaImportacion)}${
-      solicitud.fechaDecision ? `  |  Decisión: ${formatearFechaHora(solicitud.fechaDecision)}` : ""
+    `Estado: ${etiquetaEstado(solicitud.estado)}${solicitud.fechaDecision ? `  |  Decisión: ${formatearFechaHora(solicitud.fechaDecision)}` : ""}${
+      solicitud.usuarioDecisor ? `  |  Por: ${solicitud.usuarioDecisor}` : ""
     }`,
     { tamano: 10, color: GRIS },
   );
 
-  titulo("Datos para el maestro de clientes");
-  const maestro = ficha.maestroCliente;
-  fila("Razón social", maestro.razonSocial);
-  fila("Nombre de fantasía", maestro.nombreFantasia ?? "");
-  fila("CUIT", `${maestro.cuit ?? ""}${maestro.cuit && !maestro.cuitValido ? " (dígito verificador inválido)" : ""}`);
-  fila("Email", maestro.email);
-  fila("Teléfono", maestro.telefono ?? "");
-  fila("Responsable", maestro.responsable ?? "");
-  fila("Dirección legal", maestro.direccionLegal ?? "");
-  fila("Provincia", maestro.provincia ?? "");
-  fila("Dirección comercial", maestro.direccionComercial ?? "");
-  fila("Dirección de sucursal", maestro.direccionSucursal ?? "");
-  fila("Actividad", maestro.actividad ?? "");
-  fila("Puntos de venta", maestro.puntosDeVenta ?? "");
-  fila("Antigüedad (años)", maestro.antiguedadAnios?.toString() ?? "");
-  fila("Empleados", maestro.cantidadEmpleados?.toString() ?? "");
-  fila("Tipo de compra", maestro.tipoCompra ?? "");
-  fila("Envío", maestro.envio ?? "");
-  fila("Transportista", maestro.transportista ?? "");
-  fila("Cómo nos conoció", maestro.canal ?? "");
-  fila("Referencias comerciales", maestro.referenciasComerciales.join("\n"));
+  // Observacion del rechazo, recuadrada para que se vea antes que el resto.
+  if (solicitud.estado === "RECHAZADO") {
+    const relleno = 12;
+    const anchoTexto = anchoUtil - relleno * 2 - 4;
+    const motivo = partir(`Motivo de rechazo: ${ficha.solicitud.motivoRechazo ?? "sin motivo registrado (rechazada antes de que se pidiera)"}`, negrita, 10, anchoTexto);
+    const comentario = ficha.solicitud.comentarioDecision ? partir(ficha.solicitud.comentarioDecision, normal, 10, anchoTexto) : [];
+    const alto = relleno * 2 + 14 + motivo.length * 14 + comentario.length * 14;
+    y -= 12;
+    espacio(alto);
+    pagina.drawRectangle({ x: MARGEN, y: y - alto, width: anchoUtil, height: alto, color: FONDO_ROJO, borderColor: BORDE_ROJO, borderWidth: 0.8 });
+    pagina.drawRectangle({ x: MARGEN, y: y - alto, width: 4, height: alto, color: ROJO });
+    let linea = y - relleno - 9;
+    pagina.drawText("OBSERVACIÓN", { x: MARGEN + relleno + 4, y: linea, size: 9, font: negrita, color: ROJO });
+    linea -= 15;
+    for (const texto of motivo) {
+      pagina.drawText(texto, { x: MARGEN + relleno + 4, y: linea, size: 10, font: negrita, color: NEGRO });
+      linea -= 14;
+    }
+    for (const texto of comentario) {
+      pagina.drawText(texto, { x: MARGEN + relleno + 4, y: linea, size: 10, font: normal, color: NEGRO });
+      linea -= 14;
+    }
+    y -= alto;
+  }
+
+  // Todo lo que cargo la empresa en el formulario, paso por paso.
+  const usados = new Set(["origen", "firma"].map(normalizarEncabezado));
+  const { documentos, textos } = separarDocumentos(solicitud.datos);
+  for (const { titulo: nombreSeccion, campos } of SECCIONES_FORMULARIO) {
+    titulo(nombreSeccion);
+    for (const campo of campos) {
+      usados.add(normalizarEncabezado(campo));
+      const valor = leerDato(solicitud.datos, campo);
+      if (campo === "CUIT a verificar" && !valor) continue;
+      if (campo === "Referencias comerciales") fila(campo, valor.split("|").map((referencia) => referencia.trim()).join("\n"));
+      else fila(campo, campo === "Razón social" ? valor || solicitud.nombre : valor);
+      if (campo === "CUIT") fila("Email", solicitud.email);
+    }
+  }
+  const otros = textos.filter((dato) => !usados.has(normalizarEncabezado(dato.campo)));
+  if (otros.length) {
+    titulo("Otros datos del formulario");
+    for (const dato of otros) fila(dato.campo, dato.valor);
+  }
+
+  const adjuntos = documentos.filter((adjunto) => normalizarEncabezado(adjunto.campo) !== normalizarEncabezado("Firma"));
+  titulo(`Documentación adjunta (${adjuntos.length})`);
+  if (adjuntos.length === 0) escribir("La empresa no adjuntó documentación.", { color: GRIS });
+  for (const adjunto of adjuntos) fila(adjunto.campo, adjunto.url.startsWith("/") ? `${base}${adjunto.url}` : adjunto.url);
+
+  titulo("Firma");
+  if (firma) {
+    const imagen = firma.tipo === "image/png" ? await documento.embedPng(firma.datos) : await documento.embedJpg(firma.datos);
+    const escala = Math.min(220 / imagen.width, 90 / imagen.height, 1);
+    const alto = imagen.height * escala;
+    espacio(alto + 24);
+    pagina.drawImage(imagen, { x: MARGEN, y: y - alto, width: imagen.width * escala, height: alto });
+    y -= alto + 4;
+    pagina.drawLine({ start: { x: MARGEN, y }, end: { x: MARGEN + 220, y }, thickness: 0.6, color: GRIS });
+    y -= 4;
+    escribir(leerDato(solicitud.datos, "Responsable") || solicitud.nombre, { tamano: 9, color: GRIS });
+  } else {
+    escribir(leerDato(solicitud.datos, "Firma") ? "La firma no se puede mostrar acá: abrila desde el CRM." : "Sin firma.", { color: GRIS });
+  }
 
   titulo("Evaluación del formulario");
   fila("Completitud", `${ficha.evaluacion.puntaje}% - ${ficha.evaluacion.categoria} (${ficha.evaluacion.etiqueta})`);
@@ -253,9 +355,10 @@ export async function pdfAlta(solicitud: Solicitud, decisiones: readonly Decisio
 
   titulo("Decisión");
   fila("Estado actual", etiquetaEstado(solicitud.estado));
-  if (ficha.solicitud.motivoRechazo) fila("Motivo de rechazo", ficha.solicitud.motivoRechazo);
-  if (ficha.solicitud.comentarioDecision) fila("Comentario", ficha.solicitud.comentarioDecision);
+  if (solicitud.fechaDecision) fila("Fecha", formatearFechaHora(solicitud.fechaDecision));
   if (solicitud.usuarioDecisor) fila("Decidida por", solicitud.usuarioDecisor);
+  // En un rechazo el motivo y el comentario ya estan en la observacion de arriba.
+  if (solicitud.estado !== "RECHAZADO" && ficha.solicitud.comentarioDecision) fila("Comentario", ficha.solicitud.comentarioDecision);
   if (decisiones.length > 1) {
     fila(
       "Historial",
@@ -264,10 +367,6 @@ export async function pdfAlta(solicitud: Solicitud, decisiones: readonly Decisio
         .join("\n"),
     );
   }
-
-  titulo(`Documentación adjunta (${ficha.documentos.length})`);
-  if (ficha.documentos.length === 0) escribir("La empresa no adjuntó documentación.", { color: GRIS });
-  for (const adjunto of ficha.documentos) fila(adjunto.campo, adjunto.url);
 
   // Pie con numero de pagina en todas las hojas.
   const paginas = documento.getPages();
