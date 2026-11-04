@@ -110,7 +110,7 @@ export function origenSeguimiento(): { destino: string; aviso: string | null } {
     return {
       destino: "la app",
       aviso:
-        "Planilla de test leida por su link publico (se actualiza cada minuto). Lo que se finaliza desde aca queda guardado en la app, no en la planilla, hasta configurar la service account.",
+        "Planilla leida por su link publico (se actualiza cada minuto). Lo que se finaliza desde aca queda guardado en la app, no en la planilla, hasta configurar la service account.",
     };
   }
   return { destino: "la planilla", aviso: null };

@@ -51,7 +51,11 @@ export function claveCliente(cliente: string): string {
 
 /** Valores que la planilla usa como "vacio". */
 function limpio(valor: string): string {
-  return ["null", "#n/a", "-", "—"].includes(valor.toLowerCase()) ? "" : valor;
+  return ["null", "#n/a", "#n/d", "#ref!", "-", "—"].includes(valor.toLowerCase()) ? "" : valor;
+}
+
+function esCliente(cliente: string): boolean {
+  return Boolean(limpio(cliente)) && !["no es cliente", "sin match", "otros"].includes(clave(cliente));
 }
 
 // --- Fichas de clientes ----------------------------------------------------
@@ -124,7 +128,7 @@ export function armarFichas(desplegable: FilaSheet[], maestro: FilaSheet[]): Map
     const { datos, celda } = hojaDesplegable;
     for (const fila of datos) {
       const cliente = celda(fila, "cliente");
-      if (!cliente) continue;
+      if (!esCliente(cliente)) continue;
       const destino = ficha(cliente);
       const disponible = celda(fila, "limiteDisponible");
       completar(destino, "listaPrecio", limpio(celda(fila, "listaPrecio")));
@@ -147,7 +151,7 @@ export function armarFichas(desplegable: FilaSheet[], maestro: FilaSheet[]): Map
     const { datos, celda } = hojaMaestro;
     for (const fila of datos) {
       const cliente = celda(fila, "cliente");
-      if (!cliente) continue;
+      if (!esCliente(cliente)) continue;
       const destino = ficha(cliente);
       completar(destino, "actividad", limpio(celda(fila, "actividad")));
       completar(destino, "categoria", limpio(celda(fila, "categoria")));
@@ -159,6 +163,31 @@ export function armarFichas(desplegable: FilaSheet[], maestro: FilaSheet[]): Map
   }
 
   return fichas;
+}
+
+/** Coincidencias exactas por codigo, nombre o cualquiera de los dos grupos de WhatsApp. */
+export function crearBuscadorClientes(fichas: Map<string, FichaCliente>) {
+  const nombres = new Map<string, FichaCliente | null>();
+  const grupos = new Map<string, FichaCliente | null>();
+  // Conserva emojis y signos: pueden distinguir dos grupos diferentes.
+  const claveGrupo = (grupo: string) => grupo.normalize("NFC").toLowerCase().replace(/\s+/g, " ").trim();
+  const agregar = (indice: Map<string, FichaCliente | null>, id: string, ficha: FichaCliente) => {
+    if (!id) return;
+    // Una coincidencia compartida por varios clientes no permite elegir uno.
+    if (!indice.has(id)) indice.set(id, ficha);
+    else if (indice.get(id) !== ficha) indice.set(id, null);
+  };
+  for (const ficha of fichas.values()) {
+    agregar(nombres, clave(ficha.nombre), ficha);
+    agregar(grupos, claveGrupo(ficha.grupoWhatsapp), ficha);
+    agregar(grupos, claveGrupo(ficha.grupoWhatsapp2), ficha);
+  }
+  return (cliente: string, grupoWhatsapp: string): FichaCliente | null =>
+    fichas.get(claveCliente(cliente)) ??
+    nombres.get(clave(cliente)) ??
+    grupos.get(claveGrupo(grupoWhatsapp)) ??
+    grupos.get(claveGrupo(cliente)) ??
+    null;
 }
 
 // --- Respuestas tipo -------------------------------------------------------

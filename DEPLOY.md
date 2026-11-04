@@ -10,9 +10,9 @@ Configurar estas variables en Vercel antes de desplegar:
 DB_BACKEND=demo
 SEGUIMIENTO_BACKEND=sheets
 SEGUIMIENTO_ACCESO=publico
-SEGUIMIENTO_SHEETS_ID=ID_DE_LA_PLANILLA
+SEGUIMIENTO_SHEETS_ID=1Bo5zBqgO2QTIjzob_PSnKaMeQ5BHzFdVd5scV035X54
 SEGUIMIENTO_HOJA=Seguimiento
-SEGUIMIENTO_FILA_INICIO=600
+SEGUIMIENTO_FILA_INICIO=
 ```
 
 El ID se toma de la URL de Google Sheets, entre `/d/` y `/edit`.
@@ -149,7 +149,7 @@ sincroniza con la base y trabaja sobre la base:
 DATABASE_URL=...                 # Neon
 SEGUIMIENTO_BACKEND=postgres
 SEGUIMIENTO_SHEETS_ID=1Bo5zBqgO2QTIjzob_PSnKaMeQ5BHzFdVd5scV035X54
-SEGUIMIENTO_HOJA=<nombre de la pestaña donde carga el bot>
+SEGUIMIENTO_HOJA=Seguimiento
 SEGUIMIENTO_ACCESO=              # vacio: usa la cuenta de servicio
 SEGUIMIENTO_FILA_INICIO=         # vacio = todo el historico; o la fila desde la que importar
 SYNC_TOKEN=<texto largo y aleatorio>

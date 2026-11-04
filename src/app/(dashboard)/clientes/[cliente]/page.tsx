@@ -5,7 +5,7 @@ import { LineaDeTiempoCliente, type EventoLinea } from "@/components/clientes/Li
 import { Pista } from "@/components/ui/Pista";
 import { porCliente } from "@/lib/db/historial";
 import { formulariosDeCliente } from "@/lib/db/reclamos";
-import { fichaDeCliente, getParaTablero } from "@/lib/db/seguimiento";
+import { backendSeguimiento, fichaDeCliente, getParaTablero } from "@/lib/db/seguimiento";
 import { claveCliente } from "@/lib/db/sheets/maestros";
 import { herramientasDePrueba } from "@/lib/herramientas-prueba";
 import { historialSimulado } from "@/lib/seguimiento/historial-simulado";
@@ -55,9 +55,8 @@ function Dato({ etiqueta, children }: { etiqueta: string; children: ReactNode })
 
 export default async function PerfilClientePage({ params, searchParams }: PageProps<"/clientes/[cliente]">) {
   const clave = decodeURIComponent((await params).cliente).trim();
-  // ?simulacion=1: un año de historial inventado para este cliente (prototipo, no se guarda).
-  // Es una herramienta de prueba: en produccion no aparece y el parametro se ignora.
-  const conSimulacion = herramientasDePrueba();
+  // Las simulaciones solo se habilitan sobre datos demo y con las herramientas de prueba.
+  const conSimulacion = backendSeguimiento() === "demo" && herramientasDePrueba();
   const simulacion = conSimulacion && (await searchParams).simulacion === "1";
   const buscada = claveCliente(clave);
   const [ficha, todas] = await Promise.all([fichaDeCliente(clave), getParaTablero()]);

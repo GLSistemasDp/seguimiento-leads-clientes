@@ -8,10 +8,10 @@ export type Consulta = {
   id: string;
   fecha: Date | null;
   encargado: string;
-  /** "1877 - BULONERIA BELGRANO". */
+  /** "1877 - BULONERIA BELGRANO" o "Otros · <grupo>" si no se encontro el cliente. */
   cliente: string;
   listaPrecio: string;
-  /** A, B, C o vacio. */
+  /** A, B, C, Otros (sin coincidencia con un cliente) o vacio. */
   clasificacion: string;
   grupoVendedor: string;
   /** Estado de la cuenta del cliente ("OK", "BLOQUEADO", ...). */

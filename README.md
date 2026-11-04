@@ -40,7 +40,7 @@ catalogo real para los sustitutos y escritura en la planilla de produccion
 
 ### Datos de la demo
 
-- Seguimiento: planilla de **test** leida por su link publico (`SEGUIMIENTO_ACCESO="publico"`, desde la fila 600).
+- Seguimiento: planilla **CONSULTA SERVICIO CLIENTE - 2026**, leida por su link publico (`SEGUIMIENTO_ACCESO="publico"`).
 - Altas y formularios de reclamo: datos de ejemplo en memoria (`DB_BACKEND="demo"`).
 - Lo que genera la app (historial, indicaciones de gerencia, evaluaciones de IA, tildes) queda en `.data/*.json`. Borrar esa carpeta deja la demo como nueva.
 - Variables nuevas en `.env.example`: `RESUMEN_WHATSAPP_NUMERO`, `APP_URL`, `PORTAL_USUARIO`.
@@ -169,29 +169,49 @@ por import dinamico segun `DB_BACKEND`.
   - `email/` armado del HTML y copiado al portapapeles,
   - `utils/` helpers de HTML, strings y fechas.
 
-## Planilla modificada de seguimiento
+## Planilla del bot y datos de clientes
 
-La pestaña `Seguimiento` de `consulta cliente 26` se integra con esta configuración:
+Los chats del bot se leen de la pestaña `Seguimiento` de
+[CONSULTA SERVICIO CLIENTE - 2026](https://docs.google.com/spreadsheets/d/1Bo5zBqgO2QTIjzob_PSnKaMeQ5BHzFdVd5scV035X54/edit?gid=1574636158#gid=1574636158):
 
 ```dotenv
 SEGUIMIENTO_BACKEND="sheets"
-SEGUIMIENTO_SHEETS_ID="1vlLExkogxqDGqkxcrwX3JeczI16pwxFbs6wL0XFL6Xk"
+SEGUIMIENTO_SHEETS_ID="1Bo5zBqgO2QTIjzob_PSnKaMeQ5BHzFdVd5scV035X54"
 SEGUIMIENTO_HOJA="Seguimiento"
 SEGUIMIENTO_ACCESO="publico"
+SEGUIMIENTO_FILA_INICIO=""
 ```
 
 En Vercel, cargar estas variables en los entornos correspondientes y volver a desplegar.
 Si el seguimiento ya usa Postgres con sincronización, conservar `SEGUIMIENTO_BACKEND="postgres"`:
-la importación usa el mismo lector y admite el encabezado nuevo.
+la importación usa el mismo lector.
 La columna `grillo` contiene el código y nombre del cliente. También se admiten
 `Cliente`, `Grupo / Cliente` y `Razón social`; las columnas se ubican por nombre,
 incluso si cambia su orden. `Columna 2` se ignora. Las fechas pueden ser números
 de serie o texto como `9/25/2026`.
 
-El acceso público fue comprobado para esta planilla. En este modo la aplicación
-lee Sheets y guarda las gestiones en su almacén; para escribir directamente en
-Sheets, quitar `SEGUIMIENTO_ACCESO="publico"` y configurar la service account.
+`Desplegable` es la fuente de los datos comerciales actuales: lista de precios,
+clasificación, vendedor, situación y grupos de WhatsApp. `MaestroCliente`
+complementa actividad, condiciones de pago, crédito y deuda. Los clientes se
+vinculan por código, nombre o coincidencia exacta con cualquiera de sus dos
+grupos de WhatsApp. Si un grupo corresponde a varios clientes, se necesita
+el código o el nombre para asignarlo.
+
+Las consultas sin coincidencia aparecen como `Otros · <nombre del grupo>` y
+con clasificación `Otros`. Se conserva el mensaje completo y se recupera el
+grupo de prefijos del bot como `[SIN MATCH] Grupo DP ...: ...` o `DP ...: ...`
+cuando la columna de WhatsApp está vacía. Si no figura un grupo, se conserva
+el texto del cliente como referencia; si tampoco figura, se muestra `Otros`.
+
+En modo público la aplicación lee Sheets y guarda las gestiones en su almacén;
+para escribir directamente en Sheets, quitar `SEGUIMIENTO_ACCESO="publico"`
+y configurar la service account.
 `SEGUIMIENTO_FILA_INICIO` sigue permitiendo omitir filas históricas; vacío lee desde el inicio.
+
+Los cierres, notas e indicaciones de WhatsApp se identifican por la planilla
+de origen. La fuente nueva comienza sin las gestiones generales de la prueba
+anterior; no se trasladan automáticamente. El historial simulado solo está
+disponible con `SEGUIMIENTO_BACKEND="demo"`.
 
 Si una lectura falla, Resumen conserva las secciones disponibles y muestra un
 aviso con **Reintentar**. Seguimiento y Solicitudes mantienen la navegación y
@@ -200,6 +220,7 @@ error quedan en los logs del servidor. Si falla la sincronización a Postgres,
 se conservan los registros y se informa el fallo del último intento.
 
 Pruebas del lector: `node --test tests/sheets-seguimiento.test.mjs`.
+Pruebas de separación entre prueba y planillas: `node --test tests/seguimiento-origen.test.mjs`.
 
 ## Decisiones a tener presentes
 

@@ -1,5 +1,6 @@
 import "server-only";
 import { leer, modificar } from "@/lib/db/local/almacen";
+import { clavePorOrigen } from "@/lib/seguimiento/origen";
 import type { CambiosConsulta } from "@/types/seguimiento";
 
 /**
@@ -18,11 +19,11 @@ export type CambioLocal = CambiosConsulta & {
 const COLECCION = "seguimiento-cambios";
 
 export function leerCambios(): Promise<Record<string, CambioLocal>> {
-  return leer<CambioLocal>(COLECCION);
+  return leer<CambioLocal>(clavePorOrigen(COLECCION));
 }
 
 export function guardarCambio(id: string, cambios: CambiosConsulta): Promise<CambioLocal> {
-  return modificar<CambioLocal, CambioLocal>(COLECCION, (todos) => {
+  return modificar<CambioLocal, CambioLocal>(clavePorOrigen(COLECCION), (todos) => {
     const cambio: CambioLocal = { ...todos[id], ...cambios, actualizado: new Date().toISOString() };
     todos[id] = cambio;
     return cambio;

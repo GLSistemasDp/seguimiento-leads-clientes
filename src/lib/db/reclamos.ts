@@ -7,6 +7,7 @@ import { postgresConfigurado } from "@/lib/db/postgres/pg";
 import { getVistos } from "@/lib/db/reclamos-vistos";
 import { backendActivo } from "@/lib/db/repositorio";
 import { getAll as getConsultas } from "@/lib/db/seguimiento";
+import { clavePorOrigen } from "@/lib/seguimiento/origen";
 import { esReclamo, estadoCliente, separarCliente } from "@/lib/seguimiento/presentacion";
 import {
   CAMPOS_CIERRE,
@@ -194,7 +195,7 @@ export async function getIndicaciones(): Promise<Record<string, Indicacion>> {
 }
 
 export function idWhatsapp(consultaId: string): string {
-  return `${PREFIJO_WHATSAPP}${consultaId}`;
+  return `${PREFIJO_WHATSAPP}${clavePorOrigen(consultaId)}`;
 }
 
 /**

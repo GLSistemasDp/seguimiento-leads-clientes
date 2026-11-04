@@ -3,7 +3,7 @@ import { guardarCambio, leerCambios } from "@/lib/db/sheets/cambios-locales";
 import type { CambioLocal } from "@/lib/db/sheets/cambios-locales";
 import { ErrorSheets, escribirRangos, leerRango, letraColumna } from "@/lib/db/sheets/cliente";
 import type { FilaSheet } from "@/lib/db/sheets/cliente";
-import { armarCatalogo, armarFichas, claveCliente } from "@/lib/db/sheets/maestros";
+import { armarCatalogo, armarFichas, crearBuscadorClientes } from "@/lib/db/sheets/maestros";
 import { leerHojasPublicas } from "@/lib/db/sheets/publica";
 import type { RepositorioSeguimiento } from "@/lib/db/repositorio";
 import { huella } from "@/lib/seguimiento/huella";
@@ -84,22 +84,28 @@ const VIGENCIA_MAESTROS_MS = 5 * 60_000;
 
 type Maestros = {
   fichas: Map<string, FichaCliente>;
+  buscarFicha: ReturnType<typeof crearBuscadorClientes>;
   catalogo: RespuestaTipo[];
+  origen: string;
   leido: number;
 };
 
 const almacen = globalThis as typeof globalThis & { __maestrosSeguimiento?: Promise<Maestros> };
 
 async function cargarMaestros(): Promise<Maestros> {
+  const origen = `${planilla()}|${accesoPublico()}`;
   const [desplegable, maestro, rapidas, reclamos] = await Promise.all([
     leerHojaOpcional("Desplegable"),
     leerHojaOpcional("MaestroCliente"),
     leerHojaOpcional("Rtas RÁPIDAS"),
     leerHojaOpcional("Rtas RECLAMO"),
   ]);
+  const fichas = armarFichas(desplegable, maestro);
   return {
-    fichas: armarFichas(desplegable, maestro),
+    fichas,
+    buscarFicha: crearBuscadorClientes(fichas),
     catalogo: armarCatalogo(rapidas, reclamos),
+    origen,
     leido: Date.now(),
   };
 }
@@ -107,7 +113,7 @@ async function cargarMaestros(): Promise<Maestros> {
 /** Son hojas grandes (miles de clientes) que cambian poco: se releen cada 5 minutos. */
 async function maestros(): Promise<Maestros> {
   const previo = await almacen.__maestrosSeguimiento?.catch(() => null);
-  if (previo && Date.now() - previo.leido < VIGENCIA_MAESTROS_MS) return previo;
+  if (previo?.origen === `${planilla()}|${accesoPublico()}` && Date.now() - previo.leido < VIGENCIA_MAESTROS_MS) return previo;
   const pedido = cargarMaestros();
   almacen.__maestrosSeguimiento = pedido;
   return pedido;
@@ -118,7 +124,7 @@ async function maestros(): Promise<Maestros> {
 const ALIAS = {
   fecha: ["fecha", "f", "fecha consulta", "fecha de consulta", "fecha ingreso"],
   encargado: ["encargado", "encargada", "responsable"],
-  // La planilla de consulta cliente 26 usa "grillo" para codigo y razon social.
+  // La planilla del bot usa "grillo" para codigo y razon social.
   cliente: ["grupo cliente", "cliente", "razon social", "grillo"],
   listaPrecio: ["lista de precio", "lista de precios", "lista precio", "lista"],
   clasificacion: ["clasificacion", "calificacion", "categoria", "clasif"],
@@ -280,27 +286,43 @@ async function leerTodas(): Promise<{ consultas: ConsultaUbicada[]; columnas: Co
   return { consultas, columnas };
 }
 
-/**
- * Suma la ficha del cliente y completa lo que la fila dejo vacio con los
- * datos de "Desplegable" (que es de donde la planilla los trae).
- */
-function completarConFicha(consulta: Consulta, fichas: Map<string, FichaCliente>): Consulta {
-  const ficha = consulta.cliente ? (fichas.get(claveCliente(consulta.cliente)) ?? null) : null;
-  if (!ficha) return { ...consulta, ficha: null };
+/** El bot a veces deja el grupo en el mensaje: "[SIN MATCH] Grupo DP ...: ...". */
+function grupoDelMensaje(mensaje: string): string {
+  const marcado = mensaje.match(/^\s*\[SIN\s+MATCH\]\s*(?:Grupo\s+)?([^:\r\n]+)\s*:/i);
+  const grupo = marcado ?? mensaje.match(/^\s*(?:Grupo\s+)?(DP\b[^:\r\n]+)\s*:/i);
+  return grupo?.[1].trim() ?? "";
+}
+
+/** Los datos comerciales actuales salen de Desplegable; el grupo de origen se conserva. */
+function completarConFicha(consulta: Consulta, buscarFicha: Maestros["buscarFicha"]): Consulta {
+  const grupoWhatsapp = consulta.grupoWhatsapp || grupoDelMensaje(consulta.consulta) ||
+    (/^DP\b/i.test(consulta.cliente) ? consulta.cliente : "");
+  const ficha = buscarFicha(consulta.cliente, grupoWhatsapp);
+  if (!ficha) {
+    const nombre = grupoWhatsapp || consulta.cliente;
+    return {
+      ...consulta,
+      cliente: nombre ? `Otros · ${nombre}` : "Otros",
+      clasificacion: "Otros",
+      grupoWhatsapp,
+      ficha: null,
+    };
+  }
   return {
     ...consulta,
-    listaPrecio: consulta.listaPrecio || ficha.listaPrecio,
-    clasificacion: consulta.clasificacion || ficha.clasificacion,
-    grupoVendedor: consulta.grupoVendedor || ficha.grupoVendedor,
-    estadoCuenta: consulta.estadoCuenta || ficha.situacion,
-    grupoWhatsapp: consulta.grupoWhatsapp || ficha.grupoWhatsapp,
+    cliente: ficha.codigo ? `${ficha.codigo} - ${ficha.nombre}` : ficha.nombre,
+    listaPrecio: ficha.listaPrecio || consulta.listaPrecio,
+    clasificacion: ficha.clasificacion || consulta.clasificacion,
+    grupoVendedor: ficha.grupoVendedor || consulta.grupoVendedor,
+    estadoCuenta: ficha.situacion || consulta.estadoCuenta,
+    grupoWhatsapp: grupoWhatsapp || ficha.grupoWhatsapp,
     linkWhatsapp: consulta.linkWhatsapp || ficha.linkWhatsapp,
     ficha,
   };
 }
 
 async function consultasCompletas(): Promise<Consulta[]> {
-  const [{ consultas }, { fichas }, cambios] = await Promise.all([
+  const [{ consultas }, { buscarFicha }, cambios] = await Promise.all([
     leerTodas(),
     maestros(),
     accesoPublico() ? leerCambios() : Promise.resolve<Record<string, CambioLocal>>({}),
@@ -314,7 +336,7 @@ async function consultasCompletas(): Promise<Consulta[]> {
           observaciones: cambio.observaciones ?? consulta.observaciones,
         }
       : consulta;
-    return completarConFicha(conCambios, fichas);
+    return completarConFicha(conCambios, buscarFicha);
   });
 }
 
@@ -328,9 +350,9 @@ export async function getAll(): Promise<Consulta[]> {
  * de "Desplegable" + "MaestroCliente", tengan o no consultas.
  */
 export async function leerPlanilla(): Promise<{ consultas: Consulta[]; fichas: FichaCliente[] }> {
-  const [{ consultas }, { fichas }] = await Promise.all([leerTodas(), cargarMaestros()]);
+  const [{ consultas }, { fichas, buscarFicha }] = await Promise.all([leerTodas(), cargarMaestros()]);
   return {
-    consultas: consultas.map(({ consulta }) => completarConFicha(consulta, fichas)),
+    consultas: consultas.map(({ consulta }) => completarConFicha(consulta, buscarFicha)),
     fichas: [...fichas.values()],
   };
 }
@@ -380,8 +402,8 @@ export async function update(id: string, cambios: CambiosConsulta): Promise<Cons
   }
 
   await escribirRangos(escrituras, { planilla: planilla(), entrada: "USER_ENTERED" });
-  const { fichas } = await maestros();
-  return completarConFicha({ ...ubicada.consulta, ...cambios }, fichas);
+  const { buscarFicha } = await maestros();
+  return completarConFicha({ ...ubicada.consulta, ...cambios }, buscarFicha);
 }
 
 const repositorio: RepositorioSeguimiento = { getAll, getById, update, getRespuestas };
