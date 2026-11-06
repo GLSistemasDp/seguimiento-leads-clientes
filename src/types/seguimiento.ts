@@ -11,7 +11,7 @@ export type Consulta = {
   /** "1877 - BULONERIA BELGRANO" o "Otros · <grupo>" si no se encontro el cliente. */
   cliente: string;
   listaPrecio: string;
-  /** A, B, C, Otros (sin coincidencia con un cliente) o vacio. */
+  /** Clasificación comercial de la fuente (A, B, C, N, etc.) u Otros si no se encontró el cliente. */
   clasificacion: string;
   grupoVendedor: string;
   /** Estado de la cuenta del cliente ("OK", "BLOQUEADO", ...). */
@@ -64,12 +64,15 @@ export type FichaCliente = {
   linkWhatsapp: string;
   /** SITUACION DEL CLIENTE: "OK", "TIENE DEUDA", "NO RESPONDER", "JUDICIALIZADO". */
   situacion: string;
+  /** Última situación en la que quedó una conversación finalizada; inicialmente, OBSERVACIÓN de la hoja. */
   observacion: string;
+  /** Fecha ISO del último cierre que actualizó la observación. */
+  observacionActualizadaEn?: string;
   actividad: string;
   categoria: string;
   condicionPago: string;
   limiteCredito: string;
-  /** Marca de la columna DEUDA del maestro ("REVISAR DEUDORA"), vacio si no tiene. */
+  /** Alias de situación / estado de cuenta, unificado con DEUDA del maestro. */
   deuda: string;
 };
 

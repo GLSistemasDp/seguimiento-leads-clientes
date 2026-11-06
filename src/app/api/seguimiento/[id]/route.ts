@@ -85,7 +85,7 @@ export const PATCH = async (request: Request, contexto: Contexto) => {
       encargado: actual.encargado,
       resumen: actual.ia?.resumen,
     });
-    return NextResponse.json({ consulta });
+    return NextResponse.json({ consulta: (await getById(id)) ?? consulta });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "No se pudo actualizar" },

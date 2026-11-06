@@ -57,8 +57,6 @@ const vacio = (inicio: number, estado: ResultadoSync["estado"], motivo?: string)
   fecha: new Date().toISOString(),
 });
 
-const clasificacionValida = (valor: string) => (["A", "B", "C"].includes(valor.trim().toUpperCase()) ? valor.trim().toUpperCase() : "");
-
 export async function sincronizarPlanilla(): Promise<ResultadoSync> {
   const inicio = Date.now();
   try {
@@ -95,7 +93,7 @@ async function ejecutarSincronizacion(): Promise<ResultadoSync> {
         codigo: ficha.codigo,
         nombre: ficha.nombre,
         lista: ficha.listaPrecio,
-        clasificacion: clasificacionValida(ficha.clasificacion),
+        clasificacion: ficha.clasificacion.trim().toUpperCase(),
         grupo: ficha.grupoVendedor.trim(),
         whatsapp: ficha.grupoWhatsapp,
         whatsapp2: ficha.grupoWhatsapp2,
@@ -126,7 +124,8 @@ async function ejecutarSincronizacion(): Promise<ResultadoSync> {
            nombre = EXCLUDED.nombre, lista_precio = EXCLUDED.lista_precio, clasificacion = EXCLUDED.clasificacion,
            grupo_vendedor_id = EXCLUDED.grupo_vendedor_id, grupo_whatsapp = EXCLUDED.grupo_whatsapp,
            grupo_whatsapp2 = EXCLUDED.grupo_whatsapp2, link_whatsapp = EXCLUDED.link_whatsapp, situacion = EXCLUDED.situacion,
-           observacion = EXCLUDED.observacion, actividad = EXCLUDED.actividad, categoria = EXCLUDED.categoria,
+           observacion = CASE WHEN clientes.observacion_cierre_en IS NULL THEN EXCLUDED.observacion ELSE clientes.observacion END,
+           actividad = EXCLUDED.actividad, categoria = EXCLUDED.categoria,
            condicion_pago = EXCLUDED.condicion_pago, limite_credito = EXCLUDED.limite_credito, deuda = EXCLUDED.deuda,
            cuit = CASE WHEN EXCLUDED.cuit <> '' THEN EXCLUDED.cuit ELSE clientes.cuit END,
            actualizado_en = now()`,

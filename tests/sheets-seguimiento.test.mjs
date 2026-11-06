@@ -8,7 +8,7 @@ import ts from "typescript";
 function adaptador(filas, errorLectura, { hojas = {}, entorno = {} } = {}) {
   const escrituras = [];
   const lecturas = [];
-  const datos = { Seguimiento: filas, ...hojas };
+  const datos = { Seguimiento: filas, MaestroCliente: [["CLIENTE"]], Desplegable: [["CLIENTE"]], ...hojas };
   const env = { SEGUIMIENTO_SHEETS_ID: "prueba", SEGUIMIENTO_HOJA: "Seguimiento", ...entorno };
   const cache = new Map();
   class ErrorSheets extends Error {}
@@ -92,6 +92,48 @@ const desplegable = [
   ["200 - CLIENTE SIN CONSULTAS", "D03W", "B", "", "FILTRO GRUPO NORTE", "DP - VT NORTE", "", "OK"],
 ];
 
+test("la ficha sin consultas unifica todos los campos por código con columnas reordenadas", async () => {
+  const { repo } = adaptador([["grillo", "Consulta"]], undefined, { hojas: {
+    Desplegable: [
+      ["Grupo Whatsapp", "Clientes", "Clasificación de ventas", "Lista de precios", "Situación", "Observación"],
+      ["Grupo comercial", "200 - CLIENTE SIN CONSULTAS", "B", "D03W", "OK", "Observación inicial"],
+    ],
+    MaestroCliente: [
+      ["LÍMITE DE CRÉDITO", "CLIENTE", "ACTIVIDAD", "CATERGORIA ACT", "COND. DE PAGO", "DEUDA"],
+      ["Hasta USD 1000", "200 - Razón social anterior", "Industria", "Fabricante", "CHQ 30 DIAS", "REVISAR DEUDORA"],
+    ],
+  } });
+  const ficha = await repo.fichaDeCliente("200");
+  assert.equal(ficha.nombre, "CLIENTE SIN CONSULTAS");
+  for (const [campo, esperado] of Object.entries({
+    actividad: "Industria", categoria: "Fabricante", condicionPago: "CHQ 30 DIAS", limiteCredito: "Hasta USD 1000",
+    listaPrecio: "D03W", clasificacion: "B", grupoWhatsapp: "Grupo comercial",
+    situacion: "REVISAR DEUDORA", deuda: "REVISAR DEUDORA", observacion: "Observación inicial",
+  })) assert.equal(ficha[campo], esperado, campo);
+  assert.equal((await repo.fichaDeCliente("cliente sin consultas")).codigo, "200");
+  assert.equal((await repo.leerPlanilla()).fichas.length, 1);
+  assert.equal((await repo.getAll()).length, 0);
+});
+
+test("sincronizar exige las dos hojas maestras válidas antes de reemplazar clientes", async () => {
+  for (const MaestroCliente of [[], [["Formato desconocido"]]]) {
+    const { repo } = adaptador([["grillo", "Consulta"]], undefined, { hojas: { Desplegable: desplegable, MaestroCliente } });
+    await assert.rejects(repo.leerPlanilla(), /Se conservan los clientes existentes/);
+  }
+});
+
+test("un nombre vacío en Desplegable se completa desde MaestroCliente sin perder código ni clasificación N", async () => {
+  const { repo } = adaptador([["grillo", "Consulta"]], undefined, { hojas: {
+    Desplegable: [["CLIENTE", "CLA_VTA"], ["1780 -", "N"]],
+    MaestroCliente: [["CLIENTE", "ACTIVIDAD"], ["1780 - NOMBRE COMPLETO", "Industria"]],
+  } });
+  const ficha = await repo.fichaDeCliente("1780");
+  assert.equal(ficha.codigo, "1780");
+  assert.equal(ficha.nombre, "NOMBRE COMPLETO");
+  assert.equal(ficha.clasificacion, "N");
+  assert.equal((await repo.leerPlanilla()).fichas.length, 1);
+});
+
 test("Desplegable aporta los datos comerciales actuales y MaestroCliente los complementa", async () => {
   const { repo } = adaptador([
     ["grillo", "Consulta", "Lista de precio", "Clasificacion Venta", "Grupo Vendedor", "ESTADO"],
@@ -105,11 +147,11 @@ test("Desplegable aporta los datos comerciales actuales y MaestroCliente los com
   assert.equal(consulta.listaPrecio, "D05W");
   assert.equal(consulta.clasificacion, "A");
   assert.equal(consulta.grupoVendedor, "FILTRO GRUPO SUR");
-  assert.equal(consulta.estadoCuenta, "TIENE DEUDA");
+  assert.equal(consulta.estadoCuenta, "TIENE DEUDA · REVISAR DEUDORA");
   assert.equal(consulta.grupoWhatsapp, "DP - VT SUR 🔧");
   assert.equal(consulta.ficha.observacion, "Revisar pagos");
   assert.equal(consulta.ficha.actividad, "Ferreteria");
-  assert.equal(consulta.ficha.deuda, "REVISAR DEUDORA");
+  assert.equal(consulta.ficha.deuda, consulta.ficha.situacion);
   const planilla = await repo.leerPlanilla();
   assert.equal(planilla.fichas.length, 2);
   assert.equal(planilla.fichas.find((ficha) => ficha.codigo === "200").nombre, "CLIENTE SIN CONSULTAS");

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { LineaDeTiempoCliente, type EventoLinea } from "@/components/clientes/LineaDeTiempoCliente";
+import { BotonGrupoWhatsapp } from "@/components/seguimiento/BotonGrupoWhatsapp";
 import { Pista } from "@/components/ui/Pista";
 import { porCliente } from "@/lib/db/historial";
 import { formulariosDeCliente } from "@/lib/db/reclamos";
@@ -12,7 +13,7 @@ import { historialSimulado } from "@/lib/seguimiento/historial-simulado";
 import { estadoCliente, explicarEstado, separarCliente } from "@/lib/seguimiento/presentacion";
 import { clasificacionDe } from "@/lib/seguimiento/relacion";
 import { normalizarEncabezado } from "@/lib/utils/strings";
-import { ICONO_RELACION, RELACIONES, type Consulta, type Relacion } from "@/types/seguimiento";
+import { ICONO_RELACION, RELACIONES, type Relacion } from "@/types/seguimiento";
 
 export const dynamic = "force-dynamic";
 
@@ -58,11 +59,11 @@ export default async function PerfilClientePage({ params, searchParams }: PagePr
   // Las simulaciones solo se habilitan sobre datos demo y con las herramientas de prueba.
   const conSimulacion = backendSeguimiento() === "demo" && herramientasDePrueba();
   const simulacion = conSimulacion && (await searchParams).simulacion === "1";
-  const buscada = claveCliente(clave);
   const [ficha, todas] = await Promise.all([fichaDeCliente(clave), getParaTablero()]);
+  const buscada = ficha?.codigo || claveCliente(ficha?.nombre || clave);
   const consultas = todas.filter((consulta) => claveCliente(consulta.cliente) === buscada);
 
-  const texto = consultas[0]?.cliente ?? (ficha?.codigo ? `${ficha.codigo} - ${ficha.nombre}` : clave);
+  const texto = ficha ? (ficha.codigo ? `${ficha.codigo} - ${ficha.nombre}` : ficha.nombre) : consultas[0]?.cliente ?? clave;
   const reales = await porCliente(texto);
   if (!ficha && consultas.length === 0 && reales.length === 0) notFound();
   const eventos = simulacion ? historialSimulado(texto, new Date()) : reales;
@@ -85,8 +86,8 @@ export default async function PerfilClientePage({ params, searchParams }: PagePr
     };
   });
   const pendientes = consultas.filter((consulta) => !consulta.respondida);
-  const conFicha: Consulta | undefined = consultas.find((consulta) => consulta.ficha) ?? consultas[0];
-  const estados = conFicha ? estadoCliente(conFicha) : [ficha?.situacion, ficha?.deuda].filter((valor): valor is string => Boolean(valor));
+  const conFicha = consultas.find((consulta) => consulta.ficha) ?? consultas[0];
+  const estados = estadoCliente({ ficha: ficha ?? conFicha?.ficha, estadoCuenta: conFicha?.estadoCuenta ?? "" });
   const clasificacion = (ficha?.clasificacion || conFicha?.clasificacion || "").toUpperCase();
   const responsable = (ficha?.grupoVendedor || conFicha?.grupoVendedor || "").replace(/^FILTRO GRUPO\s*/i, "");
   const ultimoEncargado = [...consultas].reverse().find((consulta) => consulta.encargado && consulta.encargado !== "bot")?.encargado;
@@ -128,7 +129,7 @@ export default async function PerfilClientePage({ params, searchParams }: PagePr
             ) : null}
 
             <dl className="mt-4">
-              <Dato etiqueta="Tier">
+              <Dato etiqueta="Clasificación de ventas">
                 {clasificacion ? (
                   <span className="inline-flex items-center gap-2">
                     <span className="rounded bg-slate-900 px-1.5 text-xs font-semibold text-white">{clasificacion}</span>
@@ -138,8 +139,11 @@ export default async function PerfilClientePage({ params, searchParams }: PagePr
                   <span className="text-slate-400">Sin clasificación</span>
                 )}
               </Dato>
+              <Dato etiqueta="Actividad">{ficha?.actividad || "Sin informar"}</Dato>
+              <Dato etiqueta="Categoría">{ficha?.categoria || "Sin informar"}</Dato>
+              <Dato etiqueta="Lista de precio">{ficha?.listaPrecio || conFicha?.listaPrecio || "Sin informar"}</Dato>
               <Dato etiqueta="CUIT">{ficha?.cuit ? <span className="font-mono">{ficha.cuit}</span> : <span className="text-slate-400">Sin CUIT cargado</span>}</Dato>
-              <Dato etiqueta="Estado financiero">
+              <Dato etiqueta="Situación / estado de cuenta (deuda)">
                 {estados.length > 0 ? (
                   <span className="flex flex-wrap gap-1">
                     {estados.map((estado) => {
@@ -159,21 +163,27 @@ export default async function PerfilClientePage({ params, searchParams }: PagePr
                 ) : (
                   <span className="text-slate-400">Sin datos de la cuenta</span>
                 )}
-                {ficha?.condicionPago || ficha?.limiteCredito ? (
-                  <span className="mt-1.5 block text-xs text-slate-500">
-                    {ficha.condicionPago ? `Condición de pago: ${ficha.condicionPago}` : ""}
-                    {ficha.condicionPago && ficha.limiteCredito ? " · " : ""}
-                    {ficha.limiteCredito ? `Límite de crédito: ${ficha.limiteCredito}` : ""}
-                  </span>
-                ) : null}
               </Dato>
+              <Dato etiqueta="Condición de pago">{ficha?.condicionPago || "Sin informar"}</Dato>
+              <Dato etiqueta="Límite de crédito">{ficha?.limiteCredito || "Sin informar"}</Dato>
               <Dato etiqueta="Responsable asignado">
                 {responsable || <span className="text-slate-400">Sin grupo vendedor</span>}
                 {ultimoEncargado ? <span className="mt-0.5 block text-xs text-slate-500">Atendió por última vez: {ultimoEncargado}</span> : null}
               </Dato>
-              {ficha?.grupoWhatsapp || conFicha?.grupoWhatsapp ? (
-                <Dato etiqueta="Grupo de WhatsApp">{ficha?.grupoWhatsapp || conFicha?.grupoWhatsapp}</Dato>
-              ) : null}
+              <Dato etiqueta="Grupo de WhatsApp">
+                <span className="flex flex-col items-start gap-1.5">
+                  {[...new Set([ficha?.grupoWhatsapp, ficha?.grupoWhatsapp2, conFicha?.grupoWhatsapp].filter((grupo): grupo is string => Boolean(grupo)))].map((grupo) => (
+                    <span key={grupo} className="flex flex-wrap items-center gap-1.5 break-words">
+                      {grupo}<BotonGrupoWhatsapp grupo={grupo} link={grupo === ficha?.grupoWhatsapp ? ficha.linkWhatsapp : ""} />
+                    </span>
+                  ))}
+                  {!ficha?.grupoWhatsapp && !ficha?.grupoWhatsapp2 && !conFicha?.grupoWhatsapp ? "Sin informar" : null}
+                </span>
+              </Dato>
+              <Dato etiqueta="Observación · última situación del chat">
+                <span className="whitespace-pre-wrap">{ficha?.observacion || "Sin observaciones registradas"}</span>
+                <span className="mt-1 block text-xs text-slate-500">Se actualiza al finalizar una conversación.</span>
+              </Dato>
             </dl>
           </section>
 

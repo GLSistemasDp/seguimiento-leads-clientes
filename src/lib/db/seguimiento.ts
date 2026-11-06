@@ -1,4 +1,6 @@
 import "server-only";
+import { conUltimaGestion, estadoCuentaUnificado } from "@/lib/clientes/ficha";
+import { claveCliente } from "@/lib/db/sheets/maestros";
 import { postgresConfigurado } from "@/lib/db/postgres/pg";
 import { backendActivo } from "@/lib/db/repositorio";
 import type { Backend, RepositorioSeguimiento } from "@/lib/db/repositorio";
@@ -46,11 +48,22 @@ async function repo(): Promise<RepositorioSeguimiento> {
 }
 
 export async function getAll(): Promise<Consulta[]> {
-  return (await repo()).getAll();
+  const consultas = await (await repo()).getAll();
+  if (backendSeguimiento() === "postgres") return consultas;
+  const { ultimasGestiones } = await import("@/lib/db/historial");
+  const gestiones = await ultimasGestiones();
+  return consultas.map((consulta) => ({
+    ...consulta,
+    ficha: consulta.ficha ? conUltimaGestion(consulta.ficha, gestiones[claveCliente(consulta.cliente)]) : consulta.ficha,
+  }));
 }
 
 export async function getById(id: string): Promise<Consulta | null> {
-  return (await repo()).getById(id);
+  const consulta = await (await repo()).getById(id);
+  if (!consulta?.ficha || backendSeguimiento() === "postgres") return consulta;
+  const { ultimasGestiones } = await import("@/lib/db/historial");
+  const gestiones = await ultimasGestiones();
+  return { ...consulta, ficha: conUltimaGestion(consulta.ficha, gestiones[claveCliente(consulta.cliente)]) };
 }
 
 export async function update(
@@ -76,12 +89,19 @@ export async function getParaTablero(): Promise<Consulta[]> {
  */
 export async function fichaDeCliente(clave: string): Promise<FichaCliente | null> {
   if (backendSeguimiento() === "postgres") return (await import("@/lib/db/postgres/seguimiento")).fichaDeCliente(clave);
-  const buscado = clave.trim().toUpperCase();
-  const consulta = (await getAll()).find((item) => {
-    const codigo = item.cliente.match(/^\s*(\d+)\s*-/)?.[1] ?? "";
-    return item.ficha && (codigo === buscado || item.ficha.nombre.toUpperCase() === buscado || item.cliente.toUpperCase() === buscado);
-  });
-  return consulta?.ficha ?? null;
+  let ficha: FichaCliente | null;
+  if (backendSeguimiento() === "sheets") {
+    ficha = await (await import("@/lib/db/sheets/seguimiento")).fichaDeCliente(clave);
+  } else {
+    const buscada = claveCliente(clave);
+    const consulta = (await getAll()).find((item) => claveCliente(item.cliente) === buscada || claveCliente(item.ficha?.nombre ?? "") === buscada);
+    ficha = consulta?.ficha ?? null;
+  }
+  if (!ficha) return null;
+  const { ultimasGestiones } = await import("@/lib/db/historial");
+  const gestiones = await ultimasGestiones();
+  const estado = estadoCuentaUnificado(ficha.situacion, ficha.deuda);
+  return conUltimaGestion({ ...ficha, situacion: estado, deuda: estado }, gestiones[ficha.codigo || claveCliente(ficha.nombre)]);
 }
 
 /** Respuestas tipo de la planilla; si no hay, las que trae la app. */

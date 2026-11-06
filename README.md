@@ -197,6 +197,17 @@ vinculan por código, nombre o coincidencia exacta con cualquiera de sus dos
 grupos de WhatsApp. Si un grupo corresponde a varios clientes, se necesita
 el código o el nombre para asignarlo.
 
+Al tocar el nombre se abre `/clientes/[codigo]`, con actividad, categoría,
+condición de pago, límite de crédito, lista de precio, clasificación de ventas
+y grupos de WhatsApp, incluso si el cliente todavía no tiene consultas.
+Situación, deuda y estado de cuenta se muestran como un único dato: se conservan
+las alertas de ambas hojas y se omite `OK` cuando hay una advertencia de deuda.
+La observación inicial viene de `Desplegable`; cada conversación finalizada la
+reemplaza con su resultado y comentario. Reabrir o agregar una nota conserva
+el último cierre. Las siguientes sincronizaciones no pisan esa observación.
+En Postgres lo mantiene la migración `003_ficha_clientes.sql`; en Sheets se
+combina la ficha con el historial persistido por la app.
+
 Las consultas sin coincidencia aparecen como `Otros · <nombre del grupo>` y
 con clasificación `Otros`. Se conserva el mensaje completo y se recupera el
 grupo de prefijos del bot como `[SIN MATCH] Grupo DP ...: ...` o `DP ...: ...`
@@ -221,6 +232,11 @@ se conservan los registros y se informa el fallo del último intento.
 
 Pruebas del lector: `node --test tests/sheets-seguimiento.test.mjs`.
 Pruebas de separación entre prueba y planillas: `node --test tests/seguimiento-origen.test.mjs`.
+Pruebas de fichas y cierres: `node --test tests/clientes-ficha.test.mjs`.
+Prueba de migración y sincronización en Postgres local:
+`node --env-file=.env.local --test tests/clientes-postgres.test.mjs`.
+Esta última crea un esquema aislado dentro de una transacción y revierte todos
+los cambios al terminar; necesita la base local iniciada.
 
 ## Decisiones a tener presentes
 

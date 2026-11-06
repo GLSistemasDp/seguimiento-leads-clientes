@@ -3,7 +3,7 @@ import { guardarCambio, leerCambios } from "@/lib/db/sheets/cambios-locales";
 import type { CambioLocal } from "@/lib/db/sheets/cambios-locales";
 import { ErrorSheets, escribirRangos, leerRango, letraColumna } from "@/lib/db/sheets/cliente";
 import type { FilaSheet } from "@/lib/db/sheets/cliente";
-import { armarCatalogo, armarFichas, crearBuscadorClientes } from "@/lib/db/sheets/maestros";
+import { armarCatalogo, armarFichas, crearBuscadorClientes, validarHojasClientes } from "@/lib/db/sheets/maestros";
 import { leerHojasPublicas } from "@/lib/db/sheets/publica";
 import type { RepositorioSeguimiento } from "@/lib/db/repositorio";
 import { huella } from "@/lib/seguimiento/huella";
@@ -92,14 +92,15 @@ type Maestros = {
 
 const almacen = globalThis as typeof globalThis & { __maestrosSeguimiento?: Promise<Maestros> };
 
-async function cargarMaestros(): Promise<Maestros> {
+async function cargarMaestros(exigirClientes = false): Promise<Maestros> {
   const origen = `${planilla()}|${accesoPublico()}`;
   const [desplegable, maestro, rapidas, reclamos] = await Promise.all([
-    leerHojaOpcional("Desplegable"),
-    leerHojaOpcional("MaestroCliente"),
+    exigirClientes ? leerHoja("Desplegable") : leerHojaOpcional("Desplegable"),
+    exigirClientes ? leerHoja("MaestroCliente") : leerHojaOpcional("MaestroCliente"),
     leerHojaOpcional("Rtas RÁPIDAS"),
     leerHojaOpcional("Rtas RECLAMO"),
   ]);
+  if (exigirClientes) validarHojasClientes(desplegable, maestro);
   const fichas = armarFichas(desplegable, maestro);
   return {
     fichas,
@@ -350,11 +351,16 @@ export async function getAll(): Promise<Consulta[]> {
  * de "Desplegable" + "MaestroCliente", tengan o no consultas.
  */
 export async function leerPlanilla(): Promise<{ consultas: Consulta[]; fichas: FichaCliente[] }> {
-  const [{ consultas }, { fichas, buscarFicha }] = await Promise.all([leerTodas(), cargarMaestros()]);
+  const [{ consultas }, { fichas, buscarFicha }] = await Promise.all([leerTodas(), cargarMaestros(true)]);
   return {
     consultas: consultas.map(({ consulta }) => completarConFicha(consulta, buscarFicha)),
     fichas: [...fichas.values()],
   };
+}
+
+/** También permite abrir clientes que nunca tuvieron consultas en Seguimiento. */
+export async function fichaDeCliente(clave: string): Promise<FichaCliente | null> {
+  return (await maestros()).buscarFicha(clave, "");
 }
 
 export async function getById(id: string): Promise<Consulta | null> {

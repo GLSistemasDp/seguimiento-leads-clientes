@@ -1,4 +1,5 @@
 import { normalizarEncabezado } from "@/lib/utils/strings";
+import { estadoCuentaUnificado } from "@/lib/clientes/ficha";
 import type { Consulta, EventoHistorial, Relacion, Resultado } from "@/types/seguimiento";
 
 /**
@@ -273,13 +274,7 @@ export function separarCliente(cliente: string): { codigo: string; nombre: strin
  * una situacion de cuenta distinta de OK.
  */
 export function alertasCliente(consulta: Pick<Consulta, "ficha" | "estadoCuenta">): string[] {
-  const alertas: string[] = [];
-  if (consulta.ficha?.deuda) alertas.push(consulta.ficha.deuda);
-  const situacion = (consulta.ficha?.situacion || consulta.estadoCuenta).trim();
-  if (situacion && situacion.toUpperCase() !== "OK" && !alertas.includes(situacion)) {
-    alertas.push(situacion);
-  }
-  return alertas;
+  return estadoCliente(consulta).filter((estado) => !["ok", "sin deuda", "sin marca", "al dia"].includes(normalizarEncabezado(estado)));
 }
 
 /**
@@ -287,12 +282,8 @@ export function alertasCliente(consulta: Pick<Consulta, "ficha" | "estadoCuenta"
  * "TIENE DEUDA", "NO RESPONDER"...) y la marca de deuda ("REVISAR DEUDORA").
  */
 export function estadoCliente(consulta: Pick<Consulta, "ficha" | "estadoCuenta">): string[] {
-  const estados: string[] = [];
-  const situacion = (consulta.ficha?.situacion || consulta.estadoCuenta).trim().toUpperCase();
-  if (situacion) estados.push(situacion);
-  const deuda = consulta.ficha?.deuda?.trim().toUpperCase();
-  if (deuda && !estados.includes(deuda)) estados.push(deuda);
-  return estados;
+  const estado = estadoCuentaUnificado(consulta.ficha?.situacion || consulta.estadoCuenta, consulta.ficha?.deuda ?? "");
+  return estado ? [estado.toUpperCase()] : [];
 }
 
 /**

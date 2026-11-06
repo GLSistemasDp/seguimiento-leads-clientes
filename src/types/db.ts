@@ -63,13 +63,14 @@ export interface ClienteRow {
   codigo: string | null;
   nombre: string;
   lista_precio: string;
-  clasificacion: "" | "A" | "B" | "C";
+  clasificacion: string;
   grupo_vendedor_id: number | null;
   grupo_whatsapp: string;
   grupo_whatsapp2: string;
   link_whatsapp: string;
   situacion: string;
   observacion: string;
+  observacion_cierre_en: Date | null;
   actividad: string;
   categoria: string;
   condicion_pago: string;

@@ -1,4 +1,5 @@
 import "server-only";
+import { estadoCuentaUnificado } from "@/lib/clientes/ficha";
 import type { FilaSheet } from "@/lib/db/sheets/cliente";
 import type { RespuestaTipo } from "@/lib/seguimiento/respuestas";
 import { normalizarEncabezado } from "@/lib/utils/strings";
@@ -45,7 +46,7 @@ function tabla<A extends Alias>(
 
 /** "1877 - BULONERIA BELGRANO" -> "1877"; sin codigo, el nombre normalizado. */
 export function claveCliente(cliente: string): string {
-  const codigo = cliente.match(/^\s*(\d+)\s*-/);
+  const codigo = cliente.match(/^\s*(\d+)\s*(?:[-–—]|$)/);
   return codigo ? codigo[1] : normalizarEncabezado(cliente);
 }
 
@@ -61,9 +62,9 @@ function esCliente(cliente: string): boolean {
 // --- Fichas de clientes ----------------------------------------------------
 
 const ALIAS_DESPLEGABLE = {
-  cliente: ["cliente", "grupo cliente"],
-  listaPrecio: ["listaprecio", "lista de precio", "lista precio"],
-  clasificacion: ["cla vta", "clasificacion venta", "clasificacion"],
+  cliente: ["cliente", "clientes", "grupo cliente"],
+  listaPrecio: ["listaprecio", "lista de precio", "lista de precios", "lista precio"],
+  clasificacion: ["cla vta", "clasificacion venta", "clasificacion de ventas", "clasificacion de venta", "clasificacion ventas", "clasificacion"],
   grupoVendedor: ["grupo vendedor"],
   // En la planilla actual los encabezados estan corridos: el grupo vendedor
   // quedo bajo "Limite de credito disponible" y "Grupo Vendedor" esta vacia.
@@ -71,25 +72,25 @@ const ALIAS_DESPLEGABLE = {
   grupoWhatsapp: ["grupo whatsapp"],
   grupoWhatsapp2: ["grp wsp 2", "grupo whatsapp 2"],
   linkWhatsapp: ["link grupo whatsapp", "link grupo", "link whatsapp", "link wsp"],
-  situacion: ["situacion del cliente", "situacion"],
+  situacion: ["situacion del cliente", "situacion", "estado de cuenta", "deuda"],
   observacion: ["observacion", "observaciones"],
 } as const;
 
 const ALIAS_MAESTRO = {
-  cliente: ["cliente"],
+  cliente: ["cliente", "clientes"],
   actividad: ["actividad"],
   categoria: ["catergoria act", "categoria act", "categoria actividad", "categoria"],
   condicionPago: ["cond de pago", "condicion de pago"],
   limiteCredito: ["limite de credito"],
-  deuda: ["deuda"],
+  deuda: ["deuda", "estado de cuenta", "situacion"],
   cuit: ["cuit", "c.u.i.t.", "nro cuit", "cuit cliente"],
 } as const;
 
 function fichaVacia(cliente: string): FichaCliente {
-  const partes = cliente.match(/^\s*(\d+)\s*-\s*(.+)$/);
+  const partes = cliente.match(/^\s*(\d+)\s*(?:[-–—]\s*(.*))?$/);
   return {
     codigo: partes ? partes[1] : "",
-    nombre: partes ? partes[2].trim() : cliente.trim(),
+    nombre: partes ? (partes[2] ?? "").trim() : cliente.trim(),
     listaPrecio: "",
     clasificacion: "",
     grupoVendedor: "",
@@ -115,6 +116,8 @@ export function armarFichas(desplegable: FilaSheet[], maestro: FilaSheet[]): Map
     if (!existente) {
       existente = fichaVacia(cliente);
       fichas.set(id, existente);
+    } else if (!existente.nombre) {
+      existente.nombre = fichaVacia(cliente).nombre;
     }
     return existente;
   };
@@ -162,7 +165,19 @@ export function armarFichas(desplegable: FilaSheet[], maestro: FilaSheet[]): Map
     }
   }
 
+  for (const ficha of fichas.values()) {
+    ficha.nombre ||= ficha.codigo;
+    ficha.situacion = estadoCuentaUnificado(ficha.situacion, ficha.deuda);
+    ficha.deuda = ficha.situacion;
+  }
   return fichas;
+}
+
+/** La sincronización no puede reemplazar datos si falta o cambió alguna hoja maestra. */
+export function validarHojasClientes(desplegable: FilaSheet[], maestro: FilaSheet[]): void {
+  if (!tabla(desplegable, ALIAS_DESPLEGABLE, "cliente") || !tabla(maestro, ALIAS_MAESTRO, "cliente")) {
+    throw new Error("No se pudieron leer los encabezados CLIENTE de Desplegable y MaestroCliente. Se conservan los clientes existentes.");
+  }
 }
 
 /** Coincidencias exactas por codigo, nombre o cualquiera de los dos grupos de WhatsApp. */

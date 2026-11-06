@@ -25,6 +25,8 @@ export function postgresConfigurado(): boolean {
 const MIGRACIONES: readonly { version: number; nombre: string; archivo: string }[] = [
   { version: 1, nombre: "esquema inicial del CRM", archivo: "db/schema.sql" },
   { version: 2, nombre: "clasificacion de mensajes y relacion al cerrar", archivo: "db/migraciones/002_relacion_ia.sql" },
+  { version: 3, nombre: "ficha unificada y observacion del ultimo cierre", archivo: "db/migraciones/003_ficha_clientes.sql" },
+  { version: 4, nombre: "conservar clasificacion comercial de Sheets", archivo: "db/migraciones/004_clasificacion_clientes.sql" },
 ];
 
 const global = globalThis as typeof globalThis & { crmPool?: Promise<Pool> };

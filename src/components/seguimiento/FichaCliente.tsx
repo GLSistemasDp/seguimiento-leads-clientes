@@ -155,12 +155,11 @@ export function FichaCliente({
           <div className="grid gap-4 sm:grid-cols-2">
             <section className="rounded-lg border border-slate-200 p-3">
               <p className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
-                Comercial · Desplegable
+                Datos comerciales
               </p>
               <dl className="grid grid-cols-2 gap-x-3 gap-y-2">
                 <Dato etiqueta="Lista de precio" valor={ficha.listaPrecio} />
-                <Dato etiqueta="Clasificacion venta" valor={ficha.clasificacion} />
-                <Dato etiqueta="Situacion" valor={ficha.situacion} />
+                <Dato etiqueta="Clasificación de ventas" valor={ficha.clasificacion} />
                 <Dato etiqueta="Grupo vendedor" valor={ficha.grupoVendedor.replace(/^FILTRO GRUPO\s*/i, "")} />
                 <div className="col-span-2">
                   <Dato
@@ -168,16 +167,14 @@ export function FichaCliente({
                     valor={[ficha.grupoWhatsapp, ficha.grupoWhatsapp2].filter(Boolean).join(" · ")}
                   />
                 </div>
-                {ficha.observacion ? (
-                  <div className="col-span-2">
-                    <Dato etiqueta="Observacion" valor={ficha.observacion} />
-                  </div>
-                ) : null}
+                <div className="col-span-2">
+                  <Dato etiqueta="Observación · última situación del chat" valor={ficha.observacion} />
+                </div>
               </dl>
             </section>
             <section className="rounded-lg border border-slate-200 p-3">
               <p className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
-                Cuenta · MaestroCliente
+                Actividad y cuenta
               </p>
               <dl className="grid grid-cols-2 gap-x-3 gap-y-2">
                 <div className="col-span-2">
@@ -188,7 +185,9 @@ export function FichaCliente({
                 <div className="col-span-2">
                   <Dato etiqueta="Condicion de pago" valor={ficha.condicionPago} />
                 </div>
-                <Dato etiqueta="Deuda" valor={ficha.deuda || "Sin marca"} />
+                <div className="col-span-2">
+                  <Dato etiqueta="Situación / estado de cuenta (deuda)" valor={ficha.situacion} />
+                </div>
               </dl>
             </section>
           </div>

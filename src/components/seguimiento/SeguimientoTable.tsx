@@ -175,7 +175,7 @@ const FilaSeguimiento = memo(function FilaSeguimiento({
         <td colSpan={COLUMNAS.length} className="px-5 py-2.5">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white">
             <Icono nombre="chat" className="size-4 text-white/80" />
-            <span className="font-semibold">{nombre}</span>
+            <Link href={rutaPerfil(consulta.cliente)} className="font-semibold hover:underline" title="Ver ficha del cliente">{nombre}</Link>
             {codigo ? <span className="text-xs text-white/75">#{codigo}</span> : null}
             <span className="truncate text-xs text-white/75">{consulta.grupoWhatsapp || "Sin grupo de WhatsApp"}</span>
             {resumen ? (
@@ -200,9 +200,8 @@ const FilaSeguimiento = memo(function FilaSeguimiento({
     >
       {/* Cliente: circulo con iniciales, nombre y el resto en gris chico. */}
       <td className="py-3 pr-3 pl-5">
-        <button
-          type="button"
-          onClick={() => onVerFicha(consulta)}
+        <Link
+          href={rutaPerfil(consulta.cliente)}
           title="Ver ficha e historial del cliente"
           className="group -m-1 flex max-w-full items-start gap-2.5 rounded-md p-1 text-left hover:bg-slate-100/70"
         >
@@ -236,7 +235,7 @@ const FilaSeguimiento = memo(function FilaSeguimiento({
               <Icono nombre="ojo" className="size-3.5 text-slate-300 group-hover:text-slate-600" />
             </span>
           </span>
-        </button>
+        </Link>
         <div className="mt-1 pl-[2.375rem]">
           {vendedor ? <p className="truncate text-xs text-slate-400">{vendedor}</p> : null}
           {estados.length > 0 ? (
@@ -256,12 +255,13 @@ const FilaSeguimiento = memo(function FilaSeguimiento({
           ) : null}
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             <BotonGrupoWhatsapp grupo={consulta.grupoWhatsapp} link={consulta.linkWhatsapp} />
-            <Link
-              href={rutaPerfil(consulta.cliente)}
+            <button
+              type="button"
+              onClick={() => onVerFicha(consulta)}
               className="text-[11px] font-medium text-slate-500 underline-offset-2 hover:text-slate-900 hover:underline"
             >
-              Perfil e historial →
-            </Link>
+              Vista rápida
+            </button>
           </div>
         </div>
       </td>

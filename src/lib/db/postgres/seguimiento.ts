@@ -31,6 +31,7 @@ type FilaConsulta = ConsultaSeguimientoRow & {
   cl_link_whatsapp: string | null;
   cl_situacion: string | null;
   cl_observacion: string | null;
+  cl_observacion_cierre_en: Date | null;
   cl_actividad: string | null;
   cl_categoria: string | null;
   cl_condicion_pago: string | null;
@@ -45,7 +46,8 @@ const SELECT_CONSULTA = `
     cl.codigo AS cl_codigo, cl.nombre AS cl_nombre, cl.lista_precio AS cl_lista_precio,
     cl.clasificacion AS cl_clasificacion, cl.grupo_whatsapp AS cl_grupo_whatsapp,
     cl.grupo_whatsapp2 AS cl_grupo_whatsapp2, cl.link_whatsapp AS cl_link_whatsapp,
-    cl.situacion AS cl_situacion, cl.observacion AS cl_observacion, cl.actividad AS cl_actividad,
+    cl.situacion AS cl_situacion, cl.observacion AS cl_observacion,
+    cl.observacion_cierre_en AS cl_observacion_cierre_en, cl.actividad AS cl_actividad,
     cl.categoria AS cl_categoria, cl.condicion_pago AS cl_condicion_pago,
     cl.limite_credito AS cl_limite_credito, cl.deuda AS cl_deuda, cl.cuit AS cl_cuit,
     gv.nombre AS grupo_vendedor
@@ -67,6 +69,7 @@ function ficha(fila: FilaConsulta): FichaCliente | null {
     linkWhatsapp: fila.cl_link_whatsapp ?? "",
     situacion: fila.cl_situacion ?? "",
     observacion: fila.cl_observacion ?? "",
+    observacionActualizadaEn: fila.cl_observacion_cierre_en?.toISOString(),
     actividad: fila.cl_actividad ?? "",
     categoria: fila.cl_categoria ?? "",
     condicionPago: fila.cl_condicion_pago ?? "",
@@ -245,6 +248,7 @@ export async function fichaDeCliente(clave: string): Promise<FichaCliente | null
     linkWhatsapp: fila.link_whatsapp,
     situacion: fila.situacion,
     observacion: fila.observacion,
+    observacionActualizadaEn: fila.observacion_cierre_en?.toISOString(),
     actividad: fila.actividad,
     categoria: fila.categoria,
     condicionPago: fila.condicion_pago,
