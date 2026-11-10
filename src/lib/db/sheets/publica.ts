@@ -1,4 +1,5 @@
 import "server-only";
+import { after } from "next/server";
 import * as XLSX from "xlsx";
 import { ErrorSheets } from "@/lib/db/sheets/cliente";
 import type { FilaSheet } from "@/lib/db/sheets/cliente";
@@ -12,8 +13,14 @@ import type { FilaSheet } from "@/lib/db/sheets/cliente";
  * fechas llegan como numero de serie y las casillas como "TRUE" / "FALSE".
  */
 
-/** La exportacion tarda unos segundos: se reutiliza durante un minuto. */
+/**
+ * La exportacion tarda varios segundos (unos 3 s de descarga y 1 s de lectura):
+ * durante un minuto se reutiliza tal cual. Despues, hasta 15 minutos, se sigue
+ * mostrando la copia que hay mientras se baja la nueva en segundo plano, asi
+ * nadie espera la descarga salvo la primera vez.
+ */
 const VIGENCIA_MS = 60_000;
+const VIGENCIA_MAXIMA_MS = 15 * 60_000;
 
 type Libro = { hojas: Record<string, FilaSheet[]>; leido: number };
 
@@ -37,7 +44,14 @@ async function descargar(planilla: string): Promise<Libro> {
     );
   }
 
-  const libro = XLSX.read(new Uint8Array(await respuesta.arrayBuffer()), { type: "array" });
+  // Solo valores: sin formatos, estilos ni formulas, que la app no usa y hacen la lectura mas lenta.
+  const libro = XLSX.read(new Uint8Array(await respuesta.arrayBuffer()), {
+    type: "array",
+    cellText: false,
+    cellHTML: false,
+    cellFormula: false,
+    cellStyles: false,
+  });
   const hojas: Record<string, FilaSheet[]> = {};
   for (const nombre of libro.SheetNames) {
     const hoja = libro.Sheets[nombre];
@@ -58,13 +72,42 @@ async function descargar(planilla: string): Promise<Libro> {
   return { hojas, leido: Date.now() };
 }
 
+const actualizando = new Set<string>();
+
+/** Baja la planilla de nuevo sin que nadie la espere; si falla, queda la copia anterior. */
+function refrescarEnSegundoPlano(planilla: string, libros: Map<string, Promise<Libro>>, anterior: Promise<Libro>): void {
+  if (actualizando.has(planilla)) return;
+  actualizando.add(planilla);
+  const tarea = descargar(planilla)
+    .then((libro) => {
+      libros.set(planilla, Promise.resolve(libro));
+    })
+    .catch(() => {
+      libros.set(planilla, anterior);
+    })
+    .finally(() => actualizando.delete(planilla));
+  // En Vercel, after() mantiene viva la funcion hasta que termine la descarga.
+  try {
+    after(() => tarea);
+  } catch {
+    // Fuera de un pedido (scripts, pruebas) la tarea sigue sola.
+  }
+}
+
 /** Todas las pestanas de la planilla, por nombre. */
 export async function leerHojasPublicas(planilla: string): Promise<Record<string, FilaSheet[]>> {
   const libros = (almacen.__librosPublicos ??= new Map());
   const previo = libros.get(planilla);
   if (previo) {
     const libro = await previo.catch(() => null);
-    if (libro && Date.now() - libro.leido < VIGENCIA_MS) return libro.hojas;
+    if (libro) {
+      const edad = Date.now() - libro.leido;
+      if (edad < VIGENCIA_MS) return libro.hojas;
+      if (edad < VIGENCIA_MAXIMA_MS) {
+        refrescarEnSegundoPlano(planilla, libros, previo);
+        return libro.hojas;
+      }
+    }
   }
 
   const pedido = descargar(planilla);

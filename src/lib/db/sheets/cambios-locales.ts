@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { leer, modificar } from "@/lib/db/local/almacen";
 import { clavePorOrigen } from "@/lib/seguimiento/origen";
 import type { CambiosConsulta } from "@/types/seguimiento";
@@ -18,8 +19,14 @@ export type CambioLocal = CambiosConsulta & {
 
 const COLECCION = "seguimiento-cambios";
 
-export function leerCambios(): Promise<Record<string, CambioLocal>> {
-  return leer<CambioLocal>(clavePorOrigen(COLECCION));
+export const leerCambios = cache((): Promise<Record<string, CambioLocal>> => leer<CambioLocal>(clavePorOrigen(COLECCION)));
+
+/** Varios cambios en una sola escritura (cierre masivo). */
+export function guardarCambios(cambios: Record<string, CambiosConsulta>): Promise<void> {
+  return modificar<CambioLocal, void>(clavePorOrigen(COLECCION), (todos) => {
+    const actualizado = new Date().toISOString();
+    for (const [id, cambio] of Object.entries(cambios)) todos[id] = { ...todos[id], ...cambio, actualizado };
+  });
 }
 
 export function guardarCambio(id: string, cambios: CambiosConsulta): Promise<CambioLocal> {

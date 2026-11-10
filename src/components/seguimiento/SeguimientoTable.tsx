@@ -68,8 +68,8 @@ function BadgeRelacion({ relacion }: { relacion: Relacion }) {
   );
 }
 
-/** Lo secundario (lista, vendedor, fecha, encargado) va dentro de estas columnas, en chico. */
-const COLUMNAS = ["Cliente", "Consulta", "Demora", "Relación · última gestión", "Respondido"] as const;
+/** El cliente va en el encabezado azul de cada chat; cada fila es una consulta. */
+const COLUMNAS = ["Fecha · hito · demora", "Mensaje", "Relación · última charla", "Resuelto"] as const;
 
 const PRIORIDADES: Record<Prioridad, { etiqueta: string; estilo: string; punto: string }> = {
   ALTA: { etiqueta: "Alta", estilo: "bg-red-50 text-red-700 ring-red-200", punto: "bg-red-500" },
@@ -106,18 +106,6 @@ function estiloEstado(estado: string): string {
   return "bg-amber-50 text-amber-800 ring-amber-200";
 }
 
-const CLASIFICACIONES: Record<string, string> = {
-  A: "bg-slate-900 text-white ring-slate-900",
-  B: "bg-slate-100 text-slate-700 ring-slate-200",
-  C: "bg-white text-slate-500 ring-slate-200",
-};
-
-/** "BULONERIA BELGRANO" -> "BB", para el circulo del cliente. */
-function iniciales(nombre: string): string {
-  const palabras = nombre.replace(/[^\p{L}\p{N} ]/gu, " ").split(/\s+/).filter(Boolean);
-  return ((palabras[0]?.[0] ?? "") + (palabras[1]?.[0] ?? "")).toUpperCase() || "?";
-}
-
 async function guardar(id: string, cambios: Cambios): Promise<string | null> {
   try {
     const respuesta = await fetch(`/api/seguimiento/${id}`, {
@@ -138,7 +126,7 @@ type FilaProps = {
   respondida: boolean;
   ocupada: boolean;
   saliendo: boolean;
-  /** Primera fila de su chat en la vista agrupada: lleva el encabezado. */
+  /** Primera fila de su chat (o distinta de la anterior): lleva el encabezado con el cliente. */
   nuevoChat: boolean;
   resumen: ResumenChat | undefined;
   catalogo: readonly RespuestaTipo[] | undefined;
@@ -166,18 +154,74 @@ const FilaSeguimiento = memo(function FilaSeguimiento({
   const tachado = respondida ? "text-slate-400 line-through" : "";
   const vendedor = consulta.grupoVendedor.replace(/^FILTRO GRUPO\s*/i, "");
   const estados = estadoCliente(consulta);
+  const hora = formatearHora(consulta.fecha);
 
   return (
     <>
     {nuevoChat ? (
-      // Separador de cada chat: azul de la marca para que no se confunda con las consultas.
+      // Encabezado de cada chat (azul de la marca): cliente, estado de cuenta,
+      // acceso al chat y cuantos mensajes quedan sin responder.
       <tr className="bg-[#1b2b5e]">
         <td colSpan={COLUMNAS.length} className="px-5 py-2.5">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white">
-            <Icono nombre="chat" className="size-4 text-white/80" />
-            <Link href={rutaPerfil(consulta.cliente)} className="font-semibold hover:underline" title="Ver ficha del cliente">{nombre}</Link>
-            {codigo ? <span className="text-xs text-white/75">#{codigo}</span> : null}
-            <span className="truncate text-xs text-white/75">{consulta.grupoWhatsapp || "Sin grupo de WhatsApp"}</span>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-white">
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <Link
+                href={rutaPerfil(consulta.cliente)}
+                className="font-semibold hover:underline"
+                title="Ver ficha e historial del cliente"
+              >
+                {nombre}
+              </Link>
+              {codigo ? <span className="text-xs text-white/75">#{codigo}</span> : null}
+              {consulta.clasificacion ? (
+                <span
+                  className="rounded bg-white/15 px-1.5 text-[11px] font-semibold text-white ring-1 ring-white/30 ring-inset"
+                  title="Clasificacion de venta"
+                >
+                  {consulta.clasificacion}
+                </span>
+              ) : null}
+              {vendedor || consulta.listaPrecio ? (
+                <span className="text-xs text-white/60">
+                  {[vendedor, consulta.listaPrecio].filter(Boolean).join(" · ")}
+                </span>
+              ) : null}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1">
+              {estados.length > 0 ? (
+                estados.map((estado) => {
+                  const etiqueta = <span className={`${ETIQUETA} ${estiloEstado(estado)}`}>{estado}</span>;
+                  const explicacion = explicarEstado(estado);
+                  return explicacion ? (
+                    <Pista key={estado} texto={explicacion} lado="abajo">
+                      {etiqueta}
+                    </Pista>
+                  ) : (
+                    <span key={estado}>{etiqueta}</span>
+                  );
+                })
+              ) : (
+                <span className="text-xs text-white/60">Sin estado de cuenta</span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <BotonGrupoWhatsapp
+                grupo={consulta.grupoWhatsapp}
+                link={consulta.linkWhatsapp}
+                etiqueta="Ir al chat"
+                className="inline-flex items-center gap-1.5 rounded-md bg-white px-2.5 py-1 text-xs font-semibold text-[#1b2b5e] hover:bg-slate-100"
+              />
+              <button
+                type="button"
+                onClick={() => onVerFicha(consulta)}
+                className="rounded-md px-2 py-1 text-xs font-medium text-white/80 ring-1 ring-white/30 ring-inset hover:bg-white/10 hover:text-white"
+              >
+                Vista rápida
+              </button>
+            </div>
+
             {resumen ? (
               <span
                 className={`ml-auto ${ETIQUETA} ${
@@ -198,77 +242,13 @@ const FilaSeguimiento = memo(function FilaSeguimiento({
         respondida ? "bg-slate-50/60" : "hover:bg-slate-50"
       } ${saliendo ? "pointer-events-none opacity-0" : "opacity-100"}`}
     >
-      {/* Cliente: circulo con iniciales, nombre y el resto en gris chico. */}
+      {/* Fecha, hito (con prioridad) y demora, uno debajo del otro. */}
       <td className="py-3 pr-3 pl-5">
-        <Link
-          href={rutaPerfil(consulta.cliente)}
-          title="Ver ficha e historial del cliente"
-          className="group -m-1 flex max-w-full items-start gap-2.5 rounded-md p-1 text-left hover:bg-slate-100/70"
-        >
-          <span
-            aria-hidden="true"
-            className="flex size-7 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500"
-          >
-            {iniciales(nombre)}
-          </span>
-          <span className="flex min-w-0 flex-col">
-            <span
-              className={`line-clamp-2 text-sm font-medium ${
-                respondida ? tachado : "text-slate-800 group-hover:text-slate-950"
-              }`}
-            >
-              {nombre}
-            </span>
-            <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
-              {codigo ? <span>#{codigo}</span> : null}
-              {consulta.clasificacion ? (
-                <span
-                  className={`rounded px-1.5 text-[11px] font-semibold ring-1 ring-inset ${
-                    CLASIFICACIONES[consulta.clasificacion.toUpperCase()] ?? "bg-white text-slate-500 ring-slate-200"
-                  }`}
-                  title="Clasificacion de venta"
-                >
-                  {consulta.clasificacion}
-                </span>
-              ) : null}
-              {consulta.listaPrecio ? <span title="Lista de precio">{consulta.listaPrecio}</span> : null}
-              <Icono nombre="ojo" className="size-3.5 text-slate-300 group-hover:text-slate-600" />
-            </span>
-          </span>
-        </Link>
-        <div className="mt-1 pl-[2.375rem]">
-          {vendedor ? <p className="truncate text-xs text-slate-400">{vendedor}</p> : null}
-          {estados.length > 0 ? (
-            <div className="mt-1 flex flex-wrap gap-1">
-              {estados.map((estado) => {
-                const etiqueta = <span className={`${ETIQUETA} ${estiloEstado(estado)}`}>{estado}</span>;
-                const explicacion = explicarEstado(estado);
-                return explicacion ? (
-                  <Pista key={estado} texto={explicacion}>
-                    {etiqueta}
-                  </Pista>
-                ) : (
-                  <span key={estado}>{etiqueta}</span>
-                );
-              })}
-            </div>
-          ) : null}
-          <div className="mt-1 flex flex-wrap items-center gap-1.5">
-            <BotonGrupoWhatsapp grupo={consulta.grupoWhatsapp} link={consulta.linkWhatsapp} />
-            <button
-              type="button"
-              onClick={() => onVerFicha(consulta)}
-              className="text-[11px] font-medium text-slate-500 underline-offset-2 hover:text-slate-900 hover:underline"
-            >
-              Vista rápida
-            </button>
-          </div>
-        </div>
-      </td>
-
-      {/* Consulta: hito y prioridad, el mensaje y lo que indico gerencia. */}
-      <td className="px-3 py-3">
-        <div className="flex flex-wrap items-center gap-1.5">
+        <p className="text-xs font-medium text-slate-600 tabular-nums">
+          {formatearDiaCorto(consulta.fecha)}
+          {hora !== "00:00 hs" ? <span className="font-normal text-slate-400"> · {hora}</span> : null}
+        </p>
+        <div className="mt-1.5 flex flex-wrap items-center gap-1">
           {consulta.hito ? (
             <span className={`${ETIQUETA} ${respondida ? "bg-slate-50 text-slate-400 ring-slate-200" : estiloHito(consulta.hito)}`}>
               {consulta.hito}
@@ -300,10 +280,29 @@ const FilaSeguimiento = memo(function FilaSeguimiento({
             </Link>
           ) : null}
         </div>
-        <p
-          title={consulta.consulta}
-          className={`mt-1 line-clamp-3 text-sm ${respondida ? tachado : "text-slate-700"}`}
-        >
+        {respondida ? null : (
+        <div className="mt-1.5">
+          {consulta.diasAbierta !== null ? (
+            <span
+              title="Tiempo que lleva sin resolverse"
+              className={`${ETIQUETA} tabular-nums ${
+                consulta.vencida ? "bg-red-50 text-red-700 ring-red-200" : "bg-slate-50 text-slate-600 ring-slate-200"
+              }`}
+            >
+              {consulta.diasAbierta === 0
+                ? "Demora: hoy"
+                : `Demora: ${consulta.diasAbierta} ${consulta.diasAbierta === 1 ? "día" : "días"}`}
+            </span>
+          ) : (
+            <span className="text-xs text-slate-400">Demora: —</span>
+          )}
+        </div>
+        )}
+      </td>
+
+      {/* Descripcion del mensaje, lo que indico gerencia y la respuesta sugerida. */}
+      <td className="px-3 py-3">
+        <p title={consulta.consulta} className={`line-clamp-4 text-sm ${respondida ? tachado : "text-slate-700"}`}>
           {consulta.consulta}
         </p>
         {consulta.indicacion ? (
@@ -316,32 +315,14 @@ const FilaSeguimiento = memo(function FilaSeguimiento({
           </p>
         ) : null}
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <p className="text-xs text-slate-400">
-            {formatearDiaCorto(consulta.fecha)}
-            {formatearHora(consulta.fecha) !== "00:00 hs" ? ` · ${formatearHora(consulta.fecha)}` : ""}
-            {consulta.encargado && consulta.encargado.toLowerCase() !== "bot" ? ` · ${consulta.encargado}` : ""}
-          </p>
+          {consulta.encargado && consulta.encargado.toLowerCase() !== "bot" ? (
+            <p className="text-xs text-slate-400">{consulta.encargado}</p>
+          ) : null}
           <RecomendacionRespuesta consulta={consulta} apagada={respondida} catalogo={catalogo} />
         </div>
       </td>
 
-      <td className="px-2 py-3 text-center">
-        {!respondida && consulta.diasAbierta !== null ? (
-          <span
-            className={`${ETIQUETA} tabular-nums ${
-              consulta.vencida ? "bg-red-50 text-red-700 ring-red-200" : "bg-slate-50 text-slate-600 ring-slate-200"
-            }`}
-          >
-            {consulta.diasAbierta === 0
-              ? "Hoy"
-              : `${consulta.diasAbierta} ${consulta.diasAbierta === 1 ? "dia" : "dias"}`}
-          </span>
-        ) : (
-          <span className="text-xs text-slate-400">—</span>
-        )}
-      </td>
-
-      {/* Relacion vigente (semaforo) y la ultima gestion con el cliente, en texto. */}
+      {/* Estado de la relacion (semaforo) y la informacion de la ultima charla. */}
       <td className="px-3 py-3">
         <div className="flex flex-wrap items-center gap-1.5">
           <BadgeRelacion relacion={consulta.relacion.relacion} />
@@ -349,13 +330,13 @@ const FilaSeguimiento = memo(function FilaSeguimiento({
         </div>
         {consulta.ultimaGestion?.resultado ? (
           <p className="mt-1.5 text-xs text-slate-600">
-            <span className="text-slate-400">Última gestión:</span>{" "}
+            <span className="text-slate-400">Última charla:</span>{" "}
             <span className="font-medium text-slate-800">{consulta.ultimaGestion.resultado}</span>
             {" · "}
             {formatearDiaCorto(new Date(consulta.ultimaGestion.fecha))}
           </p>
         ) : (
-          <p className="mt-1.5 text-xs text-slate-400">Sin gestiones previas registradas</p>
+          <p className="mt-1.5 text-xs text-slate-400">Sin charlas previas registradas</p>
         )}
         {consulta.ultimaGestion?.observacion ? (
           <p className="mt-0.5 line-clamp-2 text-xs text-slate-500" title={consulta.ultimaGestion.observacion}>
@@ -374,8 +355,8 @@ const FilaSeguimiento = memo(function FilaSeguimiento({
           checked={respondida}
           disabled={ocupada}
           onChange={() => onAlternar(consulta, respondida)}
-          aria-label={`Finalizar la conversacion con ${nombre}`}
-          title={respondida ? "Finalizada · destildar para volver a la cola" : "Finalizar conversacion"}
+          aria-label={`Marcar como resuelta la consulta de ${nombre}`}
+          title={respondida ? "Resuelta · destildar para volver a la cola" : "Marcar como resuelta"}
           className="mt-1 size-4 cursor-pointer rounded accent-slate-900 disabled:cursor-wait"
         />
       </td>
@@ -386,8 +367,6 @@ const FilaSeguimiento = memo(function FilaSeguimiento({
 
 export type SeguimientoTableProps = {
   consultas: readonly FilaConsulta[];
-  /** Muestra un encabezado por chat (cliente + grupo de WhatsApp). */
-  agrupado?: boolean;
   chats?: Record<string, ResumenChat>;
   /** Respuestas tipo de la planilla para las sugerencias. */
   catalogo?: readonly RespuestaTipo[];
@@ -402,7 +381,6 @@ const ATAJO_POR_DEFECTO: CierreFrecuente = { resultado: "Resuelto", relacion: "B
 
 export function SeguimientoTable({
   consultas,
-  agrupado = false,
   chats = SIN_CHATS,
   catalogo,
   vista = "pendientes",
@@ -499,10 +477,9 @@ export function SeguimientoTable({
     <>
       <table className="w-full table-fixed border-collapse">
         <colgroup>
-          <col className="w-[24%]" />
+          <col className="w-52" />
           <col />
-          <col className="w-20" />
-          <col className="w-[22%]" />
+          <col className="w-[28%]" />
           <col className="w-24" />
         </colgroup>
         <thead>
@@ -528,7 +505,7 @@ export function SeguimientoTable({
                 respondida={respondidas[consulta.id] ?? consulta.respondida}
                 ocupada={guardando.has(consulta.id)}
                 saliendo={saliendo.has(consulta.id)}
-                nuevoChat={agrupado && (indice === 0 || chat !== claveChat(consultas[indice - 1]))}
+                nuevoChat={indice === 0 || chat !== claveChat(consultas[indice - 1])}
                 resumen={chats[chat]}
                 catalogo={catalogo}
                 onAlternar={alternar}

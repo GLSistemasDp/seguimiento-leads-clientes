@@ -1,5 +1,5 @@
 import "server-only";
-import { guardarCambio, leerCambios } from "@/lib/db/sheets/cambios-locales";
+import { guardarCambio, guardarCambios, leerCambios } from "@/lib/db/sheets/cambios-locales";
 import type { CambioLocal } from "@/lib/db/sheets/cambios-locales";
 import { ErrorSheets, escribirRangos, leerRango, letraColumna } from "@/lib/db/sheets/cliente";
 import type { FilaSheet } from "@/lib/db/sheets/cliente";
@@ -410,6 +410,40 @@ export async function update(id: string, cambios: CambiosConsulta): Promise<Cons
   await escribirRangos(escrituras, { planilla: planilla(), entrada: "USER_ENTERED" });
   const { buscarFicha } = await maestros();
   return completarConFicha({ ...ubicada.consulta, ...cambios }, buscarFicha);
+}
+
+/**
+ * Varias consultas de una vez (cierre masivo): con el link publico, una sola
+ * escritura en el almacen; con la service account, se lee la hoja una vez y
+ * se escriben todas las celdas en un solo pedido. Devuelve cuantas encontro.
+ */
+export async function updateVarias(cambios: Record<string, CambiosConsulta>): Promise<number> {
+  if (accesoPublico()) {
+    await guardarCambios(cambios);
+    return Object.keys(cambios).length;
+  }
+
+  const { consultas, columnas } = await leerTodas();
+  const escrituras: { rango: string; valores: FilaSheet[] }[] = [];
+  const pestana = `'${hoja().replace(/'/g, "''")}'`;
+  const celda = (campo: Campo, fila: number, valor: string) => {
+    const indice = columnas[campo];
+    if (indice === undefined) throw new ErrorSheets(`La planilla de seguimiento no tiene la columna "${campo}".`);
+    escrituras.push({ rango: `${pestana}!${letraColumna(indice)}${fila}`, valores: [[valor]] });
+  };
+  let encontradas = 0;
+  for (const { consulta, fila } of consultas) {
+    const cambio = cambios[consulta.id];
+    if (!cambio) continue;
+    encontradas += 1;
+    if (cambio.respondida !== undefined) celda("respondida", fila, cambio.respondida ? "TRUE" : "FALSE");
+    if (cambio.observaciones !== undefined) {
+      const texto = cambio.observaciones;
+      celda("observaciones", fila, /^[=+\-@]/.test(texto) ? `'${texto}` : texto);
+    }
+  }
+  if (escrituras.length > 0) await escribirRangos(escrituras, { planilla: planilla(), entrada: "USER_ENTERED" });
+  return encontradas;
 }
 
 const repositorio: RepositorioSeguimiento = { getAll, getById, update, getRespuestas };

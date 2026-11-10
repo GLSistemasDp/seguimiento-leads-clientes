@@ -10,6 +10,7 @@ import { SimularBot } from "@/components/seguimiento/SimularBot";
 import { SeguimientoTable } from "@/components/seguimiento/SeguimientoTable";
 import { TriajeSeguimiento } from "@/components/seguimiento/TriajeSeguimiento";
 import { AnalisisSeguimiento } from "@/components/seguimiento/AnalisisSeguimiento";
+import { CierreMasivo } from "@/components/seguimiento/CierreMasivo";
 import { Paginacion } from "@/components/solicitudes/Paginacion";
 import { EncabezadoPagina } from "@/components/ui/EncabezadoPagina";
 import { porConsulta, ultimasGestiones } from "@/lib/db/historial";
@@ -17,6 +18,7 @@ import { formulariosPorConsulta, getIndicaciones, idWhatsapp } from "@/lib/db/re
 import { avisoConfiguracion, backendSeguimiento, getAll, getParaTablero, getRespuestas } from "@/lib/db/seguimiento";
 import { herramientasDePrueba } from "@/lib/herramientas-prueba";
 import { calcularAnalisis, esPeriodoAnalisis } from "@/lib/seguimiento/analisis";
+import { inicioDelMes, nombreMes, pendientesAnteriores } from "@/lib/seguimiento/cierre-masivo";
 import { claveCliente } from "@/lib/db/sheets/maestros";
 import { telegramConfigurado } from "@/lib/notificaciones/telegram";
 import { proximoEnvioCierre } from "@/lib/seguimiento/cierre-del-dia";
@@ -24,6 +26,7 @@ import { TRIAJES, calcularTriaje, enTriaje, esTriaje, type Triaje } from "@/lib/
 import {
   agruparPorChat,
   cierreMasFrecuente,
+  claveChat,
   diasAbierta,
   ORDEN_CONSULTA_POR_DEFECTO,
   esOrdenConsulta,
@@ -122,6 +125,13 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
     ? Math.min(Math.max(paginaPedida, 1), totalPaginas)
     : 1;
   const visibles = filtradas.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
+  // Al cliente solo viaja el resumen de los chats que se ven en esta pagina.
+  const resumenes = resumirChats(filtradasSinVista);
+  const chatsVisibles = Object.fromEntries(
+    visibles.map(claveChat).filter((clave) => resumenes[clave]).map((clave) => [clave, resumenes[clave]]),
+  );
+  const corteMes = inicioDelMes(ahora);
+  const anteriores = pendientesAnteriores(todas, corteMes, ahora).length;
 
   const paramsActuales: Record<string, string> = {};
   for (const [clave, valor] of Object.entries(params)) {
@@ -150,6 +160,7 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
           <>
             <ProximoEnvio proximo={proximo?.toISOString() ?? null} ahora={ahora.getTime()} telegramListo={telegramConfigurado()} />
             <BotonTelegram tipo="seguimiento" listo={telegramConfigurado()} />
+            <CierreMasivo cantidad={anteriores} corte={corteMes.toISOString()} mes={nombreMes(corteMes)} />
             {sincroniza ? <EstadoSincronizacion ultima={ultimaSync} ahora={ahora.getTime()} /> : null}
             {backendSeguimiento() === "postgres" && !sincroniza && herramientasDePrueba() ? <SimularBot /> : null}
           </>
@@ -187,10 +198,9 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <SeguimientoTable
-          agrupado={agrupado}
           vista={vista}
           atajo={cierreMasFrecuente(Object.values(historial).flat())}
-          chats={resumirChats(filtradasSinVista)}
+          chats={chatsVisibles}
           catalogo={catalogo}
           consultas={visibles.map((consulta) => ({
             ...consulta,

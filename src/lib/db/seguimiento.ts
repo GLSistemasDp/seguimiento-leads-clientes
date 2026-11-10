@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { conUltimaGestion, estadoCuentaUnificado } from "@/lib/clientes/ficha";
 import { claveCliente } from "@/lib/db/sheets/maestros";
 import { postgresConfigurado } from "@/lib/db/postgres/pg";
@@ -7,6 +8,8 @@ import type { Backend, RepositorioSeguimiento } from "@/lib/db/repositorio";
 import { RESPUESTAS } from "@/lib/seguimiento/respuestas";
 import type { RespuestaTipo } from "@/lib/seguimiento/respuestas";
 import type { CambiosConsulta, Consulta, FichaCliente, Relacion, Resultado } from "@/types/seguimiento";
+
+export type CierreVarias = { consulta: Consulta; relacion: Relacion };
 
 /**
  * Punto unico de acceso al seguimiento de clientes. Con DB_BACKEND="demo"
@@ -47,16 +50,23 @@ async function repo(): Promise<RepositorioSeguimiento> {
   }
 }
 
-export async function getAll(): Promise<Consulta[]> {
-  const consultas = await (await repo()).getAll();
-  if (backendSeguimiento() === "postgres") return consultas;
-  const { ultimasGestiones } = await import("@/lib/db/historial");
-  const gestiones = await ultimasGestiones();
+/**
+ * Todas las consultas. Memorizada por pedido (React.cache): el menu, la pagina
+ * y el panel de reclamos la piden en la misma carga y se lee una sola vez.
+ */
+export const getAll = cache(async (): Promise<Consulta[]> => {
+  const [consultas, gestiones] = await Promise.all([
+    (await repo()).getAll(),
+    backendSeguimiento() === "postgres"
+      ? Promise.resolve(null)
+      : import("@/lib/db/historial").then(({ ultimasGestiones }) => ultimasGestiones()),
+  ]);
+  if (!gestiones) return consultas;
   return consultas.map((consulta) => ({
     ...consulta,
     ficha: consulta.ficha ? conUltimaGestion(consulta.ficha, gestiones[claveCliente(consulta.cliente)]) : consulta.ficha,
   }));
-}
+});
 
 export async function getById(id: string): Promise<Consulta | null> {
   const consulta = await (await repo()).getById(id);
@@ -75,13 +85,69 @@ export async function update(
 }
 
 /**
+ * Finaliza varias consultas de una vez (cierre masivo) con el mismo resultado
+ * y observacion, y deja cada cierre en el historial. Escribe en bloque: una
+ * sentencia en Postgres, una escritura en el almacen o un pedido a la planilla.
+ * Devuelve cuantas se cerraron.
+ */
+export async function finalizarVarias(
+  cierres: readonly CierreVarias[],
+  resultado: Resultado,
+  observacion: string,
+): Promise<number> {
+  if (cierres.length === 0) return 0;
+  // Como en el cierre de a una: el resultado al frente de la observacion.
+  const observaciones = `${resultado} · ${observacion}`;
+  const backend = backendSeguimiento();
+
+  if (backend === "postgres") {
+    const pg = await import("@/lib/db/postgres/seguimiento");
+    return pg.finalizarVarias(
+      cierres.map(({ consulta, relacion }) => ({ id: consulta.id, relacion })),
+      resultado,
+      observaciones,
+    );
+  }
+
+  let cerradas = cierres.length;
+  if (backend === "sheets") {
+    const sheets = await import("@/lib/db/sheets/seguimiento");
+    cerradas = await sheets.updateVarias(
+      Object.fromEntries(cierres.map(({ consulta }) => [consulta.id, { respondida: true, observaciones }])),
+    );
+  } else {
+    const repositorio = await repo();
+    for (const { consulta, relacion } of cierres) {
+      await repositorio.update(consulta.id, { respondida: true, observaciones }, { resultado, relacion });
+    }
+  }
+
+  const { registrarVarios } = await import("@/lib/db/historial");
+  await registrarVarios(
+    cierres.map(({ consulta, relacion }) => ({
+      consultaId: consulta.id,
+      cliente: consulta.cliente,
+      hito: consulta.hito,
+      tipo: "finalizada" as const,
+      resultado,
+      relacion,
+      observacion,
+      consulta: consulta.consulta,
+      encargado: consulta.encargado,
+      resumen: consulta.ia?.resumen,
+    })),
+  );
+  return cerradas;
+}
+
+/**
  * Para el tablero del Resumen. Con Postgres la cola solo guarda lo reciente:
  * se le suma lo ya archivado en el historial.
  */
-export async function getParaTablero(): Promise<Consulta[]> {
+export const getParaTablero = cache(async (): Promise<Consulta[]> => {
   if (backendSeguimiento() === "postgres") return (await import("@/lib/db/postgres/seguimiento")).getParaTablero();
   return getAll();
-}
+});
 
 /**
  * Ficha de un cliente por su codigo (o nombre): con Postgres sale de la

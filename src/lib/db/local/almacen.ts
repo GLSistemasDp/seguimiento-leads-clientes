@@ -36,14 +36,21 @@ async function upsertPg(
   nombre: string,
   registros: Record<string, unknown>,
 ): Promise<void> {
-  for (const [clave, datos] of Object.entries(registros)) {
+  // De a bloques en una sola sentencia: un cierre masivo toca cientos de claves
+  // y una ida y vuelta a la base por cada una tardaria minutos.
+  const entradas = Object.entries(registros);
+  for (let desde = 0; desde < entradas.length; desde += TAMANO_BLOQUE) {
+    const bloque = Object.fromEntries(entradas.slice(desde, desde + TAMANO_BLOQUE));
     await consulta(
-      `INSERT INTO almacen_registros (coleccion, clave, datos) VALUES ($1, $2, $3::jsonb)
+      `INSERT INTO almacen_registros (coleccion, clave, datos)
+       SELECT $1, registro.key, registro.value FROM jsonb_each($2::jsonb) AS registro
        ON CONFLICT (coleccion, clave) DO UPDATE SET datos = EXCLUDED.datos, actualizado = now()`,
-      [nombre, clave, JSON.stringify(datos)],
+      [nombre, JSON.stringify(bloque)],
     );
   }
 }
+
+const TAMANO_BLOQUE = 500;
 
 /**
  * Lee la coleccion, aplica el cambio y escribe solo las claves que cambiaron.

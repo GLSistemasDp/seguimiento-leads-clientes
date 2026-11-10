@@ -22,6 +22,8 @@ function entorno() {
   }
   const mocks = {
     "server-only": {},
+    // React.cache memoriza por pedido; fuera de React se usa la funcion tal cual.
+    react: { cache: (funcion) => funcion },
     "next/server": { NextResponse: { json: (cuerpo, init) => ({ cuerpo, status: init?.status ?? 200 }) } },
     "@/lib/db/sheets/seguimiento": { ...repo, default: repo },
     "@/lib/db/postgres/pg": { postgresConfigurado: () => false },

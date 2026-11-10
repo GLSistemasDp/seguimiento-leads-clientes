@@ -14,6 +14,9 @@ function adaptador(filas, errorLectura, { hojas = {}, entorno = {} } = {}) {
   class ErrorSheets extends Error {}
   const mocks = {
     "server-only": {},
+    // React.cache memoriza por pedido; fuera de React se usa la funcion tal cual.
+    react: { cache: (funcion) => funcion },
+    "next/server": { after: () => {} },
     "@/lib/db/sheets/cliente": {
       ErrorSheets,
       leerRango: async (rango, planilla) => {

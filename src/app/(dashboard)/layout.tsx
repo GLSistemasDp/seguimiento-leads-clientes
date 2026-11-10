@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense, cache } from "react";
 import { BarraLateral, NavPrincipal } from "@/app/(dashboard)/NavPrincipal";
 import type { Pendientes } from "@/app/(dashboard)/NavPrincipal";
 import { getPanel } from "@/lib/db/reclamos";
@@ -13,8 +14,11 @@ const MOTORES = {
   postgres: "Postgres",
 } as const;
 
-/** Lo pendiente de cada seccion. Si una fuente falla, su globito no aparece y la pagina sigue. */
-async function contarPendientes(): Promise<Pendientes> {
+/**
+ * Lo pendiente de cada seccion. Si una fuente falla, su globito no aparece y la
+ * pagina sigue. Una sola vez por pedido: lo usan la barra lateral y el menu.
+ */
+const contarPendientes = cache(async (): Promise<Pendientes> => {
   const [consultas, solicitudes, reclamos] = await Promise.allSettled([
     getConsultas(),
     getSolicitudes({ estado: "PENDIENTE" }),
@@ -29,6 +33,20 @@ async function contarPendientes(): Promise<Pendientes> {
         ? reclamos.value.reclamos.filter((reclamo) => reclamo.estado === "SIN_DEFINIR").length
         : undefined,
   };
+});
+
+const SIN_PENDIENTES: Pendientes = {};
+
+/**
+ * Los globitos se cargan aparte (Suspense): el menu y la pagina aparecen
+ * enseguida y los numeros llegan cuando estan, sin frenar el contenido.
+ */
+async function BarraConPendientes() {
+  return <BarraLateral pendientes={await contarPendientes()} />;
+}
+
+async function NavConPendientes() {
+  return <NavPrincipal pendientes={await contarPendientes()} />;
 }
 
 /**
@@ -36,8 +54,7 @@ async function contarPendientes(): Promise<Pendientes> {
  * lateral de iconos, saludo y fecha arriba, contenido sobre fondo gris), para
  * que integrarlo sea sumar el grupo "CRM" a la barra del portal.
  */
-export default async function DashboardLayout({ children }: LayoutProps<"/">) {
-  const pendientes = await contarPendientes();
+export default function DashboardLayout({ children }: LayoutProps<"/">) {
   const motor = MOTORES[backendActivo()];
   const motorSeguimiento = MOTORES[backendSeguimiento()];
   const usuario = process.env.PORTAL_USUARIO || "EQUIPO COMERCIAL";
@@ -50,7 +67,9 @@ export default async function DashboardLayout({ children }: LayoutProps<"/">) {
           <span className="text-[8px] font-semibold text-[#1b2b5e]">De Pascale</span>
           <span className="text-[6px] text-slate-500">Protección Industrial</span>
         </Link>
-        <BarraLateral pendientes={pendientes} />
+        <Suspense fallback={<BarraLateral pendientes={SIN_PENDIENTES} />}>
+          <BarraConPendientes />
+        </Suspense>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -64,7 +83,9 @@ export default async function DashboardLayout({ children }: LayoutProps<"/">) {
                 Bienvenido, <span className="font-medium">{usuario}</span>
               </p>
             </div>
-            <NavPrincipal pendientes={pendientes} />
+            <Suspense fallback={<NavPrincipal pendientes={SIN_PENDIENTES} />}>
+              <NavConPendientes />
+            </Suspense>
             <div className="hidden text-sm leading-tight text-slate-800 sm:block">
               <p>FECHA</p>
               <p className="tabular-nums">{formatearFecha(new Date())}</p>

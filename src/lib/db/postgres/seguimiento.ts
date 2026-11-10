@@ -136,6 +136,30 @@ export async function update(id: string, cambios: CambiosConsulta, cierre?: Cier
 }
 
 /**
+ * Finaliza varias consultas en una sola sentencia (cierre masivo). El trigger
+ * las archiva en chat_interacciones una por una, como al cerrarlas a mano.
+ */
+export async function finalizarVarias(
+  cierres: readonly { id: string; relacion: Relacion }[],
+  resultado: Resultado,
+  observaciones: string,
+): Promise<number> {
+  if (cierres.length === 0) return 0;
+  const filas = await consultar<{ id: string }>(
+    `UPDATE consultas_seguimiento c
+        SET respondida = true,
+            observaciones = $3,
+            resultado = $4::resultado_consulta,
+            relacion = v.relacion::relacion_cliente
+       FROM unnest($1::text[], $2::text[]) AS v(id, relacion)
+      WHERE c.id = v.id AND NOT c.respondida
+      RETURNING c.id`,
+    [cierres.map((cierre) => cierre.id), cierres.map((cierre) => cierre.relacion), observaciones, resultado],
+  );
+  return filas.length;
+}
+
+/**
  * Para el tablero del Resumen: la cola mas lo ya archivado (finalizadas que
  * la purga saco de la cola), asi las barras de respondidas no se pierden.
  */

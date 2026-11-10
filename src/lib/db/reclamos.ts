@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { guardarAdjuntos } from "@/lib/db/adjuntos";
 import type { ArchivoAdjunto } from "@/lib/db/adjuntos";
 import { reclamosDemo } from "@/lib/db/demo/reclamos";
@@ -189,10 +190,10 @@ export async function actualizarGestion(id: string, gestion: Gestion): Promise<R
 
 // --- Indicaciones del gerente ------------------------------------------------
 
-export async function getIndicaciones(): Promise<Record<string, Indicacion>> {
+export const getIndicaciones = cache(async (): Promise<Record<string, Indicacion>> => {
   if (reclamosEnPostgres()) return (await pg()).indicaciones();
   return leer<Indicacion>(INDICACIONES);
-}
+});
 
 export function idWhatsapp(consultaId: string): string {
   return `${PREFIJO_WHATSAPP}${clavePorOrigen(consultaId)}`;
@@ -363,7 +364,7 @@ export type PanelReclamos = {
  * de cada estado los que llevan mas dias. La clasificacion, el estado de
  * cuenta y el grupo del cliente salen de la planilla de seguimiento.
  */
-export async function getPanel(ahora = new Date()): Promise<PanelReclamos> {
+async function armarPanel(ahora = new Date()): Promise<PanelReclamos> {
   const [indicaciones, todosFormularios, vistos] = await Promise.all([getIndicaciones(), formularios(), getVistos()]);
   let consultas: Consulta[] = [];
   let error: string | null = null;
@@ -392,3 +393,6 @@ export async function getPanel(ahora = new Date()): Promise<PanelReclamos> {
     );
   return { reclamos, error };
 }
+
+/** Panel de reclamos, una vez por pedido (lo piden el menu y la pagina). */
+export const getPanel = cache((ahora?: Date): Promise<PanelReclamos> => armarPanel(ahora));

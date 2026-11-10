@@ -53,6 +53,9 @@ test("Postgres migra fichas, registra el último cierre y lo conserva al sincron
       actividad: "Industria", categoria: "Fabricante", condicionPago: "30 días", limiteCredito: "Hasta USD 1000" };
     const mocks = {
       "server-only": {},
+      // React.cache memoriza por pedido; fuera de React se usa la funcion tal cual.
+      react: { cache: (funcion) => funcion },
+      "next/server": { after: () => {} },
       "@/lib/db/postgres/pg": { postgresConfigurado: () => true, pool: async () => ({ connect: async () => ({
         query: (...args) => db.query(...args), release() {},
       }) }) },

@@ -8,17 +8,29 @@ import { linkGrupoValido } from "@/lib/seguimiento/presentacion";
  * planilla va directo al grupo; sin link, WhatsApp no permite abrir un grupo
  * por su nombre: se copia el nombre y se abre WhatsApp Web para buscarlo.
  */
-export function BotonGrupoWhatsapp({ grupo, link }: { grupo: string; link: string }) {
+export function BotonGrupoWhatsapp({
+  grupo,
+  link,
+  etiqueta,
+  className,
+}: {
+  grupo: string;
+  link: string;
+  /** Texto fijo del boton ("Ir al chat"); sin el, muestra "Abrir grupo" o el nombre del grupo. */
+  etiqueta?: string;
+  className?: string;
+}) {
   const { mostrar } = useToast();
   const directo = linkGrupoValido(link);
   const clase =
+    className ??
     "inline-flex max-w-full items-center gap-1 rounded-md bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200 ring-inset hover:bg-slate-50";
 
   if (directo) {
     return (
       <a href={directo} target="_blank" rel="noopener noreferrer" title={`Abrir el grupo ${grupo}`} className={clase}>
         <span aria-hidden="true" className="text-emerald-500">●</span>
-        <span className="truncate">Abrir grupo</span>
+        <span className="truncate">{etiqueta ?? "Abrir grupo"}</span>
       </a>
     );
   }
@@ -37,7 +49,7 @@ export function BotonGrupoWhatsapp({ grupo, link }: { grupo: string; link: strin
   return (
     <button type="button" onClick={() => void buscar()} title={`${grupo} · copia el nombre y abre WhatsApp Web`} className={clase}>
       <span aria-hidden="true" className="text-emerald-500">●</span>
-      <span className="truncate">{grupo}</span>
+      <span className="truncate">{etiqueta ?? grupo}</span>
     </button>
   );
 }

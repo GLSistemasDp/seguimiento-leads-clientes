@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { leer, modificar } from "@/lib/db/local/almacen";
 import { backendSeguimiento } from "@/lib/db/seguimiento";
 import { claveCliente } from "@/lib/db/sheets/maestros";
@@ -34,11 +35,25 @@ export async function registrar(evento: Omit<EventoHistorial, "id" | "fecha">): 
   return completo;
 }
 
-/** Eventos por consulta, del mas viejo al mas nuevo. */
-export async function porConsulta(): Promise<Record<string, EventoHistorial[]>> {
+/**
+ * Varios eventos en una sola escritura (cierre masivo). Con Postgres no hace
+ * nada: los cierres ya los registra el trigger de la base.
+ */
+export async function registrarVarios(eventos: readonly Omit<EventoHistorial, "id" | "fecha">[]): Promise<void> {
+  if (conPostgres() || eventos.length === 0) return;
+  const fecha = new Date().toISOString();
+  await modificar<EventoHistorial[], void>(clavePorOrigen(ARCHIVO), (datos) => {
+    for (const evento of eventos) {
+      datos[evento.consultaId] = [...(datos[evento.consultaId] ?? []), { ...evento, id: crypto.randomUUID(), fecha }];
+    }
+  });
+}
+
+/** Eventos por consulta, del mas viejo al mas nuevo. Una lectura por pedido. */
+export const porConsulta = cache(async (): Promise<Record<string, EventoHistorial[]>> => {
   if (conPostgres()) return (await pg()).porConsulta();
   return leer<EventoHistorial[]>(clavePorOrigen(ARCHIVO));
-}
+});
 
 /** Toda la historia de un cliente (todas sus consultas), lo mas nuevo primero. */
 export async function porCliente(cliente: string): Promise<EventoHistorial[]> {
@@ -54,7 +69,7 @@ export async function porCliente(cliente: string): Promise<EventoHistorial[]> {
  * El ultimo cierre de cada cliente, por su clave (codigo, o nombre si no
  * tiene): es el "ultimo estado de gestion" que muestra la bandeja.
  */
-export async function ultimasGestiones(): Promise<Record<string, EventoHistorial>> {
+export const ultimasGestiones = cache(async (): Promise<Record<string, EventoHistorial>> => {
   const eventos = conPostgres()
     ? await (await pg()).ultimasGestiones()
     : Object.values(await porConsulta())
@@ -66,7 +81,7 @@ export async function ultimasGestiones(): Promise<Record<string, EventoHistorial
     if (!porCliente[clave] || porCliente[clave].fecha < evento.fecha) porCliente[clave] = evento;
   }
   return porCliente;
-}
+});
 
 /** Lo que se registro en el dia (hora de Argentina), para el resumen diario. */
 export async function delDia(dia: string, diaLocal: (fecha: Date) => string): Promise<EventoHistorial[]> {
