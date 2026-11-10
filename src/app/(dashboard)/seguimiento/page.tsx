@@ -1,6 +1,5 @@
 import { leerDatos } from "@/lib/db/lectura";
 import { ProblemaDatos } from "@/components/ui/ProblemaDatos";
-import { after } from "next/server";
 import { Suspense } from "react";
 import { ProximoEnvio } from "@/components/resumen/ProximoEnvio";
 import { BotonTelegram } from "@/components/ui/BotonTelegram";
@@ -41,7 +40,7 @@ import {
   vencida,
 } from "@/lib/seguimiento/presentacion";
 import { relacionActual } from "@/lib/seguimiento/relacion";
-import { sincronizacionConfigurada, sincronizarSiHaceFalta, ultimaSincronizacion } from "@/lib/sync/planilla";
+import { sincronizacionConfigurada, ultimaSincronizacion } from "@/lib/sync/planilla";
 import type { Consulta, EventoHistorial } from "@/types/seguimiento";
 
 export const metadata = { title: "Seguimiento de clientes · CRM De Pascale" };
@@ -74,9 +73,9 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
   };
 
   const ahora = new Date();
-  // Con la base, la planilla de la empresa se trae en segundo plano si hace mas de 2 minutos que no se sincroniza.
+  // Con la base, la planilla de la empresa la trae la propia pantalla (EstadoSincronizacion):
+  // al abrirse y cada 2 minutos, sin frenar la carga.
   const sincroniza = backendSeguimiento() === "postgres" && sincronizacionConfigurada();
-  if (sincroniza) after(() => sincronizarSiHaceFalta(2));
   const lectura = await leerDatos("seguimiento y datos relacionados", () => Promise.all([
     getAll(),
     // El analisis mira tambien lo ya archivado (con Postgres la cola solo guarda lo reciente).

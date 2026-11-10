@@ -67,6 +67,22 @@ test("integra el encabezado grillo, fechas mixtas y casillas de la planilla modi
   assert.ok(Number.isFinite(consultas[1].fecha.getTime()));
 });
 
+test("una fila cargada sin fecha toma la de la fila anterior y conserva su id", async () => {
+  const filas = [
+    ["Fecha de consulta", "grillo", "Consulta", "RESPUESTA"],
+    ["9/3/2026", "100 - Cliente", "Primera", "TRUE"],
+    ["", "101 - Otro", "Sin fecha", "TRUE"],
+    ["9/7/2026", "102 - Tercero", "Con fecha", "FALSE"],
+  ];
+  const consultas = await adaptador(filas).repo.getAll();
+  assert.equal(consultas[1].fecha.toISOString(), "2026-09-03T03:00:00.000Z");
+  assert.equal(consultas[2].fecha.toISOString(), "2026-09-07T03:00:00.000Z");
+  // El id sale de la celda original (vacia): no cambia por heredar la fecha.
+  const otra = await adaptador([filas[0], filas[2]]).repo.getAll();
+  assert.equal(otra[0].fecha, null);
+  assert.equal(otra[0].id, consultas[1].id);
+});
+
 test("conserva los encabezados anteriores y localiza columnas reordenadas al escribir", async () => {
   for (const encabezado of ["Cliente", "Grupo / Cliente", "grillo"]) {
     const { repo, escrituras } = adaptador([

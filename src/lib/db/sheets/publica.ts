@@ -94,8 +94,15 @@ function refrescarEnSegundoPlano(planilla: string, libros: Map<string, Promise<L
   }
 }
 
-/** Todas las pestanas de la planilla, por nombre. */
-export async function leerHojasPublicas(planilla: string): Promise<Record<string, FilaSheet[]>> {
+/**
+ * Todas las pestanas de la planilla, por nombre. Con `fresca` (la
+ * sincronizacion con la base) nunca se usa una copia de mas de un minuto: si
+ * no, una fila que el bot acaba de cargar podria tardar en llegar.
+ */
+export async function leerHojasPublicas(
+  planilla: string,
+  { fresca = false }: { fresca?: boolean } = {},
+): Promise<Record<string, FilaSheet[]>> {
   const libros = (almacen.__librosPublicos ??= new Map());
   const previo = libros.get(planilla);
   if (previo) {
@@ -103,7 +110,7 @@ export async function leerHojasPublicas(planilla: string): Promise<Record<string
     if (libro) {
       const edad = Date.now() - libro.leido;
       if (edad < VIGENCIA_MS) return libro.hojas;
-      if (edad < VIGENCIA_MAXIMA_MS) {
+      if (!fresca && edad < VIGENCIA_MAXIMA_MS) {
         refrescarEnSegundoPlano(planilla, libros, previo);
         return libro.hojas;
       }

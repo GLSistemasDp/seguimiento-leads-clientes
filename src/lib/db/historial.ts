@@ -36,15 +36,20 @@ export async function registrar(evento: Omit<EventoHistorial, "id" | "fecha">): 
 }
 
 /**
- * Varios eventos en una sola escritura (cierre masivo). Con Postgres no hace
- * nada: los cierres ya los registra el trigger de la base.
+ * Varios eventos en una sola escritura (cierre masivo). Sin `fecha`, la de
+ * ahora. Con Postgres no hace nada: los cierres ya los registra el trigger.
  */
-export async function registrarVarios(eventos: readonly Omit<EventoHistorial, "id" | "fecha">[]): Promise<void> {
+export async function registrarVarios(
+  eventos: readonly (Omit<EventoHistorial, "id" | "fecha"> & { fecha?: string })[],
+): Promise<void> {
   if (conPostgres() || eventos.length === 0) return;
-  const fecha = new Date().toISOString();
+  const ahora = new Date().toISOString();
   await modificar<EventoHistorial[], void>(clavePorOrigen(ARCHIVO), (datos) => {
     for (const evento of eventos) {
-      datos[evento.consultaId] = [...(datos[evento.consultaId] ?? []), { ...evento, id: crypto.randomUUID(), fecha }];
+      datos[evento.consultaId] = [
+        ...(datos[evento.consultaId] ?? []),
+        { ...evento, id: crypto.randomUUID(), fecha: evento.fecha ?? ahora },
+      ];
     }
   });
 }

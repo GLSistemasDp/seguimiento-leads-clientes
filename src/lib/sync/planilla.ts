@@ -260,16 +260,3 @@ export async function ultimaSincronizacion(): Promise<ResultadoSync | null> {
   );
   return rows[0]?.datos ?? null;
 }
-
-/**
- * Sincroniza si la ultima corrida tiene mas de `minutos` (la usa la pantalla
- * de seguimiento al abrirse, para no depender solo del activador).
- */
-export async function sincronizarSiHaceFalta(minutos = 2): Promise<void> {
-  if (!sincronizacionConfigurada()) return;
-  const ultima = await ultimaSincronizacion().catch(() => null);
-  if (ultima && Date.now() - new Date(ultima.fecha).getTime() < minutos * 60_000) return;
-  await sincronizarPlanilla().catch((error: unknown) =>
-    console.error(`[sync-planilla] ${error instanceof Error ? error.message : String(error)}`),
-  );
-}

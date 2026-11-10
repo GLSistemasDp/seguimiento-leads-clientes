@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Icono } from "@/components/ui/Icono";
 import { useToast } from "@/components/ui/Toast";
 
@@ -14,9 +14,16 @@ function hace(fecha: string, ahora: number): string {
   return Math.abs(horas) < 48 ? HACE.format(horas, "hour") : HACE.format(Math.round(horas / 24), "day");
 }
 
+/** Cada cuanto se fija si el bot cargo algo nuevo mientras la pantalla esta abierta. */
+const INTERVALO_MS = 2 * 60_000;
+
+type RespuestaSync = { error?: string; motivo?: string; nuevas?: number; finalizadas?: number; estado?: string };
+
 /**
  * Cuando se sincronizo la planilla de la empresa con la base y un boton para
- * hacerlo en el momento (ademas del activador automatico).
+ * hacerlo en el momento. Ademas sincroniza sola: al abrir la pantalla y cada
+ * 2 minutos mientras esta a la vista, sin frenar la carga. Si el bot cargo
+ * mensajes nuevos (o se tildaron en la planilla), la lista se actualiza.
  */
 export function EstadoSincronizacion({
   ultima,
@@ -29,12 +36,46 @@ export function EstadoSincronizacion({
   const { mostrar } = useToast();
   const [, startTransition] = useTransition();
   const [cargando, setCargando] = useState(false);
+  const enCurso = useRef(false);
+
+  useEffect(() => {
+    async function automatica() {
+      if (enCurso.current || document.visibilityState !== "visible") return;
+      enCurso.current = true;
+      try {
+        const respuesta = await fetch("/api/seguimiento/sincronizar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ siHaceFalta: true }),
+        });
+        const cuerpo = (await respuesta.json().catch(() => ({}))) as RespuestaSync;
+        const nuevas = cuerpo.nuevas ?? 0;
+        if (respuesta.ok && cuerpo.estado === "ok" && (nuevas > 0 || (cuerpo.finalizadas ?? 0) > 0)) {
+          if (nuevas > 0) mostrar(`Llegaron ${nuevas} consulta${nuevas === 1 ? "" : "s"} nueva${nuevas === 1 ? "" : "s"} del bot.`, "info");
+          startTransition(() => router.refresh());
+        }
+      } catch {
+        // Sin conexion: se reintenta en la proxima vuelta; el boton sigue disponible.
+      } finally {
+        enCurso.current = false;
+      }
+    }
+    void automatica();
+    const intervalo = window.setInterval(() => void automatica(), INTERVALO_MS);
+    document.addEventListener("visibilitychange", automatica);
+    return () => {
+      window.clearInterval(intervalo);
+      document.removeEventListener("visibilitychange", automatica);
+    };
+  }, [mostrar, router]);
 
   async function sincronizar() {
+    if (enCurso.current) return;
+    enCurso.current = true;
     setCargando(true);
     try {
       const respuesta = await fetch("/api/seguimiento/sincronizar", { method: "POST" });
-      const cuerpo = (await respuesta.json().catch(() => ({}))) as { error?: string; motivo?: string; nuevas?: number; finalizadas?: number; estado?: string };
+      const cuerpo = (await respuesta.json().catch(() => ({}))) as RespuestaSync;
       if (!respuesta.ok) throw new Error(cuerpo.error ?? cuerpo.motivo ?? `Error ${respuesta.status}`);
       mostrar(
         cuerpo.estado === "omitida"
@@ -46,6 +87,7 @@ export function EstadoSincronizacion({
     } catch (error) {
       mostrar(error instanceof Error ? error.message : "No se pudo sincronizar.", "error");
     } finally {
+      enCurso.current = false;
       setCargando(false);
     }
   }

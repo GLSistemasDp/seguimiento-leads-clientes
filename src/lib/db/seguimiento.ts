@@ -126,6 +126,9 @@ export async function finalizarVarias(
   await registrarVarios(
     cierres.map(({ consulta, relacion }) => ({
       consultaId: consulta.id,
+      // Con la fecha de la consulta: en la ficha queda cuando fue la charla y
+      // el resumen del dia no lo cuenta como un cierre de hoy.
+      fecha: consulta.fecha?.toISOString(),
       cliente: consulta.cliente,
       hito: consulta.hito,
       tipo: "finalizada" as const,

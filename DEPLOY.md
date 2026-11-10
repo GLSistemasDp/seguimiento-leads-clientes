@@ -162,8 +162,9 @@ ANTHROPIC_API_KEY=...            # opcional: clasificacion con IA
 archivo (propiedades `CRM_URL` y `CRM_SYNC_TOKEN`, y ejecutar
 `instalarActivador`). Sincroniza cada 2 horas (variable `HORAS` del script). Ademas:
 
-- La pantalla de Seguimiento sincroniza en segundo plano al abrirse si pasaron
-  mas de 2 minutos, y tiene el boton **Sincronizar ahora**.
+- La pantalla de Seguimiento sincroniza sola al abrirse y cada 2 minutos mientras
+  esta a la vista (sin frenar la carga); si el bot cargo mensajes nuevos, la lista
+  se actualiza. Tambien tiene el boton **Sincronizar ahora**.
 - `vercel.json` corre `/api/sync/planilla` una vez por dia como respaldo.
 - `/api/salud` muestra la ultima sincronizacion (filas leidas, nuevas, tildadas).
 

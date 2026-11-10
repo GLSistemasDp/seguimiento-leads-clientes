@@ -242,6 +242,10 @@ async function leerTodas(): Promise<{ consultas: ConsultaUbicada[]; columnas: Co
   const consultas: ConsultaUbicada[] = [];
   const vistas = new Map<string, number>();
   const inicio = filaInicio();
+  // Algunas filas viejas se cargaron a mano sin fecha. La planilla va en orden
+  // de llegada: toman la de la ultima fila de arriba que si la tiene (si no,
+  // en la base y en la ficha del cliente quedarian como charlas de hoy).
+  let ultimaFecha: Date | null = null;
 
   filas.slice(filaEncabezados + 1).forEach((fila, desplazamiento) => {
     const numeroFila = filaEncabezados + desplazamiento + 2;
@@ -255,9 +259,11 @@ async function leerTodas(): Promise<{ consultas: ConsultaUbicada[]; columnas: Co
     const base = huella(`${cliente}|${consulta}|${celda(fila, "fecha")}`);
     const repeticiones = vistas.get(base) ?? 0;
     vistas.set(base, repeticiones + 1);
+    const fechaPropia = parsearFecha(celda(fila, "fecha"));
+    if (fechaPropia) ultimaFecha = fechaPropia;
     if (numeroFila < inicio) return;
 
-    const fecha = parsearFecha(celda(fila, "fecha"));
+    const fecha = fechaPropia ?? ultimaFecha;
     // La DEMORA de la planilla es una formula que se recalcula al abrirla; con
     // la fecha la app calcula la demora al dia de hoy.
     const dias = Number.parseFloat(celda(fila, "dias"));
@@ -277,7 +283,7 @@ async function leerTodas(): Promise<{ consultas: ConsultaUbicada[]; columnas: Co
         consulta,
         hito: celda(fila, "hito"),
         respondida: parsearBooleano(celda(fila, "respondida")),
-        dias: !fecha && Number.isFinite(dias) ? dias : null,
+        dias: !fechaPropia && Number.isFinite(dias) ? dias : null,
         observaciones: celda(fila, "observaciones"),
         tentativoRespuesta: celda(fila, "tentativoRespuesta"),
       },
@@ -351,6 +357,9 @@ export async function getAll(): Promise<Consulta[]> {
  * de "Desplegable" + "MaestroCliente", tengan o no consultas.
  */
 export async function leerPlanilla(): Promise<{ consultas: Consulta[]; fichas: FichaCliente[] }> {
+  // Con el link publico se baja la planilla de nuevo (si la copia tiene mas de
+  // un minuto): las lecturas de abajo usan esa copia recien bajada.
+  if (accesoPublico()) await leerHojasPublicas(planilla(), { fresca: true });
   const [{ consultas }, { fichas, buscarFicha }] = await Promise.all([leerTodas(), cargarMaestros(true)]);
   return {
     consultas: consultas.map(({ consulta }) => completarConFicha(consulta, buscarFicha)),
