@@ -6,9 +6,8 @@ import { BotonGrupoWhatsapp } from "@/components/seguimiento/BotonGrupoWhatsapp"
 import { Pista } from "@/components/ui/Pista";
 import { porCliente } from "@/lib/db/historial";
 import { formulariosDeCliente } from "@/lib/db/reclamos";
-import { backendSeguimiento, fichaDeCliente, getParaTablero } from "@/lib/db/seguimiento";
+import { fichaDeCliente, getParaTablero } from "@/lib/db/seguimiento";
 import { claveCliente } from "@/lib/db/sheets/maestros";
-import { herramientasDePrueba } from "@/lib/herramientas-prueba";
 import { historialSimulado } from "@/lib/seguimiento/historial-simulado";
 import { estadoCliente, explicarEstado, separarCliente } from "@/lib/seguimiento/presentacion";
 import { clasificacionDe } from "@/lib/seguimiento/relacion";
@@ -56,9 +55,8 @@ function Dato({ etiqueta, children }: { etiqueta: string; children: ReactNode })
 
 export default async function PerfilClientePage({ params, searchParams }: PageProps<"/clientes/[cliente]">) {
   const clave = decodeURIComponent((await params).cliente).trim();
-  // Las simulaciones solo se habilitan sobre datos demo y con las herramientas de prueba.
-  const conSimulacion = backendSeguimiento() === "demo" && herramientasDePrueba();
-  const simulacion = conSimulacion && (await searchParams).simulacion === "1";
+  // La simulacion se arma en memoria y no se guarda: se puede ofrecer siempre.
+  const simulacion = (await searchParams).simulacion === "1";
   const [ficha, todas] = await Promise.all([fichaDeCliente(clave), getParaTablero()]);
   const buscada = ficha?.codigo || claveCliente(ficha?.nombre || clave);
   const consultas = todas.filter((consulta) => claveCliente(consulta.cliente) === buscada);
@@ -232,17 +230,15 @@ export default async function PerfilClientePage({ params, searchParams }: PagePr
               <h2 className="text-base font-semibold text-slate-900">Historial del cliente</h2>
               <p className="text-xs text-slate-400">Del más viejo al más nuevo · los episodios en riesgo quedan resaltados</p>
             </div>
-            {conSimulacion ? (
-              <Link
-                href={simulacion ? `/clientes/${encodeURIComponent(clave)}` : `/clientes/${encodeURIComponent(clave)}?simulacion=1`}
-                scroll={false}
-                className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium ${
-                  simulacion ? "border-slate-900 bg-slate-900 text-white hover:bg-slate-800" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                }`}
-              >
-                {simulacion ? "Ver historial real" : "Simular historial"}
-              </Link>
-            ) : null}
+            <Link
+              href={simulacion ? `/clientes/${encodeURIComponent(clave)}` : `/clientes/${encodeURIComponent(clave)}?simulacion=1`}
+              scroll={false}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium ${
+                simulacion ? "border-slate-900 bg-slate-900 text-white hover:bg-slate-800" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              {simulacion ? "Ver historial real" : "Simular historial"}
+            </Link>
           </div>
 
           {simulacion ? (

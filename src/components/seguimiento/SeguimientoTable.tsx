@@ -4,10 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { memo, useCallback, useState, useTransition } from "react";
 import { BotonGrupoWhatsapp } from "@/components/seguimiento/BotonGrupoWhatsapp";
-import { FichaCliente } from "@/components/seguimiento/FichaCliente";
 import { ModalFinalizar } from "@/components/seguimiento/ModalFinalizar";
 import type { CierreConsulta } from "@/components/seguimiento/ModalFinalizar";
 import { RecomendacionRespuesta } from "@/components/seguimiento/RecomendacionRespuesta";
+import { VistaRapidaCliente } from "@/components/seguimiento/VistaRapidaCliente";
 import { Icono } from "@/components/ui/Icono";
 import { Pista } from "@/components/ui/Pista";
 import { useToast } from "@/components/ui/Toast";
@@ -131,7 +131,6 @@ type FilaProps = {
   resumen: ResumenChat | undefined;
   catalogo: readonly RespuestaTipo[] | undefined;
   onAlternar: (consulta: FilaConsulta, respondida: boolean) => void;
-  onVerFicha: (consulta: FilaConsulta) => void;
 };
 
 /**
@@ -147,7 +146,6 @@ const FilaSeguimiento = memo(function FilaSeguimiento({
   resumen,
   catalogo,
   onAlternar,
-  onVerFicha,
 }: FilaProps) {
   const { codigo, nombre } = separarCliente(consulta.cliente);
   const prioridad = PRIORIDADES[respondida ? "RESUELTA" : consulta.prioridad];
@@ -165,13 +163,15 @@ const FilaSeguimiento = memo(function FilaSeguimiento({
         <td colSpan={COLUMNAS.length} className="px-5 py-2.5">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-white">
             <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <Link
-                href={rutaPerfil(consulta.cliente)}
-                className="font-semibold hover:underline"
-                title="Ver ficha e historial del cliente"
-              >
-                {nombre}
-              </Link>
+              {/* Al pasar el mouse, vista rapida de la ficha; clic, el perfil completo. */}
+              <VistaRapidaCliente consulta={consulta} resumen={resumen}>
+                <Link
+                  href={rutaPerfil(consulta.cliente)}
+                  className="font-semibold underline decoration-white/40 decoration-dotted underline-offset-4 hover:decoration-white"
+                >
+                  {nombre}
+                </Link>
+              </VistaRapidaCliente>
               {codigo ? <span className="text-xs text-white/75">#{codigo}</span> : null}
               {consulta.clasificacion ? (
                 <span
@@ -206,21 +206,12 @@ const FilaSeguimiento = memo(function FilaSeguimiento({
               )}
             </div>
 
-            <div className="flex items-center gap-2">
-              <BotonGrupoWhatsapp
-                grupo={consulta.grupoWhatsapp}
-                link={consulta.linkWhatsapp}
-                etiqueta="Ir al chat"
-                className="inline-flex items-center gap-1.5 rounded-md bg-white px-2.5 py-1 text-xs font-semibold text-[#1b2b5e] hover:bg-slate-100"
-              />
-              <button
-                type="button"
-                onClick={() => onVerFicha(consulta)}
-                className="rounded-md px-2 py-1 text-xs font-medium text-white/80 ring-1 ring-white/30 ring-inset hover:bg-white/10 hover:text-white"
-              >
-                Vista rápida
-              </button>
-            </div>
+            <BotonGrupoWhatsapp
+              grupo={consulta.grupoWhatsapp}
+              link={consulta.linkWhatsapp}
+              etiqueta="Ir al chat"
+              className="inline-flex items-center gap-1.5 rounded-md bg-white px-2.5 py-1 text-xs font-semibold text-[#1b2b5e] hover:bg-slate-100"
+            />
 
             {resumen ? (
               <span
@@ -397,7 +388,6 @@ export function SeguimientoTable({
   const [ocultas, setOcultas] = useState<ReadonlySet<string>>(new Set());
   /** Consulta que se esta por dar por finalizada (el modal tiene su propio estado). */
   const [finalizando, setFinalizando] = useState<FilaConsulta | null>(null);
-  const [fichaAbierta, setFichaAbierta] = useState<FilaConsulta | null>(null);
 
   // Las funciones que reciben las filas son estables (useCallback): si no, cada
   // render de la tabla haria que todas las filas memorizadas se vuelvan a dibujar.
@@ -460,7 +450,6 @@ export function SeguimientoTable({
     },
     [cambiarRespondida],
   );
-  const cerrarFicha = useCallback(() => setFichaAbierta(null), []);
 
   if (consultas.length === 0) {
     return (
@@ -509,7 +498,6 @@ export function SeguimientoTable({
                 resumen={chats[chat]}
                 catalogo={catalogo}
                 onAlternar={alternar}
-                onVerFicha={setFichaAbierta}
               />
             );
           })}
@@ -517,12 +505,6 @@ export function SeguimientoTable({
       </table>
 
       <ModalFinalizar consulta={finalizando} atajo={atajo} onCancelar={cancelarCierre} onFinalizar={finalizar} />
-
-      <FichaCliente
-        consulta={fichaAbierta}
-        resumen={fichaAbierta ? chats[claveChat(fichaAbierta)] : undefined}
-        onCerrar={cerrarFicha}
-      />
     </>
   );
 }
