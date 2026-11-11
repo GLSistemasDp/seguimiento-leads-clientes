@@ -86,6 +86,8 @@ export default async function PerfilClientePage({ params, searchParams }: PagePr
   const pendientes = consultas.filter((consulta) => !consulta.respondida);
   const conFicha = consultas.find((consulta) => consulta.ficha) ?? consultas[0];
   const estados = estadoCliente({ ficha: ficha ?? conFicha?.ficha, estadoCuenta: conFicha?.estadoCuenta ?? "" });
+  const credito = ficha?.limiteCredito || conFicha?.ficha?.limiteCredito;
+  const deuda = ficha?.deuda || conFicha?.ficha?.deuda || estados.join(" · ");
   const clasificacion = (ficha?.clasificacion || conFicha?.clasificacion || "").toUpperCase();
   const responsable = (ficha?.grupoVendedor || conFicha?.grupoVendedor || "").replace(/^FILTRO GRUPO\s*/i, "");
   const ultimoEncargado = [...consultas].reverse().find((consulta) => consulta.encargado && consulta.encargado !== "bot")?.encargado;
@@ -224,6 +226,19 @@ export default async function PerfilClientePage({ params, searchParams }: PagePr
         </aside>
 
         {/* --- Columna derecha: linea de tiempo (70%) --- */}
+        <div className="flex min-w-0 flex-col gap-4">
+          <div className="grid gap-4 sm:grid-cols-2" aria-label="Crédito y deuda del cliente">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5">
+              <h2 className="text-xs font-medium tracking-wide text-slate-500 uppercase">Límite de crédito</h2>
+              <p className="mt-2 break-words text-2xl font-semibold text-[#1b2b5e] tabular-nums">{credito || "Sin informar"}</p>
+              <p className="mt-1 text-xs text-slate-400">Crédito informado en la ficha del cliente.</p>
+            </section>
+            <section className="rounded-2xl border border-slate-200 bg-white p-5">
+              <h2 className="text-xs font-medium tracking-wide text-slate-500 uppercase">Deuda pendiente</h2>
+              <p className="mt-2 break-words text-2xl font-semibold text-slate-900 tabular-nums">{deuda || "Sin informar"}</p>
+              <p className="mt-1 text-xs text-slate-400">Saldo o estado de la cuenta corriente.</p>
+            </section>
+          </div>
         <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -250,6 +265,7 @@ export default async function PerfilClientePage({ params, searchParams }: PagePr
 
           <LineaDeTiempoCliente key={simulacion ? "simulado" : "real"} eventos={linea} />
         </section>
+        </div>
       </div>
     </div>
   );
