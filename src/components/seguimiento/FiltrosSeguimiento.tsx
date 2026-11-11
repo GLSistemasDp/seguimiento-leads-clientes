@@ -4,29 +4,39 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Icono } from "@/components/ui/Icono";
 import { Selector } from "@/components/ui/Selector";
-import { ORDENES, ORDEN_CONSULTA_POR_DEFECTO, VISTAS } from "@/lib/seguimiento/presentacion";
+import { ORDENES, VISTAS } from "@/lib/seguimiento/presentacion";
+import { ICONO_RELACION, RELACIONES, type Relacion } from "@/types/seguimiento";
 import type { OrdenConsulta, Vista } from "@/lib/seguimiento/presentacion";
 
 type Filtros = {
   busqueda: string;
   hito: string;
-  encargado: string;
+  /** Relacion vigente (BUENA, REGULAR, EN_RIESGO) o "" para todas. */
+  relacion: string;
   grupoVendedor: string;
 };
 
 export type FiltrosSeguimientoProps = {
   vista: Vista;
   orden: OrdenConsulta;
+  /** Orden que se usa sin elegir ninguno (depende de la tarjeta activa). */
+  ordenPorDefecto: OrdenConsulta;
   /** true cuando la tabla agrupa por chat (cliente + grupo de WhatsApp). */
   agrupado: boolean;
   filtros: Filtros;
   conteos: Record<Vista, number>;
   /** Valores que aparecen en la planilla, para cada desplegable. */
-  opciones: { hito: string[]; encargado: string[]; grupoVendedor: string[] };
+  opciones: { hito: string[]; grupoVendedor: string[] };
 };
 
 type Parametro =
-  "vista" | "orden" | "q" | "hito" | "encargado" | "vendedor" | "agrupar";
+  "vista" | "orden" | "q" | "hito" | "relacion" | "vendedor" | "agrupar";
+
+/** Las rojas primero, como en la tarjeta "Clientes a cuidar". */
+const OPCIONES_RELACION: Record<string, string> = Object.fromEntries([
+  ["", "Todas las relaciones"],
+  ...(["EN_RIESGO", "REGULAR", "BUENA"] as Relacion[]).map((clave) => [clave, `${ICONO_RELACION[clave]} ${RELACIONES[clave]}`]),
+]);
 
 /** "" es la opcion "todos"; el resto se usa tal cual como valor y etiqueta. */
 function conTodos(etiqueta: string, valores: string[]): Record<string, string> {
@@ -39,6 +49,7 @@ function conTodos(etiqueta: string, valores: string[]): Record<string, string> {
 export function FiltrosSeguimiento({
   vista,
   orden,
+  ordenPorDefecto,
   agrupado,
   filtros,
   conteos,
@@ -159,11 +170,11 @@ export function FiltrosSeguimiento({
           onCambiar={(valor) => navegar({ hito: valor })}
         />
         <Selector
-          icono="usuario"
-          etiqueta="Encargado"
-          valor={filtros.encargado}
-          opciones={conTodos("Todos los encargados", opciones.encargado)}
-          onCambiar={(valor) => navegar({ encargado: valor })}
+          icono="escudo"
+          etiqueta="Relación"
+          valor={filtros.relacion}
+          opciones={OPCIONES_RELACION}
+          onCambiar={(valor) => navegar({ relacion: valor })}
         />
         <Selector
           icono="lista"
@@ -178,7 +189,7 @@ export function FiltrosSeguimiento({
           valor={orden}
           opciones={ORDENES}
           onCambiar={(valor) =>
-            navegar({ orden: valor === ORDEN_CONSULTA_POR_DEFECTO ? null : valor })
+            navegar({ orden: valor === ordenPorDefecto ? null : valor })
           }
         />
       </div>

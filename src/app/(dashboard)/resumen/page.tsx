@@ -7,12 +7,15 @@ import { BarrasApiladas, ColumnasPorDia, Leyenda } from "@/components/tablero/Gr
 import { EncabezadoPagina } from "@/components/ui/EncabezadoPagina";
 import { Icono } from "@/components/ui/Icono";
 import type { NombreIcono } from "@/components/ui/Icono";
-import { delDia } from "@/lib/db/historial";
+import { delDia, porConsulta } from "@/lib/db/historial";
 import { getPanel } from "@/lib/db/reclamos";
 import { getParaTablero } from "@/lib/db/seguimiento";
 import { getAll as getSolicitudes } from "@/lib/db/solicitudes";
 import { CATEGORIAS, evaluarPorReglas } from "@/lib/solicitudes/evaluacion";
-import { opciones } from "@/lib/seguimiento/presentacion";
+import { COLOR_TONO, formatearDias } from "@/components/seguimiento/TriajeSeguimiento";
+import { DEMORA, calcularTriaje, esperaHabil } from "@/lib/seguimiento/indicadores";
+import { relacionActual } from "@/lib/seguimiento/relacion";
+import { feriadosDeAnios } from "@/lib/utils/feriados";
 import { proximoEnvioCierre } from "@/lib/seguimiento/cierre-del-dia";
 import { urlBaseActual } from "@/lib/notificaciones/envios";
 import { armarResumenDiario } from "@/lib/seguimiento/resumen-diario";
@@ -23,6 +26,7 @@ import { mensajesSeguimiento } from "@/lib/notificaciones/mensajes";
 import { leerDatos } from "@/lib/db/lectura";
 import { ProblemaDatos } from "@/components/ui/ProblemaDatos";
 import { ACCIONES } from "@/types/reclamo";
+import { RELACIONES, type Consulta, type Relacion } from "@/types/seguimiento";
 
 export const metadata = { title: "Resumen · CRM De Pascale" };
 export const dynamic = "force-dynamic";
@@ -80,13 +84,16 @@ function Pendiente({
   detalle,
   icono,
   tono,
+  colorValor = "text-slate-900",
 }: {
   href: string;
   titulo: string;
-  valor: number;
+  valor: number | string;
   detalle: string;
   icono: NombreIcono;
   tono: "azul" | "ambar" | "rojo" | "verde";
+  /** Color del numero segun el estado (semaforo); sin esto va en negro. */
+  colorValor?: string;
 }) {
   const tonos = {
     azul: "bg-blue-700 text-white",
@@ -105,7 +112,7 @@ function Pendiente({
           <Icono nombre={icono} className="size-4" />
         </span>
       </div>
-      <p className="text-4xl font-semibold text-slate-900 tabular-nums">{valor}</p>
+      <p className={`text-4xl font-bold tabular-nums ${colorValor}`}>{valor}</p>
       <p className="flex items-center justify-between gap-2 text-xs text-slate-500">
         {detalle}
         <Icono nombre="flecha" className="size-4 text-slate-400 transition-transform group-hover:translate-x-1 group-hover:text-blue-700" />
@@ -135,17 +142,21 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
   const params = await searchParams;
   const periodoParam = texto(params.periodo);
   const periodo = esPeriodo(periodoParam) ? periodoParam : "14";
-  const encargado = texto(params.encargado);
+  const relacionParam = texto(params.relacion);
+  const relacion: Relacion | null = Object.hasOwn(RELACIONES, relacionParam) ? (relacionParam as Relacion) : null;
   const vendedor = texto(params.vendedor);
 
   const ahora = new Date();
-  const [seguimiento, reclamos, solicitudes, historial, proximo, base] = await Promise.all([
+  const [seguimiento, reclamos, solicitudes, historial, proximo, base, cierres, feriados] = await Promise.all([
     leerDatos("seguimiento", getParaTablero),
     leerDatos("reclamos", () => getPanel(ahora)),
     leerDatos("solicitudes", () => getSolicitudes({ estado: "PENDIENTE" })),
     leerDatos("historial", () => delDia(diaLocal(ahora), diaLocal)),
     proximoEnvioCierre(ahora).catch(() => null),
     urlBaseActual(),
+    // Para la relacion de las ya respondidas; sin esto se usa la que sugiere el mensaje.
+    porConsulta().catch((): Awaited<ReturnType<typeof porConsulta>> => ({})),
+    feriadosDeAnios([ahora.getFullYear() - 1, ahora.getFullYear()]).catch(() => new Set<string>()),
   ]);
   const todas = seguimiento.datos ?? [];
   const panel = reclamos.datos ?? { reclamos: [], error: null };
@@ -162,13 +173,25 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
   const muyAptas = altas.filter(({ evaluacion }) => evaluacion.categoria === "A").length;
   const resumen = armarResumenDiario({ consultas: todas, eventosHoy, reclamos: panel.reclamos, ahora });
 
+  // Mismos criterios que las tarjetas de Seguimiento: relacion vigente y dias habiles sin respuesta.
+  const relaciones = new Map(
+    todas.map((consulta) => {
+      const cierre = (cierres[consulta.id] ?? []).findLast((evento) => evento.tipo === "finalizada") ?? null;
+      return [consulta.id, relacionActual(consulta, cierre).relacion];
+    }),
+  );
+  const relacionDe = (consulta: Consulta) => relaciones.get(consulta.id) ?? "BUENA";
+  const esperaDe = (consulta: Consulta) => esperaHabil(consulta, ahora, feriados);
+  const triaje = calcularTriaje(todas, relacionDe, esperaDe, ahora);
+
   // --- Tablero de conversaciones (con filtros) ---
   const filtradas = todas.filter(
     (consulta) =>
-      (!encargado || consulta.encargado === encargado) &&
+      (!relacion || relacionDe(consulta) === relacion) &&
       (!vendedor || vendedorCorto(consulta.grupoVendedor) === vendedor),
   );
-  const tablero = calcularTablero(filtradas, periodo, ahora);
+  const tablero = calcularTablero(filtradas, periodo, ahora, relacionDe);
+  const triajeFiltrado = calcularTriaje(filtradas, relacionDe, esperaDe, ahora);
   const nombrePeriodo = periodo === "todo" ? "todo el historial" : `ultimos ${PERIODOS[periodo]}`;
   const tasa = tablero.entradas > 0 ? Math.round((tablero.respondidasPeriodo / tablero.entradas) * 100) : null;
 
@@ -196,22 +219,39 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
 
       <section className="flex flex-col gap-3">
         <h2 className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Para resolver hoy</h2>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {!seguimiento.error ? <Pendiente
-            href="/seguimiento?agrupar=chat"
-            titulo="Chats sin responder"
-            valor={tablero.chatsPendientes}
-            detalle={`${tablero.sinResponder} consultas en la cola`}
+            href="/seguimiento?triaje=pendientes"
+            titulo="Pendientes de respuesta"
+            valor={triaje.pendientes.cantidad === 0 ? "Al día" : triaje.pendientes.cantidad}
+            colorValor={COLOR_TONO[triaje.pendientes.tono]}
+            detalle={
+              triaje.pendientes.cantidad === 0
+                ? "No hay consultas sin responder"
+                : triaje.pendientes.masAntigua
+                  ? `La más antigua: hace ${triaje.pendientes.masAntigua} ${triaje.pendientes.masAntigua === 1 ? "día" : "días"}`
+                  : "La más antigua: de hoy"
+            }
             icono="chat"
             tono="azul"
           /> : null}
           {!seguimiento.error ? <Pendiente
-            href="/seguimiento?orden=antiguas"
-            titulo="Con demora"
-            valor={resumen.demoradas}
-            detalle="1 día o más sin respuesta"
+            href="/seguimiento?triaje=demora"
+            titulo="Demora promedio"
+            valor={triaje.demora.promedio === null ? "Al día" : `${formatearDias(triaje.demora.promedio)} d`}
+            colorValor={COLOR_TONO[triaje.demora.tono]}
+            detalle={`${triaje.demora.demoradas} con más de ${DEMORA.rojo} días hábiles`}
             icono="reloj"
             tono="ambar"
+          /> : null}
+          {!seguimiento.error ? <Pendiente
+            href="/seguimiento?triaje=riesgo"
+            titulo="Clientes a cuidar"
+            valor={triaje.riesgo.cantidad === 0 ? "Al día" : triaje.riesgo.cantidad}
+            colorValor={COLOR_TONO[triaje.riesgo.tono]}
+            detalle={`🔴 ${triaje.riesgo.enRiesgo} en riesgo · 🟡 ${triaje.riesgo.regular} regular`}
+            icono="escudo"
+            tono="rojo"
           /> : null}
           {!reclamos.error ? <Pendiente
             href="/reclamos?estado=SIN_DEFINIR"
@@ -326,10 +366,9 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
         <Suspense fallback={null}>
           <FiltrosTablero
             periodo={periodo}
-            encargado={encargado}
+            relacion={relacion ?? ""}
             vendedor={vendedor}
             opciones={{
-              encargado: opciones(todas, "encargado"),
               vendedor: [...new Set(todas.map((consulta) => vendedorCorto(consulta.grupoVendedor)).filter(Boolean))].sort(
                 (a, b) => a.localeCompare(b, "es"),
               ),
@@ -354,16 +393,16 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
           colorIcono="bg-red-100 text-red-600"
         />
         <Indicador
-          titulo="Vencidas"
-          valor={String(tablero.vencidas)}
-          detalle="2 dias o mas sin respuesta"
+          titulo="Con demora"
+          valor={String(triajeFiltrado.demora.demoradas)}
+          detalle={`más de ${DEMORA.rojo} días hábiles sin respuesta`}
           icono="reloj"
           colorIcono="bg-amber-100 text-amber-700"
         />
         <Indicador
-          titulo="Espera promedio"
-          valor={tablero.esperaPromedio === null ? "—" : `${tablero.esperaPromedio.toFixed(1)} d`}
-          detalle="de las que siguen sin respuesta"
+          titulo="Demora promedio"
+          valor={triajeFiltrado.demora.promedio === null ? "—" : `${formatearDias(triajeFiltrado.demora.promedio)} d`}
+          detalle="días hábiles, de las que siguen sin respuesta"
           icono="calendario"
           colorIcono="bg-slate-100 text-slate-700"
         />
@@ -520,8 +559,8 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
         <Tarjeta titulo="Por hito" extra={<Leyenda />}>
           <BarrasApiladas barras={tablero.porHito} encabezado="Hito" />
         </Tarjeta>
-        <Tarjeta titulo="Por encargado" extra={<Leyenda />}>
-          <BarrasApiladas barras={tablero.porEncargado} encabezado="Encargado" />
+        <Tarjeta titulo="Por relación con el cliente" extra={<Leyenda />}>
+          <BarrasApiladas barras={tablero.porRelacion} encabezado="Relación" />
         </Tarjeta>
         <Tarjeta titulo="Por grupo vendedor" extra={<Leyenda />}>
           <BarrasApiladas barras={tablero.porVendedor} encabezado="Grupo vendedor" />

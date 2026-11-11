@@ -4,28 +4,34 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Selector } from "@/components/ui/Selector";
 import { PERIODOS } from "@/lib/seguimiento/tablero";
 import type { Periodo } from "@/lib/seguimiento/tablero";
+import { ICONO_RELACION, RELACIONES, type Relacion } from "@/types/seguimiento";
 
 function conTodos(etiqueta: string, valores: string[]): Record<string, string> {
   return Object.fromEntries([["", etiqueta], ...valores.map((valor) => [valor, valor])]);
 }
 
-/** Periodo, encargado y grupo vendedor: una sola fila arriba de todo el tablero. */
+const OPCIONES_RELACION: Record<string, string> = Object.fromEntries([
+  ["", "Todas las relaciones"],
+  ...(["EN_RIESGO", "REGULAR", "BUENA"] as Relacion[]).map((clave) => [clave, `${ICONO_RELACION[clave]} ${RELACIONES[clave]}`]),
+]);
+
+/** Periodo, relacion con el cliente y grupo vendedor: una sola fila arriba de todo el tablero. */
 export function FiltrosTablero({
   periodo,
-  encargado,
+  relacion,
   vendedor,
   opciones,
 }: {
   periodo: Periodo;
-  encargado: string;
+  relacion: string;
   vendedor: string;
-  opciones: { encargado: string[]; vendedor: string[] };
+  opciones: { vendedor: string[] };
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  function navegar(clave: "periodo" | "encargado" | "vendedor", valor: string) {
+  function navegar(clave: "periodo" | "relacion" | "vendedor", valor: string) {
     const params = new URLSearchParams(searchParams.toString());
     if (valor) params.set(clave, valor);
     else params.delete(clave);
@@ -52,11 +58,11 @@ export function FiltrosTablero({
       </div>
       <div className="min-w-48">
         <Selector
-          icono="usuario"
-          etiqueta="Encargado"
-          valor={encargado}
-          opciones={conTodos("Todos los encargados", opciones.encargado)}
-          onCambiar={(valor) => navegar("encargado", valor)}
+          icono="escudo"
+          etiqueta="Relación"
+          valor={relacion}
+          opciones={OPCIONES_RELACION}
+          onCambiar={(valor) => navegar("relacion", valor)}
         />
       </div>
       <div className="min-w-56">

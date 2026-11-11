@@ -98,3 +98,12 @@ export async function diaHabil(fecha = new Date(), { puentesNoLaborables = false
   );
   return feriado ? { habil: false, dia, motivo: `feriado: ${feriado.nombre}`, fuente } : { habil: true, dia, fuente };
 }
+
+/**
+ * Dias no laborables (feriados, sin los puentes) de esos anios, como
+ * "2026-11-23". Para contar dias habiles en memoria sin esperar por cada dia.
+ */
+export async function feriadosDeAnios(anios: readonly number[]): Promise<Set<string>> {
+  const listas = await Promise.all([...new Set(anios)].map((anio) => feriadosDe(anio)));
+  return new Set(listas.flatMap(({ feriados }) => feriados.filter((item) => item.tipo !== "puente").map((item) => item.fecha)));
+}

@@ -134,7 +134,6 @@ export function filtrarPorVista(consultas: readonly Consulta[], vista: Vista): C
 export type FiltrosConsulta = {
   busqueda?: string;
   hito?: string;
-  encargado?: string;
   grupoVendedor?: string;
 };
 
@@ -142,7 +141,6 @@ export function filtrar(consultas: readonly Consulta[], filtros: FiltrosConsulta
   const busqueda = filtros.busqueda?.trim().toLowerCase();
   return consultas.filter((consulta) => {
     if (filtros.hito && consulta.hito !== filtros.hito) return false;
-    if (filtros.encargado && consulta.encargado !== filtros.encargado) return false;
     if (filtros.grupoVendedor && consulta.grupoVendedor !== filtros.grupoVendedor) return false;
     if (!busqueda) return true;
     return [
@@ -170,8 +168,9 @@ export function opciones(consultas: readonly Consulta[], campo: keyof FiltrosCon
 export const ORDENES = {
   clasificacion: "Clasificación del cliente (A, B, C)",
   prioridad: "Mayor prioridad primero",
-  antiguas: "Mas antiguas primero",
-  recientes: "Mas recientes primero",
+  antiguas: "Más antiguas primero",
+  recientes: "Más recientes primero",
+  relacion: "Relación (en riesgo primero)",
   cliente: "Cliente (A a Z)",
 } as const;
 
@@ -190,14 +189,22 @@ export function esOrdenConsulta(valor: unknown): valor is OrdenConsulta {
   return typeof valor === "string" && valor in ORDENES;
 }
 
+const PESO_RELACION: Record<Relacion, number> = { BUENA: 0, REGULAR: 1, EN_RIESGO: 2 };
+
 export function ordenar(
   consultas: readonly Consulta[],
   orden: OrdenConsulta,
   ahora = new Date(),
+  /** Relacion vigente de cada consulta (para el orden "relacion"). */
+  relacionDe: (consulta: Consulta) => Relacion = () => "BUENA",
 ): Consulta[] {
-  const tiempo = (consulta: Consulta) => consulta.fecha?.getTime() ?? 0;
+  // Sin fecha, la antiguedad sale de la columna de dias de la planilla.
+  const tiempo = (consulta: Consulta) =>
+    consulta.fecha?.getTime() ?? (consulta.dias !== null ? ahora.getTime() - consulta.dias * DIA_MS : 0);
   return [...consultas].sort((a, b) => {
     switch (orden) {
+      case "relacion":
+        return PESO_RELACION[relacionDe(b)] - PESO_RELACION[relacionDe(a)] || tiempo(a) - tiempo(b);
       case "antiguas":
         return tiempo(a) - tiempo(b);
       case "recientes":

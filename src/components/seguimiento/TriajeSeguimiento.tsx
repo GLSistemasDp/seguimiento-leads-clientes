@@ -1,141 +1,84 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ESCALA_ESPERA, TRIAJES, type DatosTriaje, type Triaje } from "@/lib/seguimiento/indicadores";
-import { ICONO_RELACION, RELACIONES, type Relacion } from "@/types/seguimiento";
+import { FILTRO_TRIAJE, TRIAJES, type DatosTriaje, type Tono, type Triaje } from "@/lib/seguimiento/indicadores";
 
 /**
- * Tarjetas de triaje: tres numeros accionables. Cada tarjeta es un filtro de
- * la tabla (tocarla de nuevo lo saca); la activa se invierte. Los graficos
- * usan el color del texto, asi se leen igual en la tarjeta activa.
+ * Tarjetas de triaje: un dato por tarjeta, sin graficos. El numero toma el
+ * color del semaforo para leerse de un vistazo. Cada tarjeta es un filtro de
+ * la tabla (tocarla de nuevo lo saca).
  */
 
-const COLOR_RELACION: Record<Relacion, string> = { BUENA: "#16a34a", REGULAR: "#f59e0b", EN_RIESGO: "#dc2626" };
+/** Color del numero segun el estado (mismos tonos del semaforo de la relacion). */
+export const COLOR_TONO: Record<Tono, string> = {
+  verde: "text-green-600",
+  ambar: "text-amber-600",
+  rojo: "text-red-600",
+};
 
-function diaCorto(dia: string): string {
-  const [, mes, numero] = dia.split("-");
-  return `${numero}/${mes}`;
+const PUNTO = { rojo: "bg-red-600", ambar: "bg-amber-500" } as const;
+
+const decimal = new Intl.NumberFormat("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+/** "4,2" con un decimal, como se escribe en Argentina. */
+export function formatearDias(dias: number): string {
+  return decimal.format(dias);
+}
+
+function dias(cantidad: number): string {
+  return `${cantidad} ${cantidad === 1 ? "día" : "días"}`;
 }
 
 function Tarjeta({
   triaje,
   activa,
   href,
+  tono,
   valor,
-  dato,
-  pie,
-  children,
+  unidad,
+  contexto,
+  ayuda,
 }: {
   triaje: Triaje;
   activa: boolean;
   href: string;
-  valor: number;
-  dato: string;
-  pie: ReactNode;
-  children: ReactNode;
+  tono: Tono;
+  /** null = no hay nada pendiente: se muestra "Al día". */
+  valor: string | null;
+  unidad?: string;
+  contexto: ReactNode;
+  ayuda: string;
 }) {
   return (
     <Link
       href={href}
       scroll={false}
       aria-pressed={activa}
-      title={activa ? "Quitar el filtro" : `Ver solo: ${TRIAJES[triaje].toLowerCase()}`}
-      className={`group flex min-w-0 flex-col gap-3 rounded-2xl border px-5 py-4 transition-colors focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:outline-none ${
-        activa ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-900 hover:border-slate-300 hover:bg-slate-50/60"
+      title={activa ? "Quitar el filtro" : ayuda}
+      className={`group flex h-full min-h-36 min-w-0 flex-col rounded-2xl border bg-white px-5 py-4 transition-colors focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:outline-none ${
+        activa ? "border-slate-900 ring-1 ring-slate-900" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/60"
       }`}
     >
       <span className="flex items-center justify-between gap-2">
-        <span className={`text-xs ${activa ? "text-slate-300" : "text-slate-500"}`}>{TRIAJES[triaje]}</span>
-        <span className={`text-[11px] ${activa ? "text-slate-300" : "text-slate-400 group-hover:text-slate-600"}`}>
+        <span className="text-xs font-medium text-slate-500">{TRIAJES[triaje]}</span>
+        <span
+          className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium ${
+            activa ? "bg-slate-900 text-white" : "text-slate-500 group-hover:bg-slate-100 group-hover:text-slate-900"
+          }`}
+        >
           {activa ? "Filtrando · quitar ✕" : "Filtrar →"}
         </span>
       </span>
-      <span className="flex items-start gap-1.5">
-        <span className="text-[28px] leading-none font-medium tracking-tight tabular-nums">{valor}</span>
-        <span className={`text-[11px] leading-none ${activa ? "text-slate-400" : "text-slate-400"}`}>{dato}</span>
+      <span className={`mt-3 flex items-baseline gap-1.5 font-bold tracking-tight tabular-nums ${COLOR_TONO[valor === null ? "verde" : tono]}`}>
+        <span className="text-[44px] leading-none">{valor ?? "Al día"}</span>
+        {valor !== null && unidad ? <span className="text-lg leading-none font-semibold">{unidad}</span> : null}
       </span>
-      <span className="block h-8">{children}</span>
-      <span className={`-mt-1 text-[11px] ${activa ? "text-slate-400" : "text-slate-400"}`}>{pie}</span>
+      <span className="mt-auto pt-3 text-xs text-slate-500">{contexto}</span>
     </Link>
   );
 }
 
-/** Linea fina en el color del texto, con el dato de cada dia al pasar el mouse. */
-function Linea({ serie }: { serie: DatosTriaje["ingresos"] }) {
-  const ancho = 160;
-  const alto = 32;
-  const maximo = Math.max(1, ...serie.map((punto) => punto.cantidad));
-  const x = (indice: number) => (indice / Math.max(1, serie.length - 1)) * ancho;
-  const y = (valor: number) => alto - 3 - (valor / maximo) * (alto - 6);
-  const ultimo = serie[serie.length - 1];
-  return (
-    <svg viewBox={`0 0 ${ancho} ${alto}`} preserveAspectRatio="none" className="h-8 w-full overflow-visible" role="img" aria-label="Consultas que entraron por día, últimos 30 días">
-      <polyline
-        points={serie.map((punto, indice) => `${x(indice).toFixed(1)},${y(punto.cantidad).toFixed(1)}`).join(" ")}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.5}
-        strokeLinejoin="round"
-        vectorEffect="non-scaling-stroke"
-      />
-      {ultimo ? <circle cx={x(serie.length - 1)} cy={y(ultimo.cantidad)} r={2.5} fill="currentColor" /> : null}
-      {serie.map((punto, indice) => (
-        <rect key={punto.dia} x={x(indice) - ancho / serie.length / 2} y={0} width={ancho / serie.length} height={alto} fill="transparent">
-          <title>{`${diaCorto(punto.dia)}: ${punto.cantidad}`}</title>
-        </rect>
-      ))}
-    </svg>
-  );
-}
-
-/** Pendientes por dias de espera; las de 1 dia o mas, marcadas. */
-function Demoras({ demoras }: { demoras: DatosTriaje["demoras"] }) {
-  const maximo = Math.max(1, ...demoras.map((fila) => fila.cantidad));
-  return (
-    <span className="flex h-8 items-end gap-[3px]" role="img" aria-label="Consultas pendientes según los días de espera">
-      {demoras.map((fila) => (
-        <span
-          key={fila.dias}
-          className="flex h-full flex-1 items-end"
-          title={`${fila.dias === ESCALA_ESPERA ? `${fila.dias} días o más` : `${fila.dias} ${fila.dias === 1 ? "día" : "días"}`}: ${fila.cantidad}`}
-        >
-          <span
-            className={`block w-full rounded-t-[2px] bg-current ${fila.dias >= 1 ? "" : "opacity-25"}`}
-            style={{ height: `${Math.max(fila.cantidad ? 12 : 4, (fila.cantidad / maximo) * 100)}%` }}
-          />
-        </span>
-      ))}
-    </span>
-  );
-}
-
-/** Chats pendientes por relacion (semaforo), en una sola barra. */
-function Relaciones({ relaciones }: { relaciones: DatosTriaje["relaciones"] }) {
-  const orden: Relacion[] = ["BUENA", "REGULAR", "EN_RIESGO"];
-  const total = orden.reduce((suma, clave) => suma + relaciones[clave], 0);
-  return (
-    <span className="flex h-8 flex-col justify-end gap-1.5" role="img" aria-label="Chats pendientes según la relación con el cliente">
-      <span className="flex h-2 w-full gap-[2px] overflow-hidden rounded-full">
-        {total === 0 ? <span className="block h-full w-full bg-current opacity-20" /> : null}
-        {orden.map((clave) =>
-          relaciones[clave] > 0 ? (
-            <span
-              key={clave}
-              className="block h-full"
-              style={{ width: `${(relaciones[clave] / total) * 100}%`, background: COLOR_RELACION[clave] }}
-              title={`${RELACIONES[clave]}: ${relaciones[clave]}`}
-            />
-          ) : null,
-        )}
-      </span>
-      <span className="flex gap-3 text-[11px] tabular-nums">
-        {orden.map((clave) => (
-          <span key={clave}>
-            {ICONO_RELACION[clave]} {relaciones[clave]}
-          </span>
-        ))}
-      </span>
-    </span>
-  );
+function Punto({ tono }: { tono: keyof typeof PUNTO }) {
+  return <span aria-hidden className={`inline-block size-2 shrink-0 rounded-full ${PUNTO[tono]}`} />;
 }
 
 export function TriajeSeguimiento({
@@ -148,40 +91,64 @@ export function TriajeSeguimiento({
   /** Link de cada tarjeta (activa = el que quita el filtro). */
   enlaces: Record<Triaje, string>;
 }) {
-  const { conteos } = datos;
-  const porcentajeRiesgo = conteos.pendientes.chats === 0 ? 0 : Math.round((conteos.riesgo.chats / conteos.pendientes.chats) * 100);
+  const { pendientes, demora, riesgo } = datos;
   return (
     <section aria-label="Triaje del seguimiento" className="grid gap-4 md:grid-cols-3">
       <Tarjeta
         triaje="pendientes"
         activa={activo === "pendientes"}
         href={enlaces.pendientes}
-        valor={conteos.pendientes.chats}
-        dato={`${conteos.pendientes.consultas} consultas`}
-        pie="Ingresos por día · 30 días"
-      >
-        <Linea serie={datos.ingresos} />
-      </Tarjeta>
+        tono={pendientes.tono}
+        valor={pendientes.cantidad === 0 ? null : String(pendientes.cantidad)}
+        contexto={
+          pendientes.cantidad === 0
+            ? "No hay consultas sin responder."
+            : pendientes.masAntigua === null
+              ? "Sin fecha de la más antigua"
+              : pendientes.masAntigua === 0
+                ? "La más antigua: de hoy"
+                : `La más antigua: hace ${dias(pendientes.masAntigua)}`
+        }
+        ayuda={`Ver solo ${FILTRO_TRIAJE.pendientes}`}
+      />
       <Tarjeta
         triaje="demora"
         activa={activo === "demora"}
         href={enlaces.demora}
-        valor={conteos.demora.chats}
-        dato={`${conteos.demora.consultas} consultas`}
-        pie="Pendientes por días de espera (0 a 7+)"
-      >
-        <Demoras demoras={datos.demoras} />
-      </Tarjeta>
+        tono={demora.tono}
+        valor={pendientes.cantidad === 0 || demora.promedio === null ? null : formatearDias(demora.promedio)}
+        unidad={demora.promedio !== null && formatearDias(demora.promedio) === "1,0" ? "día" : "días"}
+        contexto={
+          pendientes.cantidad === 0 ? (
+            "Ninguna consulta esperando respuesta."
+          ) : (
+            <>
+              <span className="tabular-nums">{demora.tramos.map((tramo) => `${tramo.etiqueta}: ${tramo.cantidad}`).join(" · ")}</span>
+              <span className="block text-slate-400">días hábiles sin respuesta</span>
+            </>
+          )
+        }
+        ayuda={`Ver solo ${FILTRO_TRIAJE.demora} (${demora.demoradas})`}
+      />
       <Tarjeta
         triaje="riesgo"
         activa={activo === "riesgo"}
         href={enlaces.riesgo}
-        valor={conteos.riesgo.chats}
-        dato={`${porcentajeRiesgo}% de los chats`}
-        pie="Chats pendientes por relación"
-      >
-        <Relaciones relaciones={datos.relaciones} />
-      </Tarjeta>
+        tono={riesgo.tono}
+        valor={riesgo.cantidad === 0 ? null : String(riesgo.cantidad)}
+        contexto={
+          riesgo.cantidad === 0 ? (
+            "Ninguna pendiente en riesgo ni regular."
+          ) : (
+            <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1 tabular-nums">
+              <Punto tono="rojo" /> {riesgo.enRiesgo} en riesgo
+              <span aria-hidden className="text-slate-300">·</span>
+              <Punto tono="ambar" /> {riesgo.regular} regular
+            </span>
+          )
+        }
+        ayuda={`Ver solo ${FILTRO_TRIAJE.riesgo}`}
+      />
     </section>
   );
 }

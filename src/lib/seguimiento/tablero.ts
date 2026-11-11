@@ -6,7 +6,7 @@ import {
   separarCliente,
   vencida,
 } from "@/lib/seguimiento/presentacion";
-import type { Consulta } from "@/types/seguimiento";
+import { ICONO_RELACION, RELACIONES, type Consulta, type Relacion } from "@/types/seguimiento";
 
 /**
  * Numeros del tablero de conversaciones para gerentes y encargados. Es solo
@@ -15,7 +15,7 @@ import type { Consulta } from "@/types/seguimiento";
  * Hay dos cortes distintos y el tablero los rotula asi:
  * - la cola actual (chats y consultas sin responder) no depende del periodo:
  *   lo pendiente sigue pendiente aunque haya entrado hace un mes;
- * - la actividad (entradas por dia, hito, encargado, grupo vendedor) cuenta
+ * - la actividad (entradas por dia, hito, relacion, grupo vendedor) cuenta
  *   las consultas que entraron dentro del periodo elegido.
  */
 
@@ -95,7 +95,8 @@ export type Tablero = {
   reclamosPeriodo: number;
   porDia: Barra[];
   porHito: Barra[];
-  porEncargado: Barra[];
+  /** En riesgo, regular y bien, siempre en ese orden. */
+  porRelacion: Barra[];
   porVendedor: Barra[];
   reclamos: FilaReclamo[];
   chats: FilaChat[];
@@ -168,6 +169,8 @@ export function calcularTablero(
   consultas: readonly Consulta[],
   periodo: Periodo,
   ahora = new Date(),
+  /** Relacion vigente de cada consulta (cierre o lo que sugiere el mensaje). */
+  relacionDe: (consulta: Consulta) => Relacion = () => "BUENA",
 ): Tablero {
   const hoy = diaLocal(ahora);
   const conFecha = consultas.filter((consulta) => consulta.fecha);
@@ -258,13 +261,19 @@ export function calcularTablero(
     diasEntre(desde, hoy).map((dia) => [dia, { clave: dia, etiqueta: etiquetaDia(dia), pendientes: 0, respondidas: 0 }]),
   );
   const hitos = new Map<string, Barra>();
-  const encargados = new Map<string, Barra>();
+  const relaciones = new Map<string, Barra>(
+    (["EN_RIESGO", "REGULAR", "BUENA"] as Relacion[]).map((clave) => [
+      clave,
+      { clave, etiqueta: `${ICONO_RELACION[clave]} ${RELACIONES[clave]}`, pendientes: 0, respondidas: 0 },
+    ]),
+  );
   const vendedores = new Map<string, Barra>();
   for (const consulta of delPeriodo) {
     const dia = diaLocal(consulta.fecha as Date);
     sumar(dias, dia, etiquetaDia(dia), consulta.respondida);
     sumar(hitos, consulta.hito || "Sin hito", consulta.hito || "Sin hito", consulta.respondida);
-    sumar(encargados, consulta.encargado || "Sin asignar", consulta.encargado || "Sin asignar", consulta.respondida);
+    const relacion = relacionDe(consulta);
+    sumar(relaciones, relacion, relacion, consulta.respondida);
     const vendedor = vendedorCorto(consulta.grupoVendedor) || "Sin grupo";
     sumar(vendedores, vendedor, vendedor, consulta.respondida);
   }
@@ -302,7 +311,7 @@ export function calcularTablero(
     reclamosPeriodo: delPeriodo.filter(esReclamo).length,
     porDia: [...dias.values()].sort((a, b) => a.clave.localeCompare(b.clave)),
     porHito: recortar(ordenarBarras(hitos), 10),
-    porEncargado: recortar(ordenarBarras(encargados), 8),
+    porRelacion: [...relaciones.values()].filter((barra) => barra.pendientes + barra.respondidas > 0),
     porVendedor: recortar(ordenarBarras(vendedores), 8),
     reclamos,
     chats: chatsPendientes.slice(0, 12),

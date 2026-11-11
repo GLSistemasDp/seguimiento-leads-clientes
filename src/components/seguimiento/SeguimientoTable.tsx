@@ -306,9 +306,6 @@ const FilaSeguimiento = memo(function FilaSeguimiento({
           </p>
         ) : null}
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-          {consulta.encargado && consulta.encargado.toLowerCase() !== "bot" ? (
-            <p className="text-xs text-slate-400">{consulta.encargado}</p>
-          ) : null}
           <RecomendacionRespuesta consulta={consulta} apagada={respondida} catalogo={catalogo} />
         </div>
       </td>

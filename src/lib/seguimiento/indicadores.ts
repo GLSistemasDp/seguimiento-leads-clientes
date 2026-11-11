@@ -1,95 +1,168 @@
-import { claveChat, diasAbierta } from "@/lib/seguimiento/presentacion";
+import { diasAbierta } from "@/lib/seguimiento/presentacion";
 import { diaLocal } from "@/lib/seguimiento/tablero";
 import type { Consulta, Relacion } from "@/types/seguimiento";
 
 /**
- * Tarjetas de triaje del seguimiento: chats pendientes, chats con mas de un
- * dia de demora y relaciones en riesgo. Cada una es tambien un filtro de la
- * tabla. Funciones puras sobre las consultas.
+ * Tarjetas de triaje del seguimiento: pendientes de respuesta, demora
+ * promedio y clientes a cuidar. Cada una muestra un solo dato y es tambien un
+ * filtro de la tabla. Funciones puras sobre las consultas.
  */
 
-const DIA_MS = 86_400_000;
-/** Dias de la linea de ingresos. */
-const DIAS_SERIE = 30;
-/** Escala de la distribucion de espera (0 a 7 dias). */
-export const ESCALA_ESPERA = 7;
+/**
+ * Umbrales de demora, en dias habiles. Se usan en la tarjeta de demora
+ * (color y filtro) y en el rojo de la de pendientes. Ajustarlos solo aca.
+ */
+export const DEMORA = {
+  /** Desde aca la demora deja de estar "al dia" (ambar). */
+  ambar: 1,
+  /** Mas de esto ya es demora para atender (rojo y filtro de la tarjeta). */
+  rojo: 3,
+} as const;
+
+/** Tramos del desglose de la tarjeta de demora (dias habiles, inclusive). */
+export const TRAMOS_DEMORA = [
+  { etiqueta: "1–2 d", desde: 1, hasta: 2 },
+  { etiqueta: "3–5 d", desde: 3, hasta: 5 },
+  { etiqueta: "+5 d", desde: 6, hasta: Number.POSITIVE_INFINITY },
+] as const;
 
 export const TRIAJES = {
-  pendientes: "Chats pendientes",
-  demora: "+ 1 día de demora",
-  riesgo: "Relaciones en riesgo",
+  pendientes: "Pendientes de respuesta",
+  demora: "Demora promedio",
+  riesgo: "Clientes a cuidar",
 } as const;
 export type Triaje = keyof typeof TRIAJES;
+
+/** Que muestra la tabla al filtrar por cada tarjeta. */
+export const FILTRO_TRIAJE: Record<Triaje, string> = {
+  pendientes: "pendientes, de la más antigua a la más reciente",
+  demora: `pendientes con más de ${DEMORA.rojo} días hábiles`,
+  riesgo: "pendientes en riesgo o regular, las rojas primero",
+};
 
 export function esTriaje(valor: unknown): valor is Triaje {
   return typeof valor === "string" && Object.hasOwn(TRIAJES, valor);
 }
 
+export type Tono = "verde" | "ambar" | "rojo";
+
+// --- Dias habiles ------------------------------------------------------------
+
+function diaSiguiente(dia: string): string {
+  const fecha = new Date(`${dia}T12:00:00Z`);
+  fecha.setUTCDate(fecha.getUTCDate() + 1);
+  return fecha.toISOString().slice(0, 10);
+}
+
+/**
+ * Dias habiles (lunes a viernes, sin feriados) que pasaron desde el dia de
+ * `desde` hasta hoy, en hora de Argentina. El mismo dia es 0; de viernes a
+ * lunes, 1.
+ */
+export function diasHabilesEntre(desde: Date, hasta: Date, feriados: ReadonlySet<string>): number {
+  const fin = diaLocal(hasta);
+  let dia = diaLocal(desde);
+  let habiles = 0;
+  while (dia < fin) {
+    dia = diaSiguiente(dia);
+    const semana = new Date(`${dia}T12:00:00Z`).getUTCDay();
+    if (semana !== 0 && semana !== 6 && !feriados.has(dia)) habiles += 1;
+  }
+  return habiles;
+}
+
+/** Dias habiles sin respuesta. Sin fecha, se usa la columna de dias de la planilla. */
+export function esperaHabil(consulta: Consulta, ahora: Date, feriados: ReadonlySet<string>): number | null {
+  if (consulta.fecha) return diasHabilesEntre(consulta.fecha, ahora, feriados);
+  return consulta.dias;
+}
+
+// --- Tarjetas ----------------------------------------------------------------
+
 /** Si la consulta entra en la tarjeta (todas son sobre lo pendiente). */
-export function enTriaje(triaje: Triaje, consulta: Consulta, relacion: Relacion, ahora = new Date()): boolean {
+export function enTriaje(triaje: Triaje, consulta: Consulta, relacion: Relacion, espera: number | null): boolean {
   if (consulta.respondida) return false;
-  if (triaje === "demora") return (diasAbierta(consulta, ahora) ?? 0) >= 1;
-  if (triaje === "riesgo") return relacion === "EN_RIESGO";
+  if (triaje === "demora") return (espera ?? 0) > DEMORA.rojo;
+  if (triaje === "riesgo") return relacion !== "BUENA";
   return true;
 }
 
 export type DatosTriaje = {
-  /** Chats y consultas de cada tarjeta. */
-  conteos: Record<Triaje, { chats: number; consultas: number }>;
-  /** Consultas que entraron cada dia (ultimos 30 dias, la ultima es hoy). */
-  ingresos: { dia: string; cantidad: number }[];
-  /** Pendientes por dias de espera: 0, 1, 2... y la ultima columna junta 7 o mas. */
-  demoras: { dias: number; cantidad: number }[];
-  /** Chats pendientes segun la peor relacion de sus consultas abiertas. */
-  relaciones: Record<Relacion, number>;
+  pendientes: {
+    cantidad: number;
+    /** Dias corridos de la pendiente mas vieja. */
+    masAntigua: number | null;
+    tono: Tono;
+  };
+  demora: {
+    /** Promedio de dias habiles sin respuesta de las pendientes. */
+    promedio: number | null;
+    tramos: { etiqueta: string; cantidad: number }[];
+    /** Pendientes con mas de DEMORA.rojo dias habiles (lo que muestra el filtro). */
+    demoradas: number;
+    tono: Tono;
+  };
+  riesgo: {
+    cantidad: number;
+    enRiesgo: number;
+    regular: number;
+    tono: Tono;
+  };
 };
-
-const PESO: Record<Relacion, number> = { BUENA: 0, REGULAR: 1, EN_RIESGO: 2 };
 
 export function calcularTriaje(
   consultas: readonly Consulta[],
   relacionDe: (consulta: Consulta) => Relacion,
+  esperaDe: (consulta: Consulta) => number | null,
   ahora = new Date(),
 ): DatosTriaje {
-  const dias = Array.from({ length: DIAS_SERIE }, (_, indice) =>
-    diaLocal(new Date(ahora.getTime() - (DIAS_SERIE - 1 - indice) * DIA_MS)),
-  );
-  const ingresos = new Map(dias.map((dia) => [dia, 0]));
-  const demoras = Array.from({ length: ESCALA_ESPERA + 1 }, (_, indice) => ({ dias: indice, cantidad: 0 }));
-  const chats: Record<Triaje, Set<string>> = { pendientes: new Set(), demora: new Set(), riesgo: new Set() };
-  const consultasPorTarjeta: Record<Triaje, number> = { pendientes: 0, demora: 0, riesgo: 0 };
-  const peorRelacion = new Map<string, Relacion>();
+  let pendientes = 0;
+  let masAntigua: number | null = null;
+  let sumaEspera = 0;
+  let conEspera = 0;
+  let demoradas = 0;
+  const tramos = TRAMOS_DEMORA.map((tramo) => ({ etiqueta: tramo.etiqueta, cantidad: 0 }));
+  let enRiesgo = 0;
+  let regular = 0;
 
   for (const consulta of consultas) {
-    if (consulta.fecha) {
-      const dia = diaLocal(consulta.fecha);
-      if (ingresos.has(dia)) ingresos.set(dia, (ingresos.get(dia) ?? 0) + 1);
-    }
     if (consulta.respondida) continue;
-    const chat = claveChat(consulta);
-    const relacion = relacionDe(consulta);
-    for (const triaje of Object.keys(TRIAJES) as Triaje[]) {
-      if (!enTriaje(triaje, consulta, relacion, ahora)) continue;
-      chats[triaje].add(chat);
-      consultasPorTarjeta[triaje] += 1;
+    pendientes += 1;
+    const corridos = diasAbierta(consulta, ahora);
+    if (corridos !== null) masAntigua = Math.max(masAntigua ?? 0, corridos);
+
+    const espera = esperaDe(consulta);
+    if (espera !== null) {
+      sumaEspera += espera;
+      conEspera += 1;
+      const tramo = TRAMOS_DEMORA.findIndex((item) => espera >= item.desde && espera <= item.hasta);
+      if (tramo >= 0) tramos[tramo].cantidad += 1;
     }
-    const anterior = peorRelacion.get(chat);
-    if (!anterior || PESO[relacion] > PESO[anterior]) peorRelacion.set(chat, relacion);
-    const espera = diasAbierta(consulta, ahora);
-    if (espera !== null) demoras[Math.min(espera, ESCALA_ESPERA)].cantidad += 1;
+    if (enTriaje("demora", consulta, "BUENA", espera)) demoradas += 1;
+
+    const relacion = relacionDe(consulta);
+    if (relacion === "EN_RIESGO") enRiesgo += 1;
+    else if (relacion === "REGULAR") regular += 1;
   }
 
-  const relaciones: Record<Relacion, number> = { BUENA: 0, REGULAR: 0, EN_RIESGO: 0 };
-  for (const relacion of peorRelacion.values()) relaciones[relacion] += 1;
-
+  const promedio = conEspera > 0 ? sumaEspera / conEspera : null;
   return {
-    conteos: {
-      pendientes: { chats: chats.pendientes.size, consultas: consultasPorTarjeta.pendientes },
-      demora: { chats: chats.demora.size, consultas: consultasPorTarjeta.demora },
-      riesgo: { chats: chats.riesgo.size, consultas: consultasPorTarjeta.riesgo },
+    pendientes: {
+      cantidad: pendientes,
+      masAntigua,
+      tono: pendientes === 0 ? "verde" : (masAntigua ?? 0) > DEMORA.rojo ? "rojo" : "ambar",
     },
-    ingresos: dias.map((dia) => ({ dia, cantidad: ingresos.get(dia) ?? 0 })),
-    demoras,
-    relaciones,
+    demora: {
+      promedio,
+      tramos,
+      demoradas,
+      tono: promedio === null || promedio < DEMORA.ambar ? "verde" : promedio > DEMORA.rojo ? "rojo" : "ambar",
+    },
+    riesgo: {
+      cantidad: enRiesgo + regular,
+      enRiesgo,
+      regular,
+      tono: enRiesgo > 0 ? "rojo" : regular > 0 ? "ambar" : "verde",
+    },
   };
 }

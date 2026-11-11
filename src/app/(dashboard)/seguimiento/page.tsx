@@ -21,13 +21,15 @@ import { inicioDelMes, nombreMes, pendientesAnteriores } from "@/lib/seguimiento
 import { claveCliente } from "@/lib/db/sheets/maestros";
 import { telegramConfigurado } from "@/lib/notificaciones/telegram";
 import { proximoEnvioCierre } from "@/lib/seguimiento/cierre-del-dia";
-import { TRIAJES, calcularTriaje, enTriaje, esTriaje, type Triaje } from "@/lib/seguimiento/indicadores";
+import { TRIAJES, calcularTriaje, enTriaje, esTriaje, esperaHabil, type Triaje } from "@/lib/seguimiento/indicadores";
+import { feriadosDeAnios } from "@/lib/utils/feriados";
 import {
   agruparPorChat,
   cierreMasFrecuente,
   claveChat,
   diasAbierta,
   ORDEN_CONSULTA_POR_DEFECTO,
+  type OrdenConsulta,
   esOrdenConsulta,
   esVista,
   filtrar,
@@ -41,7 +43,7 @@ import {
 } from "@/lib/seguimiento/presentacion";
 import { relacionActual } from "@/lib/seguimiento/relacion";
 import { sincronizacionConfigurada, ultimaSincronizacion } from "@/lib/sync/planilla";
-import type { Consulta, EventoHistorial } from "@/types/seguimiento";
+import { RELACIONES, type Consulta, type EventoHistorial, type Relacion } from "@/types/seguimiento";
 
 export const metadata = { title: "Seguimiento de clientes · CRM De Pascale" };
 export const dynamic = "force-dynamic";
@@ -60,15 +62,19 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
   // Por defecto se ve la cola de trabajo: lo que falta responder. Las tarjetas
   // de triaje son todas sobre lo pendiente.
   const vista = triaje ? "pendientes" : esVista(vistaParam) ? vistaParam : "pendientes";
+  // Cada tarjeta trae su orden: pendientes y demora, de la mas antigua a la mas
+  // reciente; clientes a cuidar, las rojas primero. Elegir otro orden lo pisa.
+  const ordenPorDefecto: OrdenConsulta = triaje === "riesgo" ? "relacion" : triaje ? "antiguas" : ORDEN_CONSULTA_POR_DEFECTO;
   const ordenParam = texto(params.orden);
-  const orden = esOrdenConsulta(ordenParam) ? ordenParam : ORDEN_CONSULTA_POR_DEFECTO;
+  const orden = esOrdenConsulta(ordenParam) ? ordenParam : ordenPorDefecto;
+  const relacionParam = texto(params.relacion);
+  const filtroRelacion: Relacion | null = relacionParam && Object.hasOwn(RELACIONES, relacionParam) ? (relacionParam as Relacion) : null;
   // Agrupado (por defecto): cada chat (cliente + grupo de WhatsApp) junto, para
   // ver quien quedo sin respuesta. "agrupar=no" muestra la lista suelta.
   const agrupado = texto(params.agrupar) !== "no";
   const filtros = {
     busqueda: texto(params.q) ?? "",
     hito: texto(params.hito) ?? "",
-    encargado: texto(params.encargado) ?? "",
     grupoVendedor: texto(params.vendedor) ?? "",
   };
 
@@ -88,6 +94,8 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
     formulariosPorConsulta().catch((): Record<string, string> => ({})),
     proximoEnvioCierre(ahora).catch(() => null),
     sincroniza ? ultimaSincronizacion().catch(() => null) : Promise.resolve(null),
+    // Sin la API de feriados se cuentan igual los dias habiles (lunes a viernes).
+    feriadosDeAnios([ahora.getFullYear() - 1, ahora.getFullYear()]).catch(() => new Set<string>()),
   ]));
   if (lectura.error) {
     return (
@@ -97,7 +105,7 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
       </div>
     );
   }
-  const [todas, historico, catalogo, historial, gestiones, indicaciones, formulariosReclamo, proximo, ultimaSync] = lectura.datos;
+  const [todas, historico, catalogo, historial, gestiones, indicaciones, formulariosReclamo, proximo, ultimaSync, feriados] = lectura.datos;
 
   // Relacion vigente de cada consulta: la del cierre si ya se respondio, si no
   // la que sugiere el ultimo mensaje (IA o reglas).
@@ -105,17 +113,27 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
     (historial[consulta.id] ?? []).findLast((evento) => evento.tipo === "finalizada") ?? null;
   const relaciones = new Map(todas.map((consulta) => [consulta.id, relacionActual(consulta, cierreDe(consulta))]));
   const relacionDe = (consulta: Consulta) => relaciones.get(consulta.id)?.relacion ?? "BUENA";
+  // Dias habiles sin respuesta (solo hacen falta las pendientes).
+  const esperas = new Map<string, number | null>();
+  const esperaDe = (consulta: Consulta) => {
+    if (!esperas.has(consulta.id)) esperas.set(consulta.id, esperaHabil(consulta, ahora, feriados));
+    return esperas.get(consulta.id) ?? null;
+  };
 
   // Las pestanas cuentan sobre los filtros de columna (y la tarjeta activa),
   // para que el numero de cada una coincida con lo que se ve al tocarla.
-  const enTarjeta = triaje ? todas.filter((consulta) => enTriaje(triaje, consulta, relacionDe(consulta), ahora)) : todas;
-  const filtradasSinVista = filtrar(enTarjeta, filtros);
+  const enTarjeta = triaje
+    ? todas.filter((consulta) => !consulta.respondida && enTriaje(triaje, consulta, relacionDe(consulta), esperaDe(consulta)))
+    : todas;
+  const filtradasSinVista = filtrar(enTarjeta, filtros).filter(
+    (consulta) => !filtroRelacion || relacionDe(consulta) === filtroRelacion,
+  );
   const conteos = {
     pendientes: filtrarPorVista(filtradasSinVista, "pendientes").length,
     respondidas: filtrarPorVista(filtradasSinVista, "respondidas").length,
     todas: filtradasSinVista.length,
   };
-  const ordenadas = ordenar(filtrarPorVista(filtradasSinVista, vista), orden, ahora);
+  const ordenadas = ordenar(filtrarPorVista(filtradasSinVista, vista), orden, ahora, relacionDe);
   const filtradas = agrupado ? agruparPorChat(ordenadas) : ordenadas;
 
   const totalPaginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
@@ -142,6 +160,8 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
       const query = new URLSearchParams(paramsActuales);
       query.delete("pagina");
       query.delete("vista");
+      // El orden de la tarjeta manda (mas antiguas primero, o las rojas primero).
+      query.delete("orden");
       if (triaje === clave) query.delete("triaje");
       else query.set("triaje", clave);
       const cadena = query.toString();
@@ -170,7 +190,7 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">{avisoConfiguracion()}</p>
       ) : null}
 
-      <TriajeSeguimiento datos={calcularTriaje(todas, relacionDe, ahora)} activo={triaje} enlaces={enlaces} />
+      <TriajeSeguimiento datos={calcularTriaje(todas, relacionDe, esperaDe, ahora)} activo={triaje} enlaces={enlaces} />
 
       <AnalisisSeguimiento
         analisis={calcularAnalisis(historico, ahora, esPeriodoAnalisis(params.periodoAnalisis) ? params.periodoAnalisis : "todo")}
@@ -184,12 +204,12 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
         <FiltrosSeguimiento
           vista={vista}
           orden={orden}
+          ordenPorDefecto={ordenPorDefecto}
           agrupado={agrupado}
-          filtros={filtros}
+          filtros={{ ...filtros, relacion: filtroRelacion ?? "" }}
           conteos={conteos}
           opciones={{
             hito: opciones(todas, "hito"),
-            encargado: opciones(todas, "encargado"),
             grupoVendedor: opciones(todas, "grupoVendedor"),
           }}
         />
