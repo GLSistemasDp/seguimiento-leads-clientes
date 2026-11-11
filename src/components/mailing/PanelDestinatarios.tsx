@@ -28,6 +28,7 @@ function Compra({ destinatario, ahora }: { destinatario: Destinatario; ahora: nu
 
 export type PanelDestinatariosProps = {
   esAlta: boolean;
+  individual?: boolean;
   /** Todos los posibles para este tipo de mail. */
   universo: readonly Destinatario[];
   /** Los que pasan los filtros. */
@@ -53,6 +54,7 @@ export type PanelDestinatariosProps = {
 /** Columna izquierda: la base de destinatarios, sus filtros y la depuracion a mano. */
 export function PanelDestinatarios({
   esAlta,
+  individual = false,
   universo,
   filtrados,
   filtros,
@@ -90,16 +92,16 @@ export function PanelDestinatarios({
   const quitados = filtrados.filter((destinatario) => destinatario.email && excluidos.has(destinatario.id)).length;
 
   return (
-    <section className="flex min-h-0 flex-col rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <section className="flex min-h-0 min-w-0 flex-col rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-col gap-3 border-b border-slate-100 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="font-semibold text-slate-900">Base de destinatarios</h2>
+            <h2 className="font-semibold text-slate-900">{individual ? "Clientes USUARIOS" : "Base de destinatarios"}</h2>
             <p className="text-xs text-slate-500">
-              {esAlta ? "Solicitudes de alta ya decididas." : "Clientes con su perfil comercial."} Destildá a quien no quieras incluir.
+              {individual ? "Grandes empresas y multinacionales. Elegí a quién escribirle." : `${esAlta ? "Solicitudes de alta ya decididas." : "Clientes con su perfil comercial."} Destildá a quien no quieras incluir.`}
             </p>
           </div>
-          {!esAlta ? (
+          {!esAlta && !individual ? (
             <div className="flex items-center gap-1.5">
               <select
                 aria-label="Bases guardadas"
@@ -283,7 +285,7 @@ export function PanelDestinatarios({
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2.5">
         <p className="text-sm text-slate-700">
-          <span className="text-lg font-semibold text-slate-900 tabular-nums">{seleccionados}</span> destinatarios
+          <span className="text-lg font-semibold text-slate-900 tabular-nums">{individual ? filtrados.length : seleccionados}</span> {individual ? "clientes USUARIOS" : "destinatarios"}
           <span className="text-xs text-slate-500">
             {" "}
             · {filtrados.length} de {universo.length} pasan los filtros
@@ -291,18 +293,18 @@ export function PanelDestinatarios({
             {sinMail > 0 ? ` · ${sinMail} sin mail` : ""}
           </span>
         </p>
-        <div className="flex gap-1">
+        {!individual ? <div className="flex gap-1">
           <Button variante="fantasma" tamano="sm" onClick={onIncluirTodos}>
             Incluir todos
           </Button>
           <Button variante="fantasma" tamano="sm" onClick={onQuitarTodos}>
             Quitar todos
           </Button>
-        </div>
+        </div> : null}
       </div>
 
       {filtrados.length === 0 ? (
-        <p className="p-10 text-center text-sm text-slate-500">Nadie coincide con estos filtros.</p>
+        <p className="p-10 text-center text-sm text-slate-500">{individual && universo.length === 0 ? "Todavía no hay clientes identificados como USUARIOS en la base." : "Nadie coincide con estos filtros."}</p>
       ) : (
         <ul className="max-h-[62vh] min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto">
           {filtrados.slice(0, visibles).map((destinatario) => {
@@ -315,12 +317,13 @@ export function PanelDestinatarios({
                 className={`flex items-start gap-3 px-4 py-3 ${enVista ? "bg-blue-50" : incluido ? "" : "bg-slate-50/80"}`}
               >
                 <input
-                  type="checkbox"
-                  checked={incluido}
+                  type={individual ? "radio" : "checkbox"}
+                  name={individual ? "cliente-usuario" : undefined}
+                  checked={individual ? enVista : incluido}
                   disabled={sinCorreo}
-                  onChange={() => onAlternar(destinatario.id)}
-                  aria-label={`${incluido ? "Quitar" : "Incluir"} a ${destinatario.nombre}`}
-                  title={sinCorreo ? "No tiene mail cargado" : incluido ? "Quitar de la base" : "Volver a incluir"}
+                  onChange={() => individual ? onVistaPrevia(destinatario.id) : onAlternar(destinatario.id)}
+                  aria-label={`${individual ? "Escribir" : incluido ? "Quitar" : "Incluir"} a ${destinatario.nombre}`}
+                  title={sinCorreo ? "No tiene mail cargado" : individual ? "Preparar un correo para este cliente" : incluido ? "Quitar de la base" : "Volver a incluir"}
                   className="mt-1 size-4 cursor-pointer accent-blue-700 disabled:cursor-not-allowed"
                 />
                 <button
@@ -335,6 +338,9 @@ export function PanelDestinatarios({
                     </span>
                     {destinatario.codigo ? (
                       <span className="font-mono text-xs text-slate-500">#{destinatario.codigo}</span>
+                    ) : null}
+                    {destinatario.tipoCliente === "USUARIO" ? (
+                      <span className="rounded bg-indigo-100 px-1.5 text-[11px] font-semibold text-indigo-800">USUARIO</span>
                     ) : null}
                     {destinatario.clasificacion ? (
                       <span

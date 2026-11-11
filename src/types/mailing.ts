@@ -3,6 +3,20 @@
  * mano) y que se le manda (una plantilla prearmada por tipo de mail).
  */
 
+export const TIPOS_MAIL_USUARIOS = {
+  usuario_respuesta_cotizacion: { etiqueta: "Respuesta a cotización", categoria: "usuarios" },
+  usuario_info_cotizacion: { etiqueta: "Información para cotizar", categoria: "usuarios" },
+  usuario_estado_pedido: { etiqueta: "Estado del pedido", categoria: "usuarios" },
+  usuario_remito_conformado: { etiqueta: "Remito conformado", categoria: "usuarios" },
+  usuario_nueva_linea: { etiqueta: "Presentación de nueva línea", categoria: "usuarios" },
+  usuario_reclamo_envio: { etiqueta: "Reclamo por error de envío", categoria: "usuarios" },
+  usuario_reclamo_calidad: { etiqueta: "Reclamo de calidad", categoria: "usuarios" },
+  usuario_cobranza: { etiqueta: "Recordatorio de cobranza", categoria: "usuarios" },
+  usuario_factura: { etiqueta: "Envío de factura", categoria: "usuarios" },
+} as const;
+
+export type TipoMailUsuario = keyof typeof TIPOS_MAIL_USUARIOS;
+
 export const TIPOS_MAIL = {
   promocional: { etiqueta: "Promoción", categoria: "promocional" },
   alta_aprobada: { etiqueta: "Alta aprobada", categoria: "altas" },
@@ -12,6 +26,7 @@ export const TIPOS_MAIL = {
   factura: { etiqueta: "Factura emitida", categoria: "informativo" },
   pedido_despachado: { etiqueta: "Pedido despachado", categoria: "informativo" },
   institucional: { etiqueta: "Institucional", categoria: "informativo" },
+  ...TIPOS_MAIL_USUARIOS,
 } as const;
 
 export type TipoMail = keyof typeof TIPOS_MAIL;
@@ -29,6 +44,10 @@ export const CATEGORIAS_MAILING = {
     etiqueta: "Informativos e institucionales",
     descripcion: "Estados de cuenta, facturas, despachos y comunicados de la empresa.",
   },
+  usuarios: {
+    etiqueta: "Clientes USUARIOS",
+    descripcion: "Grandes empresas y multinacionales: cotizaciones, pedidos, documentación y atención personalizada.",
+  },
 } as const;
 
 export type CategoriaMailing = keyof typeof CATEGORIAS_MAILING;
@@ -39,6 +58,10 @@ export function tiposDe(categoria: CategoriaMailing): TipoMail[] {
 
 export function esTipoMail(valor: unknown): valor is TipoMail {
   return typeof valor === "string" && Object.hasOwn(TIPOS_MAIL, valor);
+}
+
+export function esMailUsuario(tipo: TipoMail): tipo is TipoMailUsuario {
+  return TIPOS_MAIL[tipo].categoria === "usuarios";
 }
 
 /** Plantilla editable de un tipo de mail. */
@@ -63,6 +86,8 @@ export type Pedido = { numero: string; fecha: string; transporte: string; guia: 
 export type Destinatario = {
   id: string;
   origen: "cliente" | "alta";
+  /** Segmento explícito del maestro; no se deduce del rubro ni de la clasificación A/B/C. */
+  tipoCliente: "GENERAL" | "USUARIO";
   nombre: string;
   /** Codigo de cliente ("1877"); vacio en las altas. */
   codigo: string;

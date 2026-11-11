@@ -1,15 +1,17 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { EditorPlantilla } from "@/components/mailing/EditorPlantilla";
 import { PanelDestinatarios } from "@/components/mailing/PanelDestinatarios";
+import { PrepararMailUsuario } from "@/components/mailing/PrepararMailUsuario";
 import { Button } from "@/components/ui/Button";
 import { Icono } from "@/components/ui/Icono";
 import { Modal } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
-import { filtrar, filtrosIniciales, opcionesDe } from "@/lib/mailing/filtros";
+import { destinatariosPara, filtrar, filtrosIniciales, opcionesDe } from "@/lib/mailing/filtros";
 import { PLANTILLAS_BASE, variablesDesconocidas } from "@/lib/mailing/plantillas";
-import { CATEGORIAS_MAILING, TIPOS_MAIL, tiposDe } from "@/types/mailing";
+import { CATEGORIAS_MAILING, TIPOS_MAIL, esMailUsuario, tiposDe } from "@/types/mailing";
 import type {
   BaseMailing,
   CategoriaMailing,
@@ -74,15 +76,18 @@ export type CentroMailingProps = {
   bases: BaseMailing[];
   ahora: number;
   linkPlataforma: string;
+  iniciarUsuarios?: boolean;
+  clienteUsuarioCodigo?: string;
 };
 
-export function CentroMailing({ clientes, altas, plantillas, bases: basesIniciales, ahora, linkPlataforma }: CentroMailingProps) {
+export function CentroMailing({ clientes, altas, plantillas, bases: basesIniciales, ahora, linkPlataforma, iniciarUsuarios = false, clienteUsuarioCodigo }: CentroMailingProps) {
   const { mostrar } = useToast();
-  const [categoria, setCategoria] = useState<CategoriaMailing>("promocional");
+  const [categoria, setCategoria] = useState<CategoriaMailing>(iniciarUsuarios ? "usuarios" : "promocional");
   const [tipoPorCategoria, setTipoPorCategoria] = useState<Record<CategoriaMailing, TipoMail>>({
     promocional: "promocional",
     altas: "alta_aprobada",
     informativo: "estado_deuda",
+    usuarios: "usuario_respuesta_cotizacion",
   });
   const tipo = tipoPorCategoria[categoria];
 
@@ -94,17 +99,13 @@ export function CentroMailing({ clientes, altas, plantillas, bases: basesInicial
   const [borradores, setBorradores] = useState(plantillas);
   const [guardando, setGuardando] = useState(false);
   const [bases, setBases] = useState(basesIniciales);
-  const [vistaPreviaId, setVistaPreviaId] = useState<string | null>(null);
+  const [vistaPreviaId, setVistaPreviaId] = useState<string | null>(() => iniciarUsuarios ? clientes.find((d) => d.tipoCliente === "USUARIO" && d.codigo === clienteUsuarioCodigo)?.id ?? null : null);
   const [preparando, setPreparando] = useState(false);
 
   const esAlta = TIPOS_MAIL[tipo].categoria === "altas";
+  const esUsuario = esMailUsuario(tipo);
   const universo = useMemo(
-    () =>
-      tipo === "alta_aprobada"
-        ? altas.filter((d) => d.estadoAlta === "APROBADO")
-        : tipo === "alta_rechazada"
-          ? altas.filter((d) => d.estadoAlta === "RECHAZADO")
-          : clientes,
+    () => destinatariosPara(tipo, clientes, altas),
     [tipo, altas, clientes],
   );
   const filtrados = useMemo(() => filtrar(universo, filtros[tipo], ahora), [universo, filtros, tipo, ahora]);
@@ -220,7 +221,7 @@ export function CentroMailing({ clientes, altas, plantillas, bases: basesInicial
 
   return (
     <div className="flex flex-col gap-4 pb-24">
-      <div role="tablist" className="grid gap-2 sm:grid-cols-3">
+      <div role="tablist" aria-label="Apartados de mailing" className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         {(Object.keys(CATEGORIAS_MAILING) as CategoriaMailing[]).map((clave) => (
           <button
             key={clave}
@@ -245,10 +246,19 @@ export function CentroMailing({ clientes, altas, plantillas, bases: basesInicial
         ))}
       </div>
 
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+      {esUsuario ? (
+        <p className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950">
+          <strong>Atención a clientes USUARIOS.</strong> Elegí una gran empresa o multinacional y una de las nueve plantillas.
+          Al preparar el mail podés completar los datos del caso y descargar un borrador para enviar desde tu correo.
+          {" "}<Link href={vistaPrevia ? `/usuarios/${encodeURIComponent(vistaPrevia.codigo)}` : "/usuarios"} className="font-semibold underline underline-offset-2">Ver ficha e historial comercial →</Link>
+        </p>
+      ) : null}
+
+      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         <PanelDestinatarios
           key={tipo}
           esAlta={esAlta}
+          individual={esUsuario}
           universo={universo}
           filtrados={filtrados}
           filtros={filtros[tipo]}
@@ -279,7 +289,7 @@ export function CentroMailing({ clientes, altas, plantillas, bases: basesInicial
           tipos={tiposDe(categoria)}
           onTipo={(nuevo) => {
             setTipoPorCategoria((previo) => ({ ...previo, [categoria]: nuevo }));
-            setVistaPreviaId(null);
+            if (!esMailUsuario(nuevo)) setVistaPreviaId(null);
           }}
           plantilla={borrador}
           onCambio={(nueva) => setBorradores((previo) => ({ ...previo, [tipo]: nueva }))}
@@ -303,7 +313,7 @@ export function CentroMailing({ clientes, altas, plantillas, bases: basesInicial
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-[#1b2b5e] px-5 py-3 text-white shadow-2xl">
           <div className="min-w-0 text-sm leading-snug">
             <p className="font-medium">
-              {TIPOS_MAIL[tipo].etiqueta} · {seleccionados.length} destinatario{seleccionados.length === 1 ? "" : "s"}
+              {TIPOS_MAIL[tipo].etiqueta} · {esUsuario ? (vistaPrevia?.nombre ?? "Elegí un cliente USUARIO") : `${seleccionados.length} destinatario${seleccionados.length === 1 ? "" : "s"}`}
             </p>
             <p className="truncate text-blue-100">
               {modificada ? "Plantilla con cambios sin guardar · " : ""}
@@ -322,19 +332,30 @@ export function CentroMailing({ clientes, altas, plantillas, bases: basesInicial
             </button>
             <button
               type="button"
-              disabled={seleccionados.length === 0}
+              disabled={esUsuario ? !vistaPrevia?.email : seleccionados.length === 0}
               onClick={() => setPreparando(true)}
               className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-[#1b2b5e] hover:bg-blue-50 disabled:opacity-50"
             >
               <Icono nombre="mail" />
-              Preparar envío
+              {esUsuario ? "Preparar mail individual" : "Preparar envío"}
             </button>
           </div>
         </div>
       </div>
 
+      {preparando && esMailUsuario(tipo) && vistaPrevia?.email ? (
+        <PrepararMailUsuario
+          key={`${tipo}:${vistaPrevia.id}`}
+          tipo={tipo}
+          plantilla={borrador}
+          destinatario={vistaPrevia}
+          extras={extras}
+          onCerrar={() => setPreparando(false)}
+        />
+      ) : null}
+
       <Modal
-        abierto={preparando}
+        abierto={preparando && !esUsuario}
         ancho="lg"
         titulo={`Preparar envío · ${TIPOS_MAIL[tipo].etiqueta}`}
         onCerrar={() => setPreparando(false)}

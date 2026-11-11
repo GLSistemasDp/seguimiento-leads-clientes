@@ -21,6 +21,7 @@ type Item = {
 export const NAVEGACION: readonly Item[] = [
   { href: "/resumen", etiqueta: "Resumen", corta: "Resumen", icono: "casa" },
   { href: "/seguimiento", etiqueta: "Seguimiento de clientes", corta: "Seguimiento", icono: "chat", clave: "seguimiento" },
+  { href: "/usuarios", etiqueta: "Gestión de clientes USUARIOS", corta: "USUARIOS", icono: "usuario" },
   {
     href: "/solicitudes",
     etiqueta: "Solicitudes de alta",

@@ -5,7 +5,8 @@ import { getBases, getDestinatarios, getPlantillas } from "@/lib/db/mailing";
 export const metadata = { title: "Mailing · CRM De Pascale" };
 export const dynamic = "force-dynamic";
 
-export default async function MailingPage() {
+export default async function MailingPage({ searchParams }: PageProps<"/mailing">) {
+  const parametros = await searchParams;
   const [{ clientes, altas }, plantillas, bases] = await Promise.all([getDestinatarios(), getPlantillas(), getBases()]);
   // Se fija en el servidor para que los "dias sin comprar" coincidan en el navegador.
   const ahora = new Date().getTime();
@@ -19,7 +20,7 @@ export default async function MailingPage() {
       />
       <p className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-900">
         Base de clientes de ejemplo: la planilla actual no tiene mail, saldo ni fecha de última compra, que en producción
-        salen del ERP. Los contactos de vendedores y distribuidores también son de ejemplo. Las altas son las del módulo de
+        salen del ERP. La clasificación de clientes USUARIOS y los contactos de vendedores y distribuidores también son de ejemplo. Las altas son las del módulo de
         Solicitudes de alta.
       </p>
       <CentroMailing
@@ -29,6 +30,8 @@ export default async function MailingPage() {
         bases={bases}
         ahora={ahora}
         linkPlataforma={process.env.PORTAL_URL || "https://portal.depascale.com.ar"}
+        iniciarUsuarios={parametros.categoria === "usuarios"}
+        clienteUsuarioCodigo={typeof parametros.cliente === "string" ? parametros.cliente : undefined}
       />
     </div>
   );

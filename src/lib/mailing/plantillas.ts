@@ -1,8 +1,11 @@
 import { inlinearEstilos } from "@/lib/email/build-email-html";
 import { bloqueCredenciales, layoutEmail } from "@/lib/email/templates";
+import { htmlATextoPlano } from "@/lib/email/clipboard";
 import { DATOS_PAGO, distribuidoresPara, grupoPorProvincia, vendedorDe } from "@/lib/mailing/contactos";
+import { PLANTILLAS_USUARIOS } from "@/lib/mailing/usuarios";
 import { escapeHtml, sanitizeHtml } from "@/lib/utils/html";
-import type { Destinatario, PlantillaMailing, TipoMail } from "@/types/mailing";
+import { TIPOS_MAIL_USUARIOS } from "@/types/mailing";
+import type { Destinatario, PlantillaMailing, TipoMail, TipoMailUsuario } from "@/types/mailing";
 
 /**
  * Plantillas prearmadas de cada tipo de mail, las variables que admite cada
@@ -50,6 +53,9 @@ export const VARIABLES: Record<TipoMail, Variable[]> = {
   factura: [V.nombre, V.contacto, V.numero_factura, V.importe_factura, V.vencimiento_factura, ...VENDEDOR],
   pedido_despachado: [V.nombre, V.contacto, V.numero_pedido, V.transporte, V.guia, ...VENDEDOR],
   institucional: [V.nombre, V.contacto, V.fecha_hoy, ...VENDEDOR],
+  ...(Object.fromEntries(
+    Object.keys(TIPOS_MAIL_USUARIOS).map((tipo) => [tipo, [V.nombre, V.contacto, ...VENDEDOR]]),
+  ) as Record<TipoMailUsuario, Variable[]>),
 };
 
 /** Variables que se reemplazan por un bloque HTML armado por la app (no se escapan). */
@@ -58,6 +64,7 @@ const VARIABLES_HTML = new Set(["credenciales", "distribuidores"]);
 const PIE = "Industrias De Pascale · Protección Industrial\nRecibís este mail porque sos cliente de De Pascale.";
 
 export const PLANTILLAS_BASE: Record<TipoMail, PlantillaMailing> = {
+  ...PLANTILLAS_USUARIOS,
   promocional: {
     asunto: "{{contacto}}, tenemos novedades en protección para {{nombre}}",
     imagen: "",
@@ -217,6 +224,11 @@ function reemplazar(texto: string, valores: Record<string, string>, html: boolea
     if (!html) return VARIABLES_HTML.has(clave) ? "" : valor;
     return VARIABLES_HTML.has(clave) ? valor : escapeHtml(valor);
   });
+}
+
+/** Cuerpo personalizado, sin el encabezado ni el pie del layout. */
+export function cuerpoMailTexto(plantilla: PlantillaMailing, destinatario: Destinatario, extras: Extras): string {
+  return htmlATextoPlano(reemplazar(plantilla.cuerpo, valoresDe(destinatario, extras), true));
 }
 
 /** Variables escritas en la plantilla que este tipo de mail no conoce (posibles errores de tipeo). */

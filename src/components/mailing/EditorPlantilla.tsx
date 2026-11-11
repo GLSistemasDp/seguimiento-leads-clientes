@@ -4,9 +4,11 @@ import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Icono } from "@/components/ui/Icono";
 import { ANCHO_EMAIL } from "@/lib/email/templates";
+import { htmlATextoPlano } from "@/lib/email/clipboard";
 import { VARIABLES, armarMail, variablesDesconocidas } from "@/lib/mailing/plantillas";
 import type { Extras } from "@/lib/mailing/plantillas";
-import { TIPOS_MAIL } from "@/types/mailing";
+import { textoAParrafos } from "@/lib/utils/html";
+import { TIPOS_MAIL, esMailUsuario } from "@/types/mailing";
 import type { Destinatario, PlantillaMailing, TipoMail } from "@/types/mailing";
 
 const campo =
@@ -62,6 +64,10 @@ export function EditorPlantilla({
 }: EditorPlantillaProps) {
   const [pestana, setPestana] = useState<"editar" | "vista">("editar");
   const [errorImagen, setErrorImagen] = useState("");
+  const [textoUsuario, setTextoUsuario] = useState(() => ({
+    fuente: plantilla.cuerpo,
+    valor: htmlATextoPlano(plantilla.cuerpo),
+  }));
   const asuntoRef = useRef<HTMLInputElement>(null);
   const cuerpoRef = useRef<HTMLTextAreaElement>(null);
   const ultimoCampo = useRef<CampoTexto>("cuerpo");
@@ -72,19 +78,32 @@ export function EditorPlantilla({
     [plantilla, destinatario, extras],
   );
   const desconocidas = variablesDesconocidas(plantilla, tipo);
+  const esUsuario = esMailUsuario(tipo);
+  // Conserva espacios y saltos al escribir; solo recarga el texto si la plantilla cambia desde afuera.
+  if (esUsuario && textoUsuario.fuente !== plantilla.cuerpo) {
+    setTextoUsuario({ fuente: plantilla.cuerpo, valor: htmlATextoPlano(plantilla.cuerpo) });
+  }
+  const cuerpoVisible = esUsuario ? textoUsuario.valor : plantilla.cuerpo;
 
   function cambiar<K extends keyof PlantillaMailing>(clave: K, valor: PlantillaMailing[K]) {
     onCambio({ ...plantilla, [clave]: valor });
   }
 
+  function cambiarCuerpo(texto: string) {
+    const html = esUsuario ? textoAParrafos(texto) : texto;
+    if (esUsuario) setTextoUsuario({ fuente: html, valor: texto });
+    cambiar("cuerpo", html);
+  }
+
   /** Inserta (o envuelve la seleccion) en el ultimo campo de texto usado y deja el cursor despues. */
   function insertar(antes: string, despues = "", destino: CampoTexto = ultimoCampo.current) {
     const elemento = destino === "asunto" ? asuntoRef.current : cuerpoRef.current;
-    const valor = plantilla[destino];
+    const valor = destino === "cuerpo" ? cuerpoVisible : plantilla.asunto;
     const inicio = elemento?.selectionStart ?? valor.length;
     const fin = elemento?.selectionEnd ?? valor.length;
     const nuevo = valor.slice(0, inicio) + antes + valor.slice(inicio, fin) + despues + valor.slice(fin);
-    cambiar(destino, nuevo);
+    if (destino === "cuerpo") cambiarCuerpo(nuevo);
+    else cambiar("asunto", nuevo);
     requestAnimationFrame(() => {
       if (!elemento) return;
       elemento.focus();
@@ -110,13 +129,13 @@ export function EditorPlantilla({
   }
 
   return (
-    <section className="flex min-h-0 flex-col rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <section className="flex min-h-0 min-w-0 flex-col rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-col gap-3 border-b border-slate-100 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="font-semibold text-slate-900">Plantilla del mail</h2>
             <p className="text-xs text-slate-500">
-              Viene prearmada según el tipo. Editala y mirá cómo la recibe cada destinatario.
+              {esUsuario ? "Plantillas del equipo para grandes empresas. Los datos del caso se completan al preparar cada mail." : "Viene prearmada según el tipo. Editala y mirá cómo la recibe cada destinatario."}
             </p>
           </div>
           <div role="tablist" className="flex rounded-lg bg-slate-100 p-0.5">
@@ -174,6 +193,7 @@ export function EditorPlantilla({
 
           <div className="flex flex-col gap-2">
             <p className="text-sm font-medium text-slate-700">Imagen del encabezado</p>
+            {tipo === "usuario_nueva_linea" ? <p className="text-xs text-slate-500">Usá este espacio para la imagen promocional provista por Marketing.</p> : null}
             <div className="flex flex-wrap items-start gap-3">
               {plantilla.imagen ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -237,7 +257,7 @@ export function EditorPlantilla({
           <div className="flex flex-col gap-1.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-medium text-slate-700">Cuerpo</p>
-              <div className="flex gap-1">
+              {!esUsuario ? <div className="flex gap-1">
                 {FORMATOS.map((formato) => (
                   <button
                     key={formato.etiqueta}
@@ -251,15 +271,16 @@ export function EditorPlantilla({
                     {formato.icono}
                   </button>
                 ))}
-              </div>
+              </div> : null}
             </div>
             <textarea
               ref={cuerpoRef}
               rows={12}
-              value={plantilla.cuerpo}
+              value={cuerpoVisible}
               onFocus={() => (ultimoCampo.current = "cuerpo")}
-              onChange={(evento) => cambiar("cuerpo", evento.target.value)}
-              className={`${campo} font-mono text-xs leading-5`}
+              onChange={(evento) => cambiarCuerpo(evento.target.value)}
+              aria-label="Cuerpo de la plantilla"
+              className={`${campo} ${esUsuario ? "leading-6" : "font-mono text-xs leading-5"}`}
             />
           </div>
 
@@ -354,7 +375,7 @@ export function EditorPlantilla({
                 srcDoc={mail.html}
                 sandbox=""
                 className="h-[60vh] w-full rounded-lg border border-slate-200 bg-white"
-                style={{ minWidth: ANCHO_EMAIL / 2 }}
+                style={esUsuario ? undefined : { minWidth: ANCHO_EMAIL / 2 }}
               />
             </>
           ) : (

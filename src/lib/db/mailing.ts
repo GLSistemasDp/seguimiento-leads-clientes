@@ -1,6 +1,7 @@
 import "server-only";
 import { leer, modificar } from "@/lib/db/local/almacen";
 import { getAll as getSolicitudes } from "@/lib/db/solicitudes";
+import { getUsuarios } from "@/lib/db/usuarios";
 import { clientesDemo } from "@/lib/mailing/clientes-demo";
 import { PLANTILLAS_BASE } from "@/lib/mailing/plantillas";
 import { leerCampo } from "@/lib/solicitudes/presentacion";
@@ -22,6 +23,7 @@ function desdeSolicitud(solicitud: Solicitud): Destinatario {
   return {
     id: `alta-${solicitud.id}`,
     origen: "alta",
+    tipoCliente: "GENERAL",
     nombre: solicitud.nombre,
     codigo: "",
     email: solicitud.email,
@@ -44,9 +46,13 @@ function desdeSolicitud(solicitud: Solicitud): Destinatario {
 export type Destinatarios = { clientes: Destinatario[]; altas: Destinatario[] };
 
 export async function getDestinatarios(): Promise<Destinatarios> {
-  const solicitudes = await getSolicitudes().catch(() => []);
+  const [solicitudes, usuarios] = await Promise.all([getSolicitudes().catch(() => []), getUsuarios()]);
+  const porCodigo = new Map(usuarios.map((ficha) => [ficha.codigo, ficha]));
   return {
-    clientes: clientesDemo(),
+    clientes: clientesDemo().map((cliente) => {
+      const ficha = porCodigo.get(cliente.codigo);
+      return ficha ? { ...cliente, contacto: ficha.contacto, email: ficha.email, rubro: ficha.actividad } : cliente;
+    }),
     altas: solicitudes.filter((solicitud) => solicitud.estado !== "PENDIENTE").map(desdeSolicitud),
   };
 }

@@ -1,4 +1,5 @@
 import { normalizarEncabezado } from "@/lib/utils/strings";
+import { esMailUsuario } from "@/types/mailing";
 import type { Destinatario, FiltrosMailing, TipoMail } from "@/types/mailing";
 
 const DIA_MS = 86_400_000;
@@ -15,6 +16,14 @@ export const FILTROS_VACIOS: FiltrosMailing = {
   clasificaciones: [],
   excluirBloqueados: true,
 };
+
+/** Cada apartado trabaja sobre su propia base de clientes o solicitudes. */
+export function destinatariosPara(tipo: TipoMail, clientes: readonly Destinatario[], altas: readonly Destinatario[]): readonly Destinatario[] {
+  if (tipo === "alta_aprobada") return altas.filter((d) => d.estadoAlta === "APROBADO");
+  if (tipo === "alta_rechazada") return altas.filter((d) => d.estadoAlta === "RECHAZADO");
+  if (esMailUsuario(tipo)) return clientes.filter((d) => d.origen === "cliente" && d.tipoCliente === "USUARIO");
+  return clientes;
+}
 
 /** Cada tipo de mail arranca con los filtros que tienen sentido para el. */
 export function filtrosIniciales(tipo: TipoMail): FiltrosMailing {

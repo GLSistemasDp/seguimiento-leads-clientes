@@ -21,6 +21,7 @@ type Semilla = [
   ultimaCompra: number | null,
   /** false = el cliente no tiene mail cargado. */
   conMail?: boolean,
+  tipoCliente?: Destinatario["tipoCliente"],
 ];
 
 const SEMILLAS: Semilla[] = [
@@ -31,28 +32,28 @@ const SEMILLAS: Semilla[] = [
   ["Agroinsumos Pergamino S.R.L.", "Agro", "Buenos Aires", "C", "GERENCIA", "OK", 0, 210],
   ["Metalúrgica Rafaela S.A.", "Metalúrgica", "Santa Fe", "A", "LITORAL", "OK", 0, 9],
   ["Distribuidora EPP Rosario", "Seguridad industrial / EPP", "Santa Fe", "A", "LITORAL", "TIENE DEUDA", 1320, 18],
-  ["Servicios Petroleros Comahue S.A.", "Petróleo y energía", "Neuquén", "A", "GERENCIA+A", "OK", 0, 27],
+  ["Servicios Petroleros Comahue S.A.", "Petróleo y energía", "Neuquén", "A", "GERENCIA+A", "OK", 0, 27, true, "USUARIO"],
   ["Corralón El Progreso", "Corralón de materiales", "Córdoba", "C", "EPP - CORDOBA", "OK", 0, 154, false],
   ["Logística Ruta 9 S.A.", "Logística", "Córdoba", "B", "EPP - CORDOBA", "OK", 0, 63],
   ["Clínica San Rafael", "Sanidad", "Buenos Aires", "B", "VENTAS - SANIDAD", "OK", 0, 35],
   ["Ferretería Don Pedro", "Ferretería y bulonería", "Tucumán", "C", "VENDEDOR NOA", "NO RESPONDER", 410, 300],
-  ["Minera Puna S.A.", "Minería", "Jujuy", "A", "VENDEDOR NOA", "OK", 0, 21],
+  ["Minera Puna S.A.", "Minería", "Jujuy", "A", "VENDEDOR NOA", "OK", 0, 21, true, "USUARIO"],
   ["Taller Metalmecánico Sur", "Metalúrgica", "Buenos Aires", "C", "GERENCIA", "TIENE DEUDA", 96, 118],
   ["Seguridad Total Paraná", "Seguridad industrial / EPP", "Entre Ríos", "B", "LITORAL", "OK", 0, 74],
   ["Obras Civiles Cuyo S.R.L.", "Construcción", "San Juan", "B", "IDP - MZA - CUYO", "OK", 0, 99],
   ["Frigorífico La Pampa S.A.", "Alimentos", "La Pampa", "B", "GERENCIA", "OK", 0, 48],
   ["Limpieza Integral Norte", "Limpieza y mantenimiento", "Salta", "C", "VENDEDOR NOA", "OK", 0, 190],
   ["Bulonería Parque Patricios", "Ferretería y bulonería", "Buenos Aires", "C", "GERENCIA+A", "TIENE DEUDA", 230, 15],
-  ["Petroquímica del Sur S.A.", "Petróleo y energía", "Buenos Aires", "A", "GERENCIA+A", "OK", 0, 4],
+  ["Petroquímica del Sur S.A.", "Petróleo y energía", "Buenos Aires", "A", "GERENCIA+A", "OK", 0, 4, true, "USUARIO"],
   ["Hospital Privado Centro", "Sanidad", "Córdoba", "B", "VENTAS - SANIDAD", "OK", 0, 88],
   ["Agro Servicios Venado Tuerto", "Agro", "Santa Fe", "C", "LITORAL", "OK", 0, null],
-  ["Constructora Patagónica S.A.", "Construcción", "Chubut", "A", "GERENCIA+A", "TIENE DEUDA", 2150, 57],
+  ["Constructora Patagónica S.A.", "Construcción", "Chubut", "A", "GERENCIA+A", "TIENE DEUDA", 2150, 57, true, "USUARIO"],
   ["Industrias Plásticas Pilar", "Industria plástica", "Buenos Aires", "B", "GERENCIA", "OK", 0, 23],
   ["Ferretería Central Mendoza", "Ferretería y bulonería", "Mendoza", "B", "IDP - MZA - CUYO", "OK", 0, 140],
   ["Transportes del Litoral S.A.", "Logística", "Corrientes", "C", "LITORAL", "JUDICIALIZADO", 3900, 420],
   ["Seguridad Laboral Tucumán", "Seguridad industrial / EPP", "Tucumán", "A", "VENDEDOR NOA", "OK", 0, 11],
   ["Proveedora Naval Ribera", "Metalúrgica", "Buenos Aires", "B", "GERENCIA", "OK", 0, 205],
-  ["Cooperativa Eléctrica Rural", "Petróleo y energía", "Córdoba", "C", "EPP - CORDOBA", "OK", 0, 96, false],
+  ["Cooperativa Eléctrica Rural", "Petróleo y energía", "Córdoba", "C", "EPP - CORDOBA", "OK", 0, 96, false, "USUARIO"],
   ["Distribuidora Química Avellaneda", "Industria química", "Buenos Aires", "A", "GERENCIA+A", "OK", 0, 8],
   ["Corralón San Martín", "Corralón de materiales", "Buenos Aires", "C", "GERENCIA", "TIENE DEUDA", 58, 102],
   ["Viñedos y Bodegas del Este", "Agro", "Mendoza", "B", "IDP - MZA - CUYO", "OK", 0, 71],
@@ -82,7 +83,7 @@ function fecha(diasAtras: number, ahora: number): string {
 
 export function clientesDemo(ahora = Date.now()): Destinatario[] {
   return SEMILLAS.map(
-    ([nombre, rubro, provincia, clasificacion, grupoVendedor, situacion, deudaMiles, ultimaCompra, conMail = true], i) => {
+    ([nombre, rubro, provincia, clasificacion, grupoVendedor, situacion, deudaMiles, ultimaCompra, conMail = true, tipoCliente = "GENERAL"], i) => {
       const codigo = String(1100 + i * 137);
       const deuda = deudaMiles * 1000;
       const compra = ultimaCompra === null ? null : fecha(ultimaCompra, ahora);
@@ -90,6 +91,7 @@ export function clientesDemo(ahora = Date.now()): Destinatario[] {
       return {
         id: `cli-${codigo}`,
         origen: "cliente",
+        tipoCliente,
         nombre,
         codigo,
         email: conMail ? `compras@${dominio(nombre)}` : "",
