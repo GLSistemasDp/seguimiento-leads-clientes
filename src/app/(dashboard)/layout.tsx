@@ -83,9 +83,13 @@ export default function DashboardLayout({ children }: LayoutProps<"/">) {
                 Bienvenido, <span className="font-medium">{usuario}</span>
               </p>
             </div>
-            <Suspense fallback={<NavPrincipal pendientes={SIN_PENDIENTES} />}>
-              <NavConPendientes />
-            </Suspense>
+            {/* En pantallas grandes se navega con la barra lateral; el menu de
+                arriba queda solo en el celular, donde la barra no se muestra. */}
+            <div className="md:hidden">
+              <Suspense fallback={<NavPrincipal pendientes={SIN_PENDIENTES} />}>
+                <NavConPendientes />
+              </Suspense>
+            </div>
             <div className="hidden text-sm leading-tight text-slate-800 sm:block">
               <p>FECHA</p>
               <p className="tabular-nums">{formatearFecha(new Date())}</p>
