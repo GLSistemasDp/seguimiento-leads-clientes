@@ -196,7 +196,7 @@ function Contenido({ consulta, atajo, onCancelar, onFinalizar }: ModalFinalizarP
         />
         <p className="text-xs text-slate-500">
           La conversación sale de la bandeja y el cierre (resultado, relación y observación) queda en el historial del
-          cliente. Si fue un error, en &quot;Respondidas&quot; destildá la casilla y vuelve a la cola.
+          cliente. La bandeja principal muestra únicamente las consultas que todavía están pendientes.
         </p>
       </div>
     </Modal>

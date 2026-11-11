@@ -219,9 +219,7 @@ const FilaSeguimiento = memo(function FilaSeguimiento({
                   resumen.sinResponder > 0 ? "bg-red-600 text-white ring-red-400" : "bg-emerald-600 text-white ring-emerald-400"
                 }`}
               >
-                {resumen.sinResponder > 0
-                  ? `${resumen.sinResponder} sin responder de ${resumen.total}`
-                  : `${resumen.total} respondida${resumen.total === 1 ? "" : "s"}`}
+                {`${resumen.sinResponder} pendiente${resumen.sinResponder === 1 ? "" : "s"}`}
               </span>
             ) : null}
           </div>
@@ -358,8 +356,6 @@ export type SeguimientoTableProps = {
   chats?: Record<string, ResumenChat>;
   /** Respuestas tipo de la planilla para las sugerencias. */
   catalogo?: readonly RespuestaTipo[];
-  /** En "pendientes" la fila finalizada se va de la tabla con una transicion. */
-  vista?: "pendientes" | "respondidas" | "todas";
   /** Cierre mas usado en el historial, para el boton de un click del modal. */
   atajo?: CierreFrecuente;
 };
@@ -371,7 +367,6 @@ export function SeguimientoTable({
   consultas,
   chats = SIN_CHATS,
   catalogo,
-  vista = "pendientes",
   atajo = ATAJO_POR_DEFECTO,
 }: SeguimientoTableProps) {
   const router = useRouter();
@@ -417,7 +412,7 @@ export function SeguimientoTable({
           : `${separarCliente(consulta.cliente).nombre} volvio a la cola.`,
         "exito",
       );
-      if (valor && vista === "pendientes") {
+      if (valor) {
         // Inbox zero: la fila se desvanece y se va antes de recargar la lista.
         setSaliendo((previo) => new Set(previo).add(consulta.id));
         setTimeout(() => {
@@ -428,7 +423,7 @@ export function SeguimientoTable({
       }
       startTransition(() => router.refresh());
     },
-    [mostrar, router, vista],
+    [mostrar, router],
   );
 
   /** Tildar abre la confirmacion con observacion; destildar vuelve a la cola directo. */
@@ -448,12 +443,16 @@ export function SeguimientoTable({
     [cambiarRespondida],
   );
 
-  if (consultas.length === 0) {
+  // Recalcular sobre las filas que quedan también hace que la siguiente
+  // pendiente herede el encabezado del chat cuando se cierra la primera.
+  const visibles = consultas.filter((consulta) => !consulta.respondida && !ocultas.has(consulta.id));
+
+  if (visibles.length === 0) {
     return (
       <div className="p-12 text-center">
-        <p className="text-sm text-slate-600">No hay consultas que coincidan con el filtro.</p>
+        <p className="text-sm text-slate-600">No hay consultas pendientes que coincidan con el filtro.</p>
         <p className="mt-1 text-xs text-slate-500">
-          Si estas en &quot;Sin responder&quot;, la cola esta al dia.
+          Las conversaciones realizadas quedaron en el historial de cada cliente.
         </p>
       </div>
     );
@@ -481,17 +480,16 @@ export function SeguimientoTable({
           </tr>
         </thead>
         <tbody>
-          {consultas.map((consulta, indice) => {
-            if (ocultas.has(consulta.id)) return null;
+          {visibles.map((consulta, indice) => {
             const chat = claveChat(consulta);
             return (
               <FilaSeguimiento
                 key={consulta.id}
                 consulta={consulta}
                 respondida={respondidas[consulta.id] ?? consulta.respondida}
-                ocupada={guardando.has(consulta.id)}
+                ocupada={guardando.has(consulta.id) || saliendo.has(consulta.id)}
                 saliendo={saliendo.has(consulta.id)}
-                nuevoChat={indice === 0 || chat !== claveChat(consultas[indice - 1])}
+                nuevoChat={indice === 0 || chat !== claveChat(visibles[indice - 1])}
                 resumen={chats[chat]}
                 catalogo={catalogo}
                 onAlternar={alternar}

@@ -4,9 +4,9 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Icono } from "@/components/ui/Icono";
 import { Selector } from "@/components/ui/Selector";
-import { ORDENES, VISTAS } from "@/lib/seguimiento/presentacion";
+import { ORDENES } from "@/lib/seguimiento/presentacion";
 import { ICONO_RELACION, RELACIONES, type Relacion } from "@/types/seguimiento";
-import type { OrdenConsulta, Vista } from "@/lib/seguimiento/presentacion";
+import type { OrdenConsulta } from "@/lib/seguimiento/presentacion";
 
 type Filtros = {
   busqueda: string;
@@ -17,20 +17,19 @@ type Filtros = {
 };
 
 export type FiltrosSeguimientoProps = {
-  vista: Vista;
   orden: OrdenConsulta;
   /** Orden que se usa sin elegir ninguno (depende de la tarjeta activa). */
   ordenPorDefecto: OrdenConsulta;
   /** true cuando la tabla agrupa por chat (cliente + grupo de WhatsApp). */
   agrupado: boolean;
   filtros: Filtros;
-  conteos: Record<Vista, number>;
+  pendientes: number;
   /** Valores que aparecen en la planilla, para cada desplegable. */
   opciones: { hito: string[]; grupoVendedor: string[] };
 };
 
 type Parametro =
-  "vista" | "orden" | "q" | "hito" | "relacion" | "vendedor" | "agrupar";
+  "orden" | "q" | "hito" | "relacion" | "vendedor" | "agrupar";
 
 /** Las rojas primero, como en la tarjeta "Clientes a cuidar". */
 const OPCIONES_RELACION: Record<string, string> = Object.fromEntries([
@@ -47,12 +46,11 @@ function conTodos(etiqueta: string, valores: string[]): Record<string, string> {
 }
 
 export function FiltrosSeguimiento({
-  vista,
   orden,
   ordenPorDefecto,
   agrupado,
   filtros,
-  conteos,
+  pendientes,
   opciones,
 }: FiltrosSeguimientoProps) {
   const router = useRouter();
@@ -76,6 +74,7 @@ export function FiltrosSeguimiento({
       else params.delete(clave);
     }
     params.delete("pagina");
+    params.delete("vista");
     const query = params.toString();
     router.push(query ? `${pathname}?${query}` : pathname);
   }
@@ -90,32 +89,9 @@ export function FiltrosSeguimiento({
   return (
     <section className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div
-          className="flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1"
-          role="tablist"
-        >
-          {(Object.keys(VISTAS) as Vista[]).map((valor) => {
-            const activa = vista === valor;
-            return (
-              <button
-                key={valor}
-                type="button"
-                role="tab"
-                aria-selected={activa}
-                onClick={() =>
-                  navegar({ vista: valor === "pendientes" ? null : valor })
-                }
-                className={`inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm transition-colors ${
-                  activa
-                    ? "bg-white font-medium text-slate-900 shadow-sm"
-                    : "text-slate-500 hover:text-slate-900"
-                }`}
-              >
-                {VISTAS[valor]}
-                <span className="text-xs text-slate-400 tabular-nums">{conteos[valor]}</span>
-              </button>
-            );
-          })}
+        <div>
+          <p className="text-sm font-semibold text-slate-900">Consultas pendientes <span className="ml-1 rounded-md bg-blue-50 px-2 py-1 text-xs text-blue-800 tabular-nums">{pendientes}</span></p>
+          <p className="mt-1 text-xs text-slate-500">Las realizadas se consultan en el historial de cada cliente.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

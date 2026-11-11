@@ -106,3 +106,25 @@ test("un cierre sin resultado o relación se rechaza sin cambiar la ficha", asyn
   }
   assert.equal((await cargar("@/lib/db/seguimiento").fichaDeCliente("100")).observacion, "Nota de la planilla");
 });
+
+test("las realizadas salen de la cola y conservan resultado, relación y observación en el historial", async () => {
+  const { cargar } = entorno();
+  const { PATCH } = cargar("@/app/api/seguimiento/[id]/route");
+  const db = cargar("@/lib/db/seguimiento");
+  const { filtrarPorVista } = cargar("@/lib/seguimiento/presentacion");
+  const historial = cargar("@/lib/db/historial");
+  const finalizar = (id) => PATCH({ json: async () => ({ respondida: true, resultado: "Resuelto", relacion: "BUENA", observaciones: "Se confirmó la entrega" }) }, { params: Promise.resolve({ id }) });
+  assert.equal((await finalizar("grupo-1")).status, 200);
+  const pendientes = filtrarPorVista(await db.getAll(), "pendientes");
+  assert.deepEqual([...pendientes].map((consulta) => consulta.id), ["grupo-2"], "otro chat pendiente del mismo cliente continúa visible");
+  assert.equal((await finalizar("grupo-2")).status, 200);
+  assert.equal(filtrarPorVista(await db.getAll(), "pendientes").length, 0);
+  const eventos = await historial.porCliente("100 - Cliente");
+  assert.equal(eventos.length, 2);
+  for (const evento of eventos) {
+    assert.equal(evento.tipo, "finalizada");
+    assert.equal(evento.resultado, "Resuelto");
+    assert.equal(evento.relacion, "BUENA");
+    assert.equal(evento.observacion, "Se confirmó la entrega");
+  }
+});

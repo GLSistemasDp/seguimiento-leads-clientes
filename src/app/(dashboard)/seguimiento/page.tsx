@@ -31,7 +31,6 @@ import {
   ORDEN_CONSULTA_POR_DEFECTO,
   type OrdenConsulta,
   esOrdenConsulta,
-  esVista,
   filtrar,
   filtrarPorVista,
   opciones,
@@ -58,10 +57,6 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
   const params = await searchParams;
   const triajeParam = texto(params.triaje);
   const triaje: Triaje | null = esTriaje(triajeParam) ? triajeParam : null;
-  const vistaParam = texto(params.vista);
-  // Por defecto se ve la cola de trabajo: lo que falta responder. Las tarjetas
-  // de triaje son todas sobre lo pendiente.
-  const vista = triaje ? "pendientes" : esVista(vistaParam) ? vistaParam : "pendientes";
   // Cada tarjeta trae su orden: pendientes y demora, de la mas antigua a la mas
   // reciente; clientes a cuidar, las rojas primero. Elegir otro orden lo pisa.
   const ordenPorDefecto: OrdenConsulta = triaje === "riesgo" ? "relacion" : triaje ? "antiguas" : ORDEN_CONSULTA_POR_DEFECTO;
@@ -106,6 +101,9 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
     );
   }
   const [todas, historico, catalogo, historial, gestiones, indicaciones, formulariosReclamo, proximo, ultimaSync, feriados] = lectura.datos;
+  // La bandeja principal siempre contiene solo pendientes, incluso si se abre
+  // un enlace antiguo con vista=todas o vista=respondidas. El historial conserva los cierres.
+  const pendientes = filtrarPorVista(todas, "pendientes");
 
   // Relacion vigente de cada consulta: la del cierre si ya se respondio, si no
   // la que sugiere el ultimo mensaje (IA o reglas).
@@ -120,20 +118,13 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
     return esperas.get(consulta.id) ?? null;
   };
 
-  // Las pestanas cuentan sobre los filtros de columna (y la tarjeta activa),
-  // para que el numero de cada una coincida con lo que se ve al tocarla.
   const enTarjeta = triaje
-    ? todas.filter((consulta) => !consulta.respondida && enTriaje(triaje, consulta, relacionDe(consulta), esperaDe(consulta)))
-    : todas;
-  const filtradasSinVista = filtrar(enTarjeta, filtros).filter(
+    ? pendientes.filter((consulta) => enTriaje(triaje, consulta, relacionDe(consulta), esperaDe(consulta)))
+    : pendientes;
+  const filtradasPendientes = filtrar(enTarjeta, filtros).filter(
     (consulta) => !filtroRelacion || relacionDe(consulta) === filtroRelacion,
   );
-  const conteos = {
-    pendientes: filtrarPorVista(filtradasSinVista, "pendientes").length,
-    respondidas: filtrarPorVista(filtradasSinVista, "respondidas").length,
-    todas: filtradasSinVista.length,
-  };
-  const ordenadas = ordenar(filtrarPorVista(filtradasSinVista, vista), orden, ahora, relacionDe);
+  const ordenadas = ordenar(filtradasPendientes, orden, ahora, relacionDe);
   const filtradas = agrupado ? agruparPorChat(ordenadas) : ordenadas;
 
   const totalPaginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
@@ -143,7 +134,7 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
     : 1;
   const visibles = filtradas.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
   // Al cliente solo viaja el resumen de los chats que se ven en esta pagina.
-  const resumenes = resumirChats(filtradasSinVista);
+  const resumenes = resumirChats(filtradasPendientes);
   const chatsVisibles = Object.fromEntries(
     visibles.map(claveChat).filter((clave) => resumenes[clave]).map((clave) => [clave, resumenes[clave]]),
   );
@@ -152,7 +143,7 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
 
   const paramsActuales: Record<string, string> = {};
   for (const [clave, valor] of Object.entries(params)) {
-    if (typeof valor === "string") paramsActuales[clave] = valor;
+    if (clave !== "vista" && typeof valor === "string") paramsActuales[clave] = valor;
   }
   // Cada tarjeta filtra (o, si ya esta activa, quita el filtro) sin perder el resto.
   const enlaces = Object.fromEntries(
@@ -174,7 +165,7 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
       <EncabezadoPagina
         titulo="Seguimiento de clientes"
         etiqueta="EQUIPO COMERCIAL"
-        descripcion="Las consultas de los grupos de WhatsApp, ordenadas por clasificación del cliente (A, B, C) y, dentro de cada una, por prioridad. Al finalizar una conversación indicá cómo quedó y la relación con el cliente: pasa a su historial."
+        descripcion="Solo consultas pendientes de los grupos de WhatsApp, ordenadas por clasificación del cliente (A, B, C) y prioridad. Al finalizar una conversación con su resultado y relación, desaparece de esta bandeja y queda en el historial del cliente."
         acciones={
           <>
             <ProximoEnvio proximo={proximo?.toISOString() ?? null} ahora={ahora.getTime()} telegramListo={telegramConfigurado()} />
@@ -202,22 +193,20 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
 
       <Suspense fallback={null}>
         <FiltrosSeguimiento
-          vista={vista}
           orden={orden}
           ordenPorDefecto={ordenPorDefecto}
           agrupado={agrupado}
           filtros={{ ...filtros, relacion: filtroRelacion ?? "" }}
-          conteos={conteos}
+          pendientes={filtradasPendientes.length}
           opciones={{
-            hito: opciones(todas, "hito"),
-            grupoVendedor: opciones(todas, "grupoVendedor"),
+            hito: opciones(pendientes, "hito"),
+            grupoVendedor: opciones(pendientes, "grupoVendedor"),
           }}
         />
       </Suspense>
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <SeguimientoTable
-          vista={vista}
           atajo={cierreMasFrecuente(Object.values(historial).flat())}
           chats={chatsVisibles}
           catalogo={catalogo}
@@ -239,7 +228,7 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
           totalPaginas={totalPaginas}
           mostrando={visibles.length}
           filtradas={filtradas.length}
-          total={todas.length}
+          total={pendientes.length}
           ruta="/seguimiento"
           sustantivo="consultas"
           params={paramsActuales}
