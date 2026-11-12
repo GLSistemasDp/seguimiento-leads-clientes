@@ -53,14 +53,54 @@ export function clasificacionDe(consulta: Pick<Consulta, "consulta" | "hito" | "
 }
 
 /**
+ * Por que las reglas dieron esa relacion, en palabras: la frase del mensaje
+ * que la disparo ("el mensaje dice «molesto»") o que es un reclamo.
+ */
+/** Lo que coincidio con el patron, extendido a palabras enteras ("molest" -> "molesto"). */
+function fraseCompleta(contenido: string, patron: RegExp): string | null {
+  const coincidencia = patron.exec(contenido);
+  if (!coincidencia) return null;
+  const inicio = contenido.lastIndexOf(" ", coincidencia.index) + 1;
+  const despues = contenido.indexOf(" ", coincidencia.index + coincidencia[0].length);
+  return contenido.slice(inicio, despues === -1 ? contenido.length : despues);
+}
+
+export function motivoPorReglas(texto: string, hito: string, relacion: Relacion): string {
+  const contenido = normalizarEncabezado(texto);
+  if (relacion === "EN_RIESGO") {
+    const frase = fraseCompleta(contenido, EN_RIESGO);
+    return frase ? `el mensaje dice «${frase}»` : "el mensaje muestra frustración";
+  }
+  if (relacion === "REGULAR") {
+    const frase = fraseCompleta(contenido, REGULAR);
+    if (frase) return `el mensaje menciona «${frase}»`;
+    return normalizarEncabezado(hito) === "reclamo" ? "es un reclamo" : "queja menor en el mensaje";
+  }
+  return "mensaje operativo, sin quejas";
+}
+
+export type RelacionVigente = {
+  relacion: Relacion;
+  origen: "cierre" | "ia" | "reglas";
+  /** Por que esta en ese estado, para explicar el semaforo. */
+  motivo: string;
+};
+
+/**
  * Relacion vigente de una consulta: la que se eligio al cerrarla si ya se
- * respondio; si sigue abierta, la que sugiere el ultimo mensaje.
+ * respondio; si sigue abierta, la que sugiere el ultimo mensaje. Con el motivo.
  */
 export function relacionActual(
   consulta: Pick<Consulta, "consulta" | "hito" | "ia" | "respondida">,
   cierre: Pick<EventoHistorial, "relacion"> | null,
-): { relacion: Relacion; origen: "cierre" | "ia" | "reglas" } {
-  if (consulta.respondida && cierre?.relacion) return { relacion: cierre.relacion, origen: "cierre" };
+): RelacionVigente {
+  if (consulta.respondida && cierre?.relacion) {
+    return { relacion: cierre.relacion, origen: "cierre", motivo: "así quedó al cerrar la conversación" };
+  }
   const clasificacion = clasificacionDe(consulta);
-  return { relacion: clasificacion.relacion, origen: clasificacion.origen };
+  const motivo =
+    clasificacion.origen === "ia"
+      ? `la IA lo leyó así${clasificacion.resumen ? `: ${clasificacion.resumen}` : ""}`
+      : motivoPorReglas(consulta.consulta, consulta.hito, clasificacion.relacion);
+  return { relacion: clasificacion.relacion, origen: clasificacion.origen, motivo };
 }

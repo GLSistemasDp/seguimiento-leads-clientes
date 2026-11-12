@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { textoDiasHabiles } from "@/lib/utils/dias-habiles";
 import { ICONO_RELACION, RELACIONES, type EventoHistorial, type Relacion } from "@/types/seguimiento";
 
 /**
@@ -15,7 +16,20 @@ export type EventoLinea = EventoHistorial & {
   /** Mensaje (o resumen) del cliente y quien lo atendio, ya resueltos. */
   mensaje: string;
   agente: string;
+  /** Cierre masivo: no es una respuesta real (gris y fuera de los indicadores). */
+  masivo?: boolean;
+  /** Dias habiles entre la consulta y el cierre, si se sabe. */
+  tiempoRespuesta?: number | null;
+  /** Fecha (ISO) de la consulta anterior que parece la misma. */
+  duplicadoDe?: string | null;
 };
+
+/** Un cierre que cuenta: finalizada, con relacion y que no sea del cierre masivo. */
+function cierreReal(evento: EventoLinea): boolean {
+  return evento.tipo === "finalizada" && !evento.masivo && evento.relacion !== null;
+}
+
+const decimal = new Intl.NumberFormat("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 type Episodio = { numero: number; eventos: EventoLinea[]; recuperacion: EventoLinea | null };
 type Bloque = { clase: "evento"; evento: EventoLinea } | { clase: "episodio"; episodio: Episodio };
@@ -59,7 +73,7 @@ function armarBloques(eventos: readonly EventoLinea[]): Bloque[] {
   let actual: Episodio | null = null;
   let numero = 0;
   for (const evento of eventos) {
-    const cierre = evento.tipo === "finalizada" ? evento.relacion : null;
+    const cierre = cierreReal(evento) ? evento.relacion : null;
     if (actual) {
       if (cierre && cierre !== "EN_RIESGO") {
         actual.recuperacion = evento;
@@ -86,7 +100,27 @@ function dias(desde: string, hasta: string): number {
 
 /** Una interaccion: aparece (fade + subida) la primera vez que entra en el scroll. */
 function Nodo({ evento, visible, dentroDeEpisodio = false }: { evento: EventoLinea; visible: boolean; dentroDeEpisodio?: boolean }) {
-  const relacion = evento.tipo === "finalizada" ? evento.relacion : null;
+  const relacion = cierreReal(evento) ? evento.relacion : null;
+  if (evento.masivo) {
+    // El cierre masivo no fue una respuesta: queda a la vista pero apagado.
+    return (
+      <li
+        data-id={evento.id}
+        className={`relative scroll-mt-12 pb-4 pl-6 text-slate-400 transition duration-500 last:pb-1 ${
+          visible ? "translate-y-0 opacity-100" : "motion-safe:translate-y-3 motion-safe:opacity-0"
+        }`}
+      >
+        <span aria-hidden="true" className="absolute top-1.5 -left-[5px] size-2.5 rounded-full bg-slate-200 ring-4 ring-white" />
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+          <time dateTime={evento.fecha}>{FECHA.format(new Date(evento.fecha))}</time>
+          {evento.hito ? <span className="rounded-md px-1.5 py-0.5 text-[11px] ring-1 ring-slate-200 ring-inset">{evento.hito}</span> : null}
+          <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-500">Cierre masivo · no cuenta como respuesta</span>
+        </div>
+        {evento.mensaje ? <p className="mt-1 text-sm">{evento.mensaje}</p> : null}
+        {evento.observacion ? <p className="mt-0.5 text-xs">{evento.observacion}</p> : null}
+      </li>
+    );
+  }
   return (
     <li
       data-id={evento.id}
@@ -113,6 +147,14 @@ function Nodo({ evento, visible, dentroDeEpisodio = false }: { evento: EventoLin
           </span>
         ) : null}
         {evento.tipo !== "finalizada" ? <span className="text-[11px] text-slate-400 italic">{TIPO[evento.tipo]}</span> : null}
+        {evento.duplicadoDe ? (
+          <span
+            title="Mismo hito y texto muy parecido a una consulta de pocos días antes"
+            className="rounded-md bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-800 ring-1 ring-amber-200 ring-inset"
+          >
+            Posible duplicado del {DIA.format(new Date(evento.duplicadoDe))}
+          </span>
+        ) : null}
         {relacion ? (
           <span className="ml-auto">
             <Badge relacion={relacion} />
@@ -127,6 +169,11 @@ function Nodo({ evento, visible, dentroDeEpisodio = false }: { evento: EventoLin
           <span className="text-slate-400">Resolución:</span>{" "}
           <span className="font-medium text-slate-800">{evento.resultado ?? "Sin resultado"}</span>
           {evento.observacion ? ` — ${evento.observacion}` : ""}
+          {typeof evento.tiempoRespuesta === "number" ? (
+            <span className="ml-1 text-xs text-slate-400">
+              · respondida {evento.tiempoRespuesta === 0 ? "en el día" : `en ${textoDiasHabiles(evento.tiempoRespuesta)}`}
+            </span>
+          ) : null}
         </p>
       ) : evento.observacion ? (
         <p className="mt-1 text-sm text-slate-500">{evento.observacion}</p>
@@ -144,8 +191,12 @@ export function LineaDeTiempoCliente({ eventos: crudos }: { eventos: EventoLinea
     [eventos],
   );
   const episodios = bloques.flatMap((bloque) => (bloque.clase === "episodio" ? [bloque.episodio] : []));
-  const cierres = eventos.filter((evento) => evento.tipo === "finalizada" && evento.relacion);
+  // Los indicadores cuentan solo respuestas reales: sin los cierres masivos.
+  const cierres = eventos.filter(cierreReal);
   const enRiesgo = cierres.filter((evento) => evento.relacion === "EN_RIESGO");
+  const masivos = eventos.filter((evento) => evento.masivo).length;
+  const tiempos = cierres.flatMap((evento) => (typeof evento.tiempoRespuesta === "number" ? [evento.tiempoRespuesta] : []));
+  const tiempoMedio = tiempos.length ? tiempos.reduce((suma, valor) => suma + valor, 0) / tiempos.length : null;
 
   const contenedor = useRef<HTMLDivElement>(null);
   const [visibles, setVisibles] = useState<ReadonlySet<string>>(new Set());
@@ -204,7 +255,7 @@ export function LineaDeTiempoCliente({ eventos: crudos }: { eventos: EventoLinea
         <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
           <p>
             <span className="text-2xl font-medium text-slate-900 tabular-nums">{cierres.length}</span>{" "}
-            <span className="text-slate-500">chats resueltos</span>
+            <span className="text-slate-500">{cierres.length === 1 ? "chat resuelto" : "chats resueltos"}</span>
           </p>
           <p>
             <span className="text-2xl font-medium text-red-600 tabular-nums">{episodios.length}</span>{" "}
@@ -216,7 +267,16 @@ export function LineaDeTiempoCliente({ eventos: crudos }: { eventos: EventoLinea
             </span>{" "}
             <span className="text-slate-500">de los cierres en riesgo</span>
           </p>
+          <p title={tiempos.length ? `Promedio de ${tiempos.length} ${tiempos.length === 1 ? "respuesta" : "respuestas"}, sin cierres masivos` : "Sin fechas para medir"}>
+            <span className="text-2xl font-medium text-slate-900 tabular-nums">{tiempoMedio === null ? "—" : decimal.format(tiempoMedio)}</span>{" "}
+            <span className="text-slate-500">días hábiles de tiempo medio de respuesta</span>
+          </p>
         </div>
+        {masivos > 0 ? (
+          <p className="mt-1 text-[11px] text-slate-400">
+            {masivos} {masivos === 1 ? "cierre masivo no cuenta" : "cierres masivos no cuentan"} en estos números (no fueron respuestas reales).
+          </p>
+        ) : null}
 
         <div className="mt-3 flex h-5 items-end gap-[2px]" role="list" aria-label="Recorrido de la relación, del más viejo al más nuevo">
           {cierres.map((evento, indice) => (

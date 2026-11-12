@@ -375,7 +375,8 @@ export function avisoEstado(estadoCuenta: string): string | null {
   const estado = normalizarEncabezado(estadoCuenta);
   if (!estado || estado === "ok") return null;
   if (estado.includes("no responder")) return "Cliente marcado NO RESPONDER: preguntar antes de responder.";
-  if (estado.includes("deuda")) return "Cliente con deuda: revisar la cuenta antes de comprometer entregas o precios.";
+  // "deud" cubre TIENE DEUDA y REVISAR DEUDORA.
+  if (estado.includes("deud")) return "Cliente con deuda: revisar la cuenta antes de comprometer entregas o precios.";
   if (estado.includes("judicial")) return "Cliente en gestión judicial: derivar a Administración.";
   return `Estado de cuenta "${estadoCuenta}": revisarlo antes de responder.`;
 }

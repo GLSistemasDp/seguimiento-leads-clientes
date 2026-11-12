@@ -2,10 +2,15 @@
  * Lo que se ve mientras una pantalla del CRM trae sus datos: el menu queda
  * igual y el contenido aparece en cuanto esta, sin dejar la pantalla anterior
  * congelada al tocar una seccion.
+ *
+ * Sin texto visible ni oculto: el HTML llega con este esqueleto y la pagina
+ * lo reemplaza al cargar; un texto "Cargando…" quedaba en el <main> para quien
+ * lee el HTML sin JavaScript. El aviso para lectores de pantalla va en
+ * aria-label / aria-busy.
  */
 export default function Cargando() {
   return (
-    <div className="flex animate-pulse flex-col gap-6" role="status" aria-label="Cargando">
+    <div className="flex animate-pulse flex-col gap-6" role="status" aria-label="Cargando" aria-busy="true">
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div className="h-8 w-72 max-w-full rounded-md bg-slate-200" />
         <div className="mt-3 h-4 w-[32rem] max-w-full rounded bg-slate-100" />
@@ -24,7 +29,6 @@ export default function Cargando() {
           </div>
         ))}
       </div>
-      <span className="sr-only">Cargando…</span>
     </div>
   );
 }

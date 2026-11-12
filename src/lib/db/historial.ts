@@ -88,6 +88,30 @@ export const ultimasGestiones = cache(async (): Promise<Record<string, EventoHis
   return porCliente;
 });
 
+/** Si la observacion la escribio una persona (no la del cierre masivo automatico). */
+function observacionEscrita(evento: EventoHistorial): boolean {
+  const texto = evento.observacion.trim();
+  return texto !== "" && texto !== evento.resultado && !texto.includes("Cierre masivo:");
+}
+
+/**
+ * La ultima observacion escrita de cada cliente (por codigo o nombre), de un
+ * cierre o de una nota. Sirve aunque el ultimo cierre no haya dejado texto.
+ */
+export const ultimasObservaciones = cache(async (): Promise<Record<string, EventoHistorial>> => {
+  const eventos = conPostgres()
+    ? await (await pg()).ultimasObservaciones()
+    : Object.values(await porConsulta())
+        .flat()
+        .filter((evento) => evento.tipo !== "reabierta" && observacionEscrita(evento));
+  const porCliente: Record<string, EventoHistorial> = {};
+  for (const evento of eventos) {
+    const clave = claveCliente(evento.cliente);
+    if (!porCliente[clave] || porCliente[clave].fecha < evento.fecha) porCliente[clave] = evento;
+  }
+  return porCliente;
+});
+
 /** Lo que se registro en el dia (hora de Argentina), para el resumen diario. */
 export async function delDia(dia: string, diaLocal: (fecha: Date) => string): Promise<EventoHistorial[]> {
   if (conPostgres()) return (await pg()).delDia(dia);

@@ -243,6 +243,7 @@ function aEvento(fila: ChatInteraccionRow): EventoHistorial {
     cliente: fila.cliente_texto,
     hito: fila.hito,
     fecha: fila.registrado_en.toISOString(),
+    fechaConsulta: fila.fecha_consulta ? fila.fecha_consulta.toISOString() : null,
     tipo: fila.tipo,
     resultado: fila.resultado,
     relacion: fila.relacion,
@@ -261,6 +262,23 @@ export async function ultimasGestiones(): Promise<EventoHistorial[]> {
       ORDER BY cliente_texto, registrado_en DESC, id DESC`,
   );
   return filas.map(aEvento);
+}
+
+/**
+ * La ultima observacion escrita de cada cliente (cierres y notas), aunque el
+ * ultimo cierre no haya dejado ninguna. No cuentan las automaticas (cierre
+ * masivo) ni las que solo repiten el resultado.
+ */
+export async function ultimasObservaciones(): Promise<EventoHistorial[]> {
+  const filas = await consultar<ChatInteraccionRow>(
+    `SELECT DISTINCT ON (cliente_texto) * FROM chat_interacciones
+      WHERE tipo IN ('finalizada', 'nota')
+        AND btrim(coalesce(observacion, '')) <> ''
+        AND observacion IS DISTINCT FROM resultado
+        AND observacion NOT LIKE '%Cierre masivo:%'
+      ORDER BY cliente_texto, registrado_en DESC, id DESC`,
+  );
+  return filas.map(aEvento).filter((evento) => evento.observacion.trim());
 }
 
 /** Ficha del cliente por codigo (o por nombre si no tiene). */

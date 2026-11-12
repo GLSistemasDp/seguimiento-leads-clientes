@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { FILTRO_TRIAJE, TRIAJES, type DatosTriaje, type Tono, type Triaje } from "@/lib/seguimiento/indicadores";
+import { textoDiasHabiles } from "@/lib/utils/dias-habiles";
 
 /**
  * Tarjetas de triaje: un dato por tarjeta, sin graficos. El numero toma el
@@ -24,8 +25,18 @@ export function formatearDias(dias: number): string {
   return decimal.format(dias);
 }
 
-function dias(cantidad: number): string {
-  return `${cantidad} ${cantidad === 1 ? "día" : "días"}`;
+/** "+18 vs. semana pasada": rojo si la cola crecio, verde si bajo. */
+function Variacion({ actual, anterior }: { actual: number; anterior: number | null }) {
+  if (anterior === null) return null;
+  const diferencia = actual - anterior;
+  if (diferencia === 0) return <span className="block text-slate-500">Igual que la semana pasada</span>;
+  return (
+    <span className={`block font-medium tabular-nums ${diferencia > 0 ? "text-red-600" : "text-green-600"}`}>
+      {diferencia > 0 ? "+" : "−"}
+      {Math.abs(diferencia)} vs. semana pasada
+      <span className="font-normal text-slate-400"> ({anterior})</span>
+    </span>
+  );
 }
 
 function Tarjeta({
@@ -101,13 +112,18 @@ export function TriajeSeguimiento({
         tono={pendientes.tono}
         valor={pendientes.cantidad === 0 ? null : String(pendientes.cantidad)}
         contexto={
-          pendientes.cantidad === 0
-            ? "No hay consultas sin responder."
-            : pendientes.masAntigua === null
-              ? "Sin fecha de la más antigua"
-              : pendientes.masAntigua === 0
-                ? "La más antigua: de hoy"
-                : `La más antigua: hace ${dias(pendientes.masAntigua)}`
+          <>
+            <Variacion actual={pendientes.cantidad} anterior={pendientes.semanaPasada} />
+            <span className="block">
+              {pendientes.cantidad === 0
+                ? "No hay consultas sin responder."
+                : pendientes.masAntigua === null
+                  ? "Sin fecha de la más antigua"
+                  : pendientes.masAntigua === 0
+                    ? "La más antigua: de hoy"
+                    : `La más antigua: hace ${textoDiasHabiles(pendientes.masAntigua)}`}
+            </span>
+          </>
         }
         ayuda={`Ver solo ${FILTRO_TRIAJE.pendientes}`}
       />
@@ -117,14 +133,14 @@ export function TriajeSeguimiento({
         href={enlaces.demora}
         tono={demora.tono}
         valor={pendientes.cantidad === 0 || demora.promedio === null ? null : formatearDias(demora.promedio)}
-        unidad={demora.promedio !== null && formatearDias(demora.promedio) === "1,0" ? "día" : "días"}
+        unidad={demora.promedio !== null && formatearDias(demora.promedio) === "1,0" ? "día hábil" : "días hábiles"}
         contexto={
           pendientes.cantidad === 0 ? (
             "Ninguna consulta esperando respuesta."
           ) : (
             <>
               <span className="tabular-nums">{demora.tramos.map((tramo) => `${tramo.etiqueta}: ${tramo.cantidad}`).join(" · ")}</span>
-              <span className="block text-slate-400">días hábiles sin respuesta</span>
+              <span className="block text-slate-400">días hábiles sin respuesta, por tramo</span>
             </>
           )
         }

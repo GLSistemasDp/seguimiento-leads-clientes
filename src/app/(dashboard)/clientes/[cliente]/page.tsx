@@ -2,15 +2,21 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { LineaDeTiempoCliente, type EventoLinea } from "@/components/clientes/LineaDeTiempoCliente";
+import { PendientesCliente, type PendienteFicha } from "@/components/clientes/PendientesCliente";
 import { BotonGrupoWhatsapp } from "@/components/seguimiento/BotonGrupoWhatsapp";
 import { Pista } from "@/components/ui/Pista";
+import { formatearMonto, leerHistorial } from "@/lib/clientes/historial-ficha";
 import { porCliente } from "@/lib/db/historial";
 import { formulariosDeCliente } from "@/lib/db/reclamos";
-import { fichaDeCliente, getParaTablero } from "@/lib/db/seguimiento";
+import { fichaDeCliente, getParaTablero, getRespuestas } from "@/lib/db/seguimiento";
 import { claveCliente } from "@/lib/db/sheets/maestros";
+import { herramientasDePrueba } from "@/lib/herramientas-prueba";
 import { historialSimulado } from "@/lib/seguimiento/historial-simulado";
-import { estadoCliente, explicarEstado, separarCliente } from "@/lib/seguimiento/presentacion";
-import { clasificacionDe } from "@/lib/seguimiento/relacion";
+import { cierreMasFrecuente, diasAbierta, estadoCliente, explicarEstado, separarCliente } from "@/lib/seguimiento/presentacion";
+import { relacionActual } from "@/lib/seguimiento/relacion";
+import { textoDiasHabiles } from "@/lib/utils/dias-habiles";
+import { formatearDiaCorto } from "@/lib/utils/dates";
+import { prepararFeriados } from "@/lib/utils/feriados";
 import { normalizarEncabezado } from "@/lib/utils/strings";
 import { ICONO_RELACION, RELACIONES, type Relacion } from "@/types/seguimiento";
 
@@ -55,9 +61,17 @@ function Dato({ etiqueta, children }: { etiqueta: string; children: ReactNode })
 
 export default async function PerfilClientePage({ params, searchParams }: PageProps<"/clientes/[cliente]">) {
   const clave = decodeURIComponent((await params).cliente).trim();
-  // La simulacion se arma en memoria y no se guarda: se puede ofrecer siempre.
-  const simulacion = (await searchParams).simulacion === "1";
-  const [ficha, todas] = await Promise.all([fichaDeCliente(clave), getParaTablero()]);
+  // "Simular historial" es una herramienta de desarrollo: en produccion no se ofrece.
+  const conSimulacion = herramientasDePrueba();
+  const simulacion = conSimulacion && (await searchParams).simulacion === "1";
+  const ahora = new Date();
+  const [ficha, todas, catalogo] = await Promise.all([
+    fichaDeCliente(clave),
+    getParaTablero(),
+    getRespuestas().catch(() => []),
+    // Feriados para contar los dias habiles; si la API no responde queda el respaldo.
+    prepararFeriados(ahora).catch(() => undefined),
+  ]);
   const buscada = ficha?.codigo || claveCliente(ficha?.nombre || clave);
   const consultas = todas.filter((consulta) => claveCliente(consulta.cliente) === buscada);
 
@@ -70,20 +84,27 @@ export default async function PerfilClientePage({ params, searchParams }: PagePr
   const porId = new Map(consultas.map((consulta) => [consulta.id, consulta]));
   // Reclamos que escalaron al formulario formal (desde una consulta suya o con su N° de cliente).
   const reclamosFormales = await formulariosDeCliente(codigo || ficha?.codigo || "", new Set(porId.keys())).catch(() => []);
-  const cerradas = eventos
-    .filter((evento) => evento.tipo === "finalizada")
-    .sort((a, b) => b.fecha.localeCompare(a.fecha));
-  // Lo que muestra la linea de tiempo: mensaje (o resumen) y agente ya resueltos.
-  const linea: EventoLinea[] = eventos.map((evento) => {
+  // Lo que muestra la linea de tiempo: mensaje (o resumen) y agente ya resueltos,
+  // mas la fecha de la consulta (para el tiempo de respuesta).
+  const conMensaje = eventos.map((evento) => {
     const origen = porId.get(evento.consultaId);
     const agente = evento.encargado || origen?.encargado || "";
     return {
       ...evento,
+      fechaConsulta: evento.fechaConsulta ?? origen?.fecha?.toISOString() ?? null,
       mensaje: evento.resumen || evento.consulta || origen?.ia?.resumen || origen?.consulta || "",
       agente: agente && agente.toLowerCase() !== "bot" ? agente : "Equipo comercial",
     };
   });
-  const pendientes = consultas.filter((consulta) => !consulta.respondida);
+  // Cierres masivos (no son respuestas), tiempo de respuesta y posibles duplicados.
+  const lecturas = leerHistorial(conMensaje);
+  const linea: EventoLinea[] = conMensaje.map((evento) => ({ ...evento, ...lecturas.get(evento.id) }));
+  const cerradas = linea
+    .filter((evento) => evento.tipo === "finalizada" && !evento.masivo)
+    .sort((a, b) => b.fecha.localeCompare(a.fecha));
+  const pendientes = consultas
+    .filter((consulta) => !consulta.respondida)
+    .sort((a, b) => (a.fecha?.getTime() ?? 0) - (b.fecha?.getTime() ?? 0));
   const conFicha = consultas.find((consulta) => consulta.ficha) ?? consultas[0];
   const estados = estadoCliente({ ficha: ficha ?? conFicha?.ficha, estadoCuenta: conFicha?.estadoCuenta ?? "" });
   const credito = ficha?.limiteCredito || conFicha?.ficha?.limiteCredito;
@@ -92,17 +113,60 @@ export default async function PerfilClientePage({ params, searchParams }: PagePr
   const responsable = (ficha?.grupoVendedor || conFicha?.grupoVendedor || "").replace(/^FILTRO GRUPO\s*/i, "");
   const ultimoEncargado = [...consultas].reverse().find((consulta) => consulta.encargado && consulta.encargado !== "bot")?.encargado;
 
-  // Relacion de hoy: lo que sugiere el mensaje pendiente mas reciente o, si no hay, el ultimo cierre.
-  const ultimoPendiente = [...pendientes].sort((a, b) => (b.fecha?.getTime() ?? 0) - (a.fecha?.getTime() ?? 0))[0];
-  const relacionHoy: Relacion | null = ultimoPendiente && !simulacion
-    ? clasificacionDe(ultimoPendiente).relacion
-    : (cerradas.find((evento) => evento.relacion)?.relacion ?? null);
+  // Relacion de hoy, con su motivo: lo que sugiere el mensaje pendiente mas reciente
+  // (y cuanto lleva sin respuesta) o, si no hay, como quedo el ultimo cierre real.
+  const ultimoPendiente = pendientes.at(-1);
+  const ultimoCierre = cerradas.find((evento) => evento.relacion);
+  let relacionHoy: { relacion: Relacion; motivo: string } | null = null;
+  if (ultimoPendiente && !simulacion) {
+    const vigente = relacionActual(ultimoPendiente, null);
+    const espera = diasAbierta(ultimoPendiente, ahora);
+    relacionHoy = {
+      relacion: vigente.relacion,
+      motivo: `${vigente.motivo}${espera !== null ? ` · consulta sin respuesta ${espera === 0 ? "desde hoy" : `hace ${textoDiasHabiles(espera)}`}` : ""}`,
+    };
+  } else if (ultimoCierre?.relacion) {
+    relacionHoy = {
+      relacion: ultimoCierre.relacion,
+      motivo: `así quedó al cerrar la última conversación (${formatearDiaCorto(new Date(ultimoCierre.fecha))})`,
+    };
+  }
+
+  // Lo pendiente, listo para el banner (misma respuesta sugerida que la tabla).
+  const estadoCuenta = estados.join(" · ");
+  const formularioDe = new Map(reclamosFormales.flatMap((reclamo) => (reclamo.consultaId ? [[reclamo.consultaId, reclamo.id] as const] : [])));
+  const pendientesFicha: PendienteFicha[] = pendientes.map((consulta) => ({
+    id: consulta.id,
+    fecha: consulta.fecha,
+    hito: consulta.hito,
+    consulta: consulta.consulta,
+    cliente: consulta.cliente,
+    tentativoRespuesta: consulta.tentativoRespuesta,
+    relacion: relacionActual(consulta, null),
+    formularioReclamo: formularioDe.get(consulta.id) ?? null,
+    diasHabiles: diasAbierta(consulta, ahora),
+    estadoCuenta,
+    confianza: consulta.ia?.confianza ?? null,
+  }));
+  const atajoCierre = cierreMasFrecuente(cerradas);
+  // La observacion de la ficha la pisa cualquier cierre, tambien el masivo (que no
+  // fue una respuesta real): en ese caso se muestra la del ultimo cierre real.
+  const ultimoCierreReal = cerradas[0];
+  const observacionReal =
+    ficha?.observacion && !/cierre masivo:/i.test(ficha.observacion)
+      ? ficha.observacion
+      : ultimoCierreReal
+        ? [ultimoCierreReal.resultado, ultimoCierreReal.observacion].filter(Boolean).join(" · ")
+        : "";
 
   return (
     <div className="flex flex-col gap-5 pb-10">
       <Link href="/seguimiento" className="text-sm text-slate-500 hover:text-slate-900">
         ← Volver al seguimiento
       </Link>
+
+      {/* Lo que el cliente esta esperando va antes que cualquier otro dato. */}
+      {!simulacion ? <PendientesCliente pendientes={pendientesFicha} atajo={atajoCierre} catalogo={catalogo} /> : null}
 
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,7fr)]">
         {/* --- Columna izquierda: datos del cliente (30%) --- */}
@@ -123,9 +187,14 @@ export default async function PerfilClientePage({ params, searchParams }: PagePr
               </div>
             </div>
             {relacionHoy ? (
-              <p className="mt-3 flex items-center gap-2 text-xs text-slate-500">
-                Relación hoy <BadgeRelacion relacion={relacionHoy} />
-              </p>
+              <div className="mt-3 text-xs text-slate-500">
+                <p className="flex items-center gap-2">
+                  Relación hoy <BadgeRelacion relacion={relacionHoy.relacion} />
+                </p>
+                <p className="mt-1 text-slate-600">
+                  <span className="font-medium">{RELACIONES[relacionHoy.relacion]}:</span> {relacionHoy.motivo}
+                </p>
+              </div>
             ) : null}
 
             <dl className="mt-4">
@@ -165,7 +234,7 @@ export default async function PerfilClientePage({ params, searchParams }: PagePr
                 )}
               </Dato>
               <Dato etiqueta="Condición de pago">{ficha?.condicionPago || "Sin informar"}</Dato>
-              <Dato etiqueta="Límite de crédito">{ficha?.limiteCredito || "Sin informar"}</Dato>
+              <Dato etiqueta="Límite de crédito">{ficha?.limiteCredito ? formatearMonto(ficha.limiteCredito) : "Sin informar"}</Dato>
               <Dato etiqueta="Responsable asignado">
                 {responsable || <span className="text-slate-400">Sin grupo vendedor</span>}
                 {ultimoEncargado ? <span className="mt-0.5 block text-xs text-slate-500">Atendió por última vez: {ultimoEncargado}</span> : null}
@@ -181,24 +250,27 @@ export default async function PerfilClientePage({ params, searchParams }: PagePr
                 </span>
               </Dato>
               <Dato etiqueta="Observación · última situación del chat">
-                <span className="whitespace-pre-wrap">{ficha?.observacion || "Sin observaciones registradas"}</span>
+                {/* Con consultas abiertas, la situacion real es que el cliente espera respuesta. */}
+                {ultimoPendiente ? (
+                  <span className="block font-medium text-amber-800">
+                    {pendientes.length === 1 ? "1 consulta abierta" : `${pendientes.length} consultas abiertas`}: {ultimoPendiente.hito || "consulta"}
+                    {(() => {
+                      const espera = diasAbierta(pendientes[0], ahora);
+                      return espera !== null ? ` · la más antigua sin respuesta ${espera === 0 ? "desde hoy" : `hace ${textoDiasHabiles(espera)}`}` : "";
+                    })()}
+                  </span>
+                ) : null}
+                {observacionReal ? (
+                  <span className={`whitespace-pre-wrap ${ultimoPendiente ? "mt-1 block text-xs text-slate-500" : ""}`}>
+                    {ultimoPendiente ? "Último cierre: " : ""}
+                    {observacionReal}
+                  </span>
+                ) : ultimoPendiente ? null : (
+                  "Sin observaciones registradas"
+                )}
                 <span className="mt-1 block text-xs text-slate-500">Se actualiza al finalizar una conversación.</span>
               </Dato>
             </dl>
-          </section>
-
-          <section className="rounded-2xl border border-slate-200 bg-white p-5">
-            <p className="text-xs text-slate-500">En la bandeja</p>
-            <p className="mt-1 text-[28px] leading-none font-medium text-slate-900 tabular-nums">{pendientes.length}</p>
-            <p className="mt-1 text-xs text-slate-400">{pendientes.length === 1 ? "consulta pendiente" : "consultas pendientes"}</p>
-            {pendientes.length > 0 ? (
-              <Link
-                href={`/seguimiento?agrupar=chat&q=${encodeURIComponent(nombre)}`}
-                className="mt-3 inline-flex text-xs font-medium text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline"
-              >
-                Ver en el seguimiento →
-              </Link>
-            ) : null}
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5">
@@ -230,12 +302,12 @@ export default async function PerfilClientePage({ params, searchParams }: PagePr
           <div className="grid gap-4 sm:grid-cols-2" aria-label="Crédito y deuda del cliente">
             <section className="rounded-2xl border border-slate-200 bg-white p-5">
               <h2 className="text-xs font-medium tracking-wide text-slate-500 uppercase">Límite de crédito</h2>
-              <p className="mt-2 break-words text-2xl font-semibold text-[#1b2b5e] tabular-nums">{credito || "Sin informar"}</p>
+              <p className="mt-2 break-words text-2xl font-semibold text-[#1b2b5e] tabular-nums">{credito ? formatearMonto(credito) : "Sin informar"}</p>
               <p className="mt-1 text-xs text-slate-400">Crédito informado en la ficha del cliente.</p>
             </section>
             <section className="rounded-2xl border border-slate-200 bg-white p-5">
               <h2 className="text-xs font-medium tracking-wide text-slate-500 uppercase">Deuda pendiente</h2>
-              <p className="mt-2 break-words text-2xl font-semibold text-slate-900 tabular-nums">{deuda || "Sin informar"}</p>
+              <p className="mt-2 break-words text-2xl font-semibold text-slate-900 tabular-nums">{deuda ? formatearMonto(deuda) : "Sin informar"}</p>
               <p className="mt-1 text-xs text-slate-400">Saldo o estado de la cuenta corriente.</p>
             </section>
           </div>
@@ -245,7 +317,7 @@ export default async function PerfilClientePage({ params, searchParams }: PagePr
               <h2 className="text-base font-semibold text-slate-900">Historial del cliente</h2>
               <p className="text-xs text-slate-400">Del más viejo al más nuevo · los episodios en riesgo quedan resaltados</p>
             </div>
-            <Link
+            {conSimulacion ? <Link
               href={simulacion ? `/clientes/${encodeURIComponent(clave)}` : `/clientes/${encodeURIComponent(clave)}?simulacion=1`}
               scroll={false}
               className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium ${
@@ -253,7 +325,7 @@ export default async function PerfilClientePage({ params, searchParams }: PagePr
               }`}
             >
               {simulacion ? "Ver historial real" : "Simular historial"}
-            </Link>
+            </Link> : null}
           </div>
 
           {simulacion ? (

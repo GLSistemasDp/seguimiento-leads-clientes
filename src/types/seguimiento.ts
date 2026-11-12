@@ -42,6 +42,11 @@ export type ClasificacionMensaje = {
   hito: string;
   resumen: string;
   origen: "ia" | "reglas";
+  /**
+   * Confianza del bot en la clasificacion (0 a 1). Hoy el clasificador no la
+   * informa; si se agrega, la sugerencia de respuesta ya la usa.
+   */
+  confianza?: number | null;
 };
 
 /**
@@ -113,6 +118,8 @@ export type EventoHistorial = {
   hito: string;
   /** ISO. */
   fecha: string;
+  /** ISO: cuando entro la consulta del cliente (para medir el tiempo de respuesta), si se sabe. */
+  fechaConsulta?: string | null;
   tipo: "finalizada" | "reabierta" | "nota";
   resultado: Resultado | null;
   relacion: Relacion | null;

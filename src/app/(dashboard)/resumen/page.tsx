@@ -13,9 +13,9 @@ import { getParaTablero } from "@/lib/db/seguimiento";
 import { getAll as getSolicitudes } from "@/lib/db/solicitudes";
 import { CATEGORIAS, evaluarPorReglas } from "@/lib/solicitudes/evaluacion";
 import { COLOR_TONO, formatearDias } from "@/components/seguimiento/TriajeSeguimiento";
-import { DEMORA, calcularTriaje, esperaHabil } from "@/lib/seguimiento/indicadores";
+import { DEMORA, calcularTriaje } from "@/lib/seguimiento/indicadores";
 import { relacionActual } from "@/lib/seguimiento/relacion";
-import { feriadosDeAnios } from "@/lib/utils/feriados";
+import { prepararFeriados } from "@/lib/utils/feriados";
 import { proximoEnvioCierre } from "@/lib/seguimiento/cierre-del-dia";
 import { urlBaseActual } from "@/lib/notificaciones/envios";
 import { armarResumenDiario } from "@/lib/seguimiento/resumen-diario";
@@ -147,7 +147,7 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
   const vendedor = texto(params.vendedor);
 
   const ahora = new Date();
-  const [seguimiento, reclamos, solicitudes, historial, proximo, base, cierres, feriados] = await Promise.all([
+  const [seguimiento, reclamos, solicitudes, historial, proximo, base, cierres] = await Promise.all([
     leerDatos("seguimiento", getParaTablero),
     leerDatos("reclamos", () => getPanel(ahora)),
     leerDatos("solicitudes", () => getSolicitudes({ estado: "PENDIENTE" })),
@@ -156,7 +156,7 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
     urlBaseActual(),
     // Para la relacion de las ya respondidas; sin esto se usa la que sugiere el mensaje.
     porConsulta().catch((): Awaited<ReturnType<typeof porConsulta>> => ({})),
-    feriadosDeAnios([ahora.getFullYear() - 1, ahora.getFullYear()]).catch(() => new Set<string>()),
+    prepararFeriados(ahora).catch(() => undefined),
   ]);
   const todas = seguimiento.datos ?? [];
   const panel = reclamos.datos ?? { reclamos: [], error: null };
@@ -181,8 +181,7 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
     }),
   );
   const relacionDe = (consulta: Consulta) => relaciones.get(consulta.id) ?? "BUENA";
-  const esperaDe = (consulta: Consulta) => esperaHabil(consulta, ahora, feriados);
-  const triaje = calcularTriaje(todas, relacionDe, esperaDe, ahora);
+  const triaje = calcularTriaje(todas, relacionDe, ahora);
 
   // --- Tablero de conversaciones (con filtros) ---
   const filtradas = todas.filter(
@@ -191,7 +190,7 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
       (!vendedor || vendedorCorto(consulta.grupoVendedor) === vendedor),
   );
   const tablero = calcularTablero(filtradas, periodo, ahora, relacionDe);
-  const triajeFiltrado = calcularTriaje(filtradas, relacionDe, esperaDe, ahora);
+  const triajeFiltrado = calcularTriaje(filtradas, relacionDe, ahora);
   const nombrePeriodo = periodo === "todo" ? "todo el historial" : `ultimos ${PERIODOS[periodo]}`;
   const tasa = tablero.entradas > 0 ? Math.round((tablero.respondidasPeriodo / tablero.entradas) * 100) : null;
 

@@ -1,5 +1,6 @@
 import { normalizarEncabezado } from "@/lib/utils/strings";
 import { estadoCuentaUnificado } from "@/lib/clientes/ficha";
+import { businessDaysSince } from "@/lib/utils/dias-habiles";
 import type { Consulta, EventoHistorial, Relacion, Resultado } from "@/types/seguimiento";
 
 /**
@@ -9,8 +10,20 @@ import type { Consulta, EventoHistorial, Relacion, Resultado } from "@/types/seg
 
 const DIA_MS = 24 * 60 * 60 * 1000;
 
-/** Dias desde que entro la consulta. Si la planilla trae la columna D, manda esa. */
+/**
+ * Dias HABILES desde que entro la consulta: la demora de todo el CRM (tarjetas,
+ * tabla, prioridad, ficha). Sin fecha, la columna DEMORA de la planilla.
+ */
 export function diasAbierta(consulta: Consulta, ahora = new Date()): number | null {
+  if (consulta.fecha) return businessDaysSince(consulta.fecha, ahora);
+  return consulta.dias;
+}
+
+/**
+ * Dias corridos desde que entro la consulta. Solo para los mensajes de
+ * Telegram, que siguen contando como antes.
+ */
+export function diasCorridos(consulta: Consulta, ahora = new Date()): number | null {
   if (consulta.dias !== null) return consulta.dias;
   if (!consulta.fecha) return null;
   return Math.max(0, Math.floor((ahora.getTime() - consulta.fecha.getTime()) / DIA_MS));
@@ -36,7 +49,7 @@ const PESO_HITO: Record<string, number> = {
 
 const PESO_CLASIFICACION: Record<string, number> = { A: 15, B: 8, C: 3 };
 
-export function esReclamo(consulta: Consulta): boolean {
+export function esReclamo(consulta: Pick<Consulta, "hito">): boolean {
   return normalizarEncabezado(consulta.hito) === "reclamo";
 }
 
@@ -61,7 +74,7 @@ export type Prioridad = "ALTA" | "MEDIA" | "BAJA" | "RESUELTA";
 const URGENCIA =
   /\b(urgen\w*|ya mismo|cuanto antes|lo antes posible|asap|para hoy|necesito hoy|parad[oa]s?|sin stock|no (me |nos )?(llego|llegaron|llega)|sigo esperando|seguimos esperando|todavia no|cancel\w*|dar de baja|devolucion\w*|rot[oa]s?|fallad[oa]s?|defectuos[oa]s?)\b/;
 
-/** Dias sin respuesta desde los que la demora cuenta como señal. */
+/** Dias habiles sin respuesta desde los que la demora cuenta como señal. */
 const DIAS_DEMORA = 3;
 
 export type SenalPrioridad = { etiqueta: string; puntos: number };
@@ -80,7 +93,7 @@ export function senalesPrioridad(consulta: Consulta, ahora = new Date()): SenalP
   }
   if (URGENCIA.test(normalizarEncabezado(consulta.consulta))) senales.push({ etiqueta: "Pide urgencia", puntos: 1 });
   const dias = diasAbierta(consulta, ahora) ?? 0;
-  if (dias >= DIAS_DEMORA) senales.push({ etiqueta: `${dias} días sin respuesta`, puntos: 1 });
+  if (dias >= DIAS_DEMORA) senales.push({ etiqueta: `${dias} días hábiles sin respuesta`, puntos: 1 });
   return senales;
 }
 
@@ -106,7 +119,7 @@ function compararPrioridad(a: Consulta, b: Consulta, ahora: Date): number {
   );
 }
 
-/** Sin respuesta hace 2 dias o mas. */
+/** Sin respuesta hace 2 dias habiles o mas. */
 export function vencida(consulta: Consulta, ahora = new Date()): boolean {
   return !consulta.respondida && (diasAbierta(consulta, ahora) ?? 0) >= 2;
 }
@@ -167,7 +180,7 @@ export function opciones(consultas: readonly Consulta[], campo: keyof FiltrosCon
 
 export const ORDENES = {
   clasificacion: "Clasificación del cliente (A, B, C)",
-  prioridad: "Mayor prioridad primero",
+  prioridad: "Prioridad (reclamos, clientes A/B, hito)",
   antiguas: "Más antiguas primero",
   recientes: "Más recientes primero",
   relacion: "Relación (en riesgo primero)",
@@ -183,6 +196,51 @@ const RANGO_CLASIFICACION: Record<string, number> = { A: 0, B: 1, C: 2 };
 
 function rangoClasificacion(consulta: Consulta): number {
   return RANGO_CLASIFICACION[(consulta.clasificacion || consulta.ficha?.clasificacion || "").trim().toUpperCase()] ?? 3;
+}
+
+/**
+ * Orden de los hitos para el orden por prioridad, de mas a menos urgente.
+ * Cualquier hito que no este en ninguna lista va entre los dos grupos.
+ */
+const HITOS_PRIMERO = [
+  ["estado de pedido"],
+  ["pedido nuevo"],
+  ["enviar factura"],
+  ["consulta precio", "consulta de precio", "consulta precios"],
+  ["acceso web", "acceso a la web"],
+  ["informa pago"],
+];
+const HITOS_AL_FINAL = [["consulta general"], ["consulta de stock", "consulta stock", "stock"]];
+
+export function rangoHito(hito: string): number {
+  const clave = normalizarEncabezado(hito);
+  const primero = HITOS_PRIMERO.findIndex((nombres) => nombres.includes(clave));
+  if (primero >= 0) return primero;
+  const final = HITOS_AL_FINAL.findIndex((nombres) => nombres.includes(clave));
+  return final >= 0 ? HITOS_PRIMERO.length + 1 + final : HITOS_PRIMERO.length;
+}
+
+/**
+ * Orden por prioridad, en este orden de importancia:
+ * 1. reclamos;
+ * 2. clientes A y B;
+ * 3. el hito: estado de pedido, pedido nuevo, enviar factura, consulta de
+ *    precio, acceso web, informa pago, los demas y al final consulta general
+ *    y stock;
+ * 4. a igual hito, A antes que B antes que el resto;
+ * 5. la que espera hace mas tiempo.
+ * Las respondidas van al fondo.
+ */
+export function compararPorPrioridad(a: Consulta, b: Consulta, ahora = new Date()): number {
+  const importante = (consulta: Consulta) => rangoClasificacion(consulta) <= RANGO_CLASIFICACION.B;
+  return (
+    Number(a.respondida) - Number(b.respondida) ||
+    Number(!esReclamo(a)) - Number(!esReclamo(b)) ||
+    Number(!importante(a)) - Number(!importante(b)) ||
+    rangoHito(a.hito) - rangoHito(b.hito) ||
+    rangoClasificacion(a) - rangoClasificacion(b) ||
+    (diasAbierta(b, ahora) ?? 0) - (diasAbierta(a, ahora) ?? 0)
+  );
 }
 
 export function esOrdenConsulta(valor: unknown): valor is OrdenConsulta {
@@ -217,6 +275,8 @@ export function ordenar(
           compararPrioridad(a, b, ahora) ||
           tiempo(a) - tiempo(b)
         );
+      case "prioridad":
+        return compararPorPrioridad(a, b, ahora) || tiempo(a) - tiempo(b);
       default:
         // A igual prioridad, primero la que espera hace mas tiempo.
         return compararPrioridad(a, b, ahora) || tiempo(a) - tiempo(b);

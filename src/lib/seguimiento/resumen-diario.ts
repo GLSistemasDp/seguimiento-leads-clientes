@@ -1,4 +1,4 @@
-import { diasAbierta, esReclamo, estadoCliente, separarCliente } from "@/lib/seguimiento/presentacion";
+import { diasCorridos, esReclamo, estadoCliente, separarCliente } from "@/lib/seguimiento/presentacion";
 import { diaLocal } from "@/lib/seguimiento/tablero";
 import type { ReclamoPanel } from "@/types/reclamo";
 import type { Consulta, EventoHistorial } from "@/types/seguimiento";
@@ -58,7 +58,7 @@ export function armarResumenDiario({ consultas, eventosHoy, reclamos, ahora = ne
   const pendientes = consultas.filter((consulta) => !consulta.respondida);
   const chats = new Set(pendientes.map((consulta) => consulta.cliente.trim().toUpperCase()));
   const demoradas = pendientes
-    .map((consulta) => ({ consulta, dias: diasAbierta(consulta, ahora) ?? 0 }))
+    .map((consulta) => ({ consulta, dias: diasCorridos(consulta, ahora) ?? 0 }))
     .filter(({ dias }) => dias >= 1)
     .sort((a, b) => Number(esReclamo(b.consulta)) - Number(esReclamo(a.consulta)) || b.dias - a.dias);
   const finalizadasHoy = new Set(

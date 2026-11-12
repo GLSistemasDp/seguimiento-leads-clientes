@@ -14,12 +14,14 @@ import { useToast } from "@/components/ui/Toast";
 import { claveChat, estadoCliente, explicarEstado, rutaPerfil, separarCliente } from "@/lib/seguimiento/presentacion";
 import type { CierreFrecuente, Prioridad, ResumenChat } from "@/lib/seguimiento/presentacion";
 import type { RespuestaTipo } from "@/lib/seguimiento/respuestas";
+import { guardarConsulta, type CambiosConsulta } from "@/lib/seguimiento/guardar-consulta";
+import { textoDiasHabiles } from "@/lib/utils/dias-habiles";
 import { formatearDiaCorto, formatearHora } from "@/lib/utils/dates";
 import { normalizarEncabezado } from "@/lib/utils/strings";
 import { ACCIONES } from "@/types/reclamo";
 import type { Indicacion } from "@/types/reclamo";
 import { ICONO_RELACION, RELACIONES } from "@/types/seguimiento";
-import type { Consulta, EventoHistorial, Relacion, Resultado } from "@/types/seguimiento";
+import type { Consulta, EventoHistorial, Relacion } from "@/types/seguimiento";
 
 export type FilaConsulta = Consulta & {
   diasAbierta: number | null;
@@ -37,17 +39,12 @@ export type FilaConsulta = Consulta & {
   relacion: { relacion: Relacion; origen: "cierre" | "ia" | "reglas" };
   /** Ultimo cierre registrado con este cliente (cualquier consulta). */
   ultimaGestion: EventoHistorial | null;
+  /** Ultima observacion escrita para el cliente (cierre o nota), aunque el ultimo cierre no tenga. */
+  ultimaObservacion: Pick<EventoHistorial, "observacion" | "fecha"> | null;
 };
 
 const ORIGEN_RELACION = { cierre: "al cerrar", ia: "sugerida por IA", reglas: "según el mensaje" } as const;
 
-/** Lo que manda la app al finalizar, reabrir o anotar. */
-type Cambios = {
-  respondida?: boolean;
-  observaciones?: string;
-  resultado?: Resultado;
-  relacion?: Relacion;
-};
 
 /** Etiqueta suave (fondo claro, borde fino), como los estados de la lista. */
 const ETIQUETA = "inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium ring-1 ring-inset";
@@ -69,7 +66,30 @@ function BadgeRelacion({ relacion }: { relacion: Relacion }) {
 }
 
 /** El cliente va en el encabezado azul de cada chat; cada fila es una consulta. */
-const COLUMNAS = ["Fecha · hito · demora", "Mensaje", "Relación · última charla", "Resuelto"] as const;
+const COLUMNAS = ["Fecha · hito · prioridad · demora", "Mensaje", "Relación · última charla", "Resuelto"] as const;
+
+/** Hasta este largo la observacion se ve entera; mas larga, se corta y se lee al pasar el mouse. */
+const LARGO_OBSERVACION = 70;
+
+/** La observacion automatica del cierre masivo no aporta: no se muestra. */
+function observacionAMostrar(consulta: FilaConsulta): { texto: string; fecha: string | null } | null {
+  const escrita = consulta.ultimaObservacion?.observacion.trim();
+  if (escrita) return { texto: escrita, fecha: consulta.ultimaObservacion?.fecha ?? null };
+  const planilla = consulta.observaciones.trim();
+  return planilla && !planilla.includes("Cierre masivo:") ? { texto: planilla, fecha: null } : null;
+}
+
+function ObservacionBreve({ texto, fecha }: { texto: string; fecha: string | null }) {
+  const larga = texto.length > LARGO_OBSERVACION;
+  const breve = larga ? `${texto.slice(0, LARGO_OBSERVACION).trimEnd()}…` : texto;
+  const contenido = (
+    <span className="text-left">
+      <span className="text-slate-400">Obs.:</span> <span className="text-slate-700">{breve}</span>
+      {fecha ? <span className="text-slate-400"> · {formatearDiaCorto(new Date(fecha))}</span> : null}
+    </span>
+  );
+  return <p className="mt-1 text-xs">{larga ? <Pista texto={texto}>{contenido}</Pista> : contenido}</p>;
+}
 
 const PRIORIDADES: Record<Prioridad, { etiqueta: string; estilo: string; punto: string }> = {
   ALTA: { etiqueta: "Alta", estilo: "bg-red-50 text-red-700 ring-red-200", punto: "bg-red-500" },
@@ -106,20 +126,6 @@ function estiloEstado(estado: string): string {
   return "bg-amber-50 text-amber-800 ring-amber-200";
 }
 
-async function guardar(id: string, cambios: Cambios): Promise<string | null> {
-  try {
-    const respuesta = await fetch(`/api/seguimiento/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(cambios),
-    });
-    if (respuesta.ok) return null;
-    const cuerpo = (await respuesta.json().catch(() => null)) as { error?: string } | null;
-    return cuerpo?.error ?? `Error ${respuesta.status}`;
-  } catch (error) {
-    return error instanceof Error ? error.message : String(error);
-  }
-}
 
 type FilaProps = {
   consulta: FilaConsulta;
@@ -231,18 +237,32 @@ const FilaSeguimiento = memo(function FilaSeguimiento({
         respondida ? "bg-slate-50/60" : "hover:bg-slate-50"
       } ${saliendo ? "pointer-events-none opacity-0" : "opacity-100"}`}
     >
-      {/* Fecha, hito (con prioridad) y demora, uno debajo del otro. */}
+      {/* Fecha, hito, prioridad y demora: los cuatro datos, uno por renglon. */}
       <td className="py-3 pr-3 pl-5">
+        <div className="flex flex-col items-start gap-1.5">
         <p className="text-xs font-medium text-slate-600 tabular-nums">
           {formatearDiaCorto(consulta.fecha)}
           {hora !== "00:00 hs" ? <span className="font-normal text-slate-400"> · {hora}</span> : null}
         </p>
-        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           {consulta.hito ? (
             <span className={`${ETIQUETA} ${respondida ? "bg-slate-50 text-slate-400 ring-slate-200" : estiloHito(consulta.hito)}`}>
               {consulta.hito}
             </span>
+          ) : (
+            <span className="text-xs text-slate-400">Sin hito</span>
+          )}
+          {consulta.formularioReclamo ? (
+            <Link
+              href={`/reclamos/${encodeURIComponent(consulta.formularioReclamo)}`}
+              title="Este reclamo ya se cargó en el formulario formal FOR-03"
+              className={`${ETIQUETA} gap-1 bg-blue-50 text-blue-800 ring-blue-200 hover:bg-blue-100`}
+            >
+              <Icono nombre="portapapeles" className="size-3" />
+              FOR-03 · {consulta.formularioReclamo}
+            </Link>
           ) : null}
+        </div>
           <Pista
             lado="abajo"
             texto={
@@ -258,35 +278,23 @@ const FilaSeguimiento = memo(function FilaSeguimiento({
               {prioridad.etiqueta}
             </span>
           </Pista>
-          {consulta.formularioReclamo ? (
-            <Link
-              href={`/reclamos/${encodeURIComponent(consulta.formularioReclamo)}`}
-              title="Este reclamo ya se cargó en el formulario formal FOR-03"
-              className={`${ETIQUETA} gap-1 bg-blue-50 text-blue-800 ring-blue-200 hover:bg-blue-100`}
-            >
-              <Icono nombre="portapapeles" className="size-3" />
-              FOR-03 · {consulta.formularioReclamo}
-            </Link>
-          ) : null}
-        </div>
         {respondida ? null : (
-        <div className="mt-1.5">
+        <div>
           {consulta.diasAbierta !== null ? (
             <span
-              title="Tiempo que lleva sin resolverse"
+              title="Días hábiles que lleva sin resolverse (sin fines de semana ni feriados)"
               className={`${ETIQUETA} tabular-nums ${
                 consulta.vencida ? "bg-red-50 text-red-700 ring-red-200" : "bg-slate-50 text-slate-600 ring-slate-200"
               }`}
             >
-              {consulta.diasAbierta === 0
-                ? "Demora: hoy"
-                : `Demora: ${consulta.diasAbierta} ${consulta.diasAbierta === 1 ? "día" : "días"}`}
+              Demora: {textoDiasHabiles(consulta.diasAbierta)}
             </span>
           ) : (
             <span className="text-xs text-slate-400">Demora: —</span>
           )}
         </div>
         )}
+        </div>
       </td>
 
       {/* Descripcion del mensaje, lo que indico gerencia y la respuesta sugerida. */}
@@ -303,8 +311,16 @@ const FilaSeguimiento = memo(function FilaSeguimiento({
             {consulta.indicacion.comentario ? ` · ${consulta.indicacion.comentario}` : ""}
           </p>
         ) : null}
-        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <RecomendacionRespuesta consulta={consulta} apagada={respondida} catalogo={catalogo} />
+        <div className="mt-1.5">
+          <RecomendacionRespuesta
+            consulta={consulta}
+            relacion={consulta.relacion.relacion}
+            diasHabiles={consulta.diasAbierta}
+            estadoCuenta={estados.join(" · ")}
+            confianza={consulta.ia?.confianza}
+            apagada={respondida}
+            catalogo={catalogo}
+          />
         </div>
       </td>
 
@@ -324,15 +340,10 @@ const FilaSeguimiento = memo(function FilaSeguimiento({
         ) : (
           <p className="mt-1.5 text-xs text-slate-400">Sin charlas previas registradas</p>
         )}
-        {consulta.ultimaGestion?.observacion ? (
-          <p className="mt-0.5 line-clamp-2 text-xs text-slate-500" title={consulta.ultimaGestion.observacion}>
-            {consulta.ultimaGestion.observacion}
-          </p>
-        ) : consulta.observaciones ? (
-          <p className="mt-0.5 line-clamp-2 text-xs text-slate-500" title={consulta.observaciones}>
-            {consulta.observaciones}
-          </p>
-        ) : null}
+        {(() => {
+          const observacion = observacionAMostrar(consulta);
+          return observacion ? <ObservacionBreve texto={observacion.texto} fecha={observacion.fecha} /> : null;
+        })()}
       </td>
 
       <td className="py-3 pr-4 pl-2 text-center">
@@ -384,7 +395,7 @@ export function SeguimientoTable({
   // Las funciones que reciben las filas son estables (useCallback): si no, cada
   // render de la tabla haria que todas las filas memorizadas se vuelvan a dibujar.
   const cambiarRespondida = useCallback(
-    async (consulta: FilaConsulta, valor: boolean, cierre?: Omit<Cambios, "respondida">) => {
+    async (consulta: FilaConsulta, valor: boolean, cierre?: Omit<CambiosConsulta, "respondida">) => {
       const marcarGuardando = (activo: boolean) =>
         setGuardando((previo) => {
           const nuevo = new Set(previo);
@@ -394,7 +405,7 @@ export function SeguimientoTable({
         });
       setRespondidas((previo) => ({ ...previo, [consulta.id]: valor }));
       marcarGuardando(true);
-      const error = await guardar(consulta.id, { respondida: valor, ...cierre });
+      const error = await guardarConsulta(consulta.id, { respondida: valor, ...cierre });
       marcarGuardando(false);
 
       if (error) {

@@ -2,7 +2,7 @@ import { CATEGORIAS } from "@/lib/solicitudes/evaluacion";
 import type { Evaluacion } from "@/lib/solicitudes/evaluacion";
 import { leerCampo } from "@/lib/solicitudes/presentacion";
 import {
-  diasAbierta,
+  diasCorridos,
   esReclamo,
   estadoCliente,
   linkGrupoValido,
@@ -158,7 +158,7 @@ const CATEGORIAS_CHAT: Categoria[] = [
 ];
 
 function hitoConDias(consulta: Consulta, ahora: Date): string {
-  const dias = diasAbierta(consulta, ahora);
+  const dias = diasCorridos(consulta, ahora);
   return `${consulta.hito || "Consulta"}${dias === null ? "" : ` · ${plural(dias, "día", "días")}`}`;
 }
 
@@ -190,7 +190,7 @@ function priorizar(consultas: readonly Consulta[], ahora: Date): Consulta[][] {
     const clave = consulta.cliente.trim().toUpperCase();
     porChat.set(clave, [...(porChat.get(clave) ?? []), consulta]);
   }
-  const demora = (consulta: Consulta) => diasAbierta(consulta, ahora) ?? 0;
+  const demora = (consulta: Consulta) => diasCorridos(consulta, ahora) ?? 0;
   return [...porChat.values()]
     .map((lista) => [...lista].sort((a, b) => demora(b) - demora(a)))
     .sort(
@@ -221,7 +221,7 @@ export function mensajesSeguimiento(consultas: readonly Consulta[], base: string
   const todos = [...grupos, { titulo: "Resto de las consultas", icono: "💬", hito: "", incluye: () => true, lista: resto }];
 
   const chats = new Set(pendientes.map((consulta) => consulta.cliente.trim().toUpperCase())).size;
-  const demoradas = pendientes.filter((consulta) => (diasAbierta(consulta, ahora) ?? 0) >= 1).length;
+  const demoradas = pendientes.filter((consulta) => (diasCorridos(consulta, ahora) ?? 0) >= 1).length;
   const conLista = todos.filter((categoria) => categoria.lista.length > 0);
   const total = conLista.length + 1;
 

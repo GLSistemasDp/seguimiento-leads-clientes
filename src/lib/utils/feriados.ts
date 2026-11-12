@@ -1,4 +1,5 @@
 import "server-only";
+import { FERIADOS_RESPALDO, registrarFeriados, type Feriado } from "@/lib/utils/dias-habiles";
 
 /**
  * Dias habiles en Argentina: lunes a viernes que no sean feriado nacional.
@@ -13,33 +14,9 @@ const ZONA = "America/Argentina/Buenos_Aires";
 const API = "https://api.argentinadatos.com/v1/feriados";
 const VIGENCIA_MS = 12 * 60 * 60 * 1000;
 
-export type Feriado = { fecha: string; tipo: string; nombre: string };
+export type { Feriado };
 
-/** Respaldo 2026, copiado de la API (inamovibles, trasladables y puentes). */
-const RESPALDO: Record<number, Feriado[]> = {
-  2026: [
-    { fecha: "2026-01-01", tipo: "inamovible", nombre: "Año nuevo" },
-    { fecha: "2026-02-16", tipo: "inamovible", nombre: "Carnaval" },
-    { fecha: "2026-02-17", tipo: "inamovible", nombre: "Carnaval" },
-    { fecha: "2026-03-23", tipo: "puente", nombre: "Puente turístico no laborable" },
-    { fecha: "2026-03-24", tipo: "inamovible", nombre: "Día Nacional de la Memoria por la Verdad y la Justicia" },
-    { fecha: "2026-04-02", tipo: "inamovible", nombre: "Día del Veterano y de los Caídos en la Guerra de Malvinas" },
-    { fecha: "2026-04-03", tipo: "inamovible", nombre: "Viernes Santo" },
-    { fecha: "2026-05-01", tipo: "inamovible", nombre: "Día del Trabajador" },
-    { fecha: "2026-05-25", tipo: "inamovible", nombre: "Día de la Revolución de Mayo" },
-    { fecha: "2026-06-15", tipo: "trasladable", nombre: "Paso a la Inmortalidad del General Martín Güemes (17/6)" },
-    { fecha: "2026-06-20", tipo: "inamovible", nombre: "Paso a la Inmortalidad del General Manuel Belgrano" },
-    { fecha: "2026-07-09", tipo: "inamovible", nombre: "Día de la Independencia" },
-    { fecha: "2026-07-10", tipo: "puente", nombre: "Puente turístico no laborable" },
-    { fecha: "2026-08-17", tipo: "trasladable", nombre: "Paso a la Inmortalidad del Gral. José de San Martín" },
-    { fecha: "2026-10-12", tipo: "trasladable", nombre: "Día del Respeto a la Diversidad Cultural" },
-    { fecha: "2026-11-09", tipo: "inamovible", nombre: "Visita del papa León XIV" },
-    { fecha: "2026-11-23", tipo: "trasladable", nombre: "Día de la Soberanía Nacional (20/11)" },
-    { fecha: "2026-12-07", tipo: "puente", nombre: "Puente turístico no laborable" },
-    { fecha: "2026-12-08", tipo: "inamovible", nombre: "Día de la Inmaculada Concepción de María" },
-    { fecha: "2026-12-25", tipo: "inamovible", nombre: "Navidad" },
-  ],
-};
+const RESPALDO = FERIADOS_RESPALDO;
 
 const FORMATO_DIA = new Intl.DateTimeFormat("en-CA", { timeZone: ZONA, year: "numeric", month: "2-digit", day: "2-digit" });
 const FORMATO_SEMANA = new Intl.DateTimeFormat("en-US", { timeZone: ZONA, weekday: "short" });
@@ -100,10 +77,12 @@ export async function diaHabil(fecha = new Date(), { puentesNoLaborables = false
 }
 
 /**
- * Dias no laborables (feriados, sin los puentes) de esos anios, como
- * "2026-11-23". Para contar dias habiles en memoria sin esperar por cada dia.
+ * Trae los feriados de este anio y el anterior (API, con respaldo) y los suma
+ * a la cuenta de dias habiles (businessDaysSince). Llamarla al empezar las
+ * paginas que muestran demoras; si la API no responde queda el respaldo.
  */
-export async function feriadosDeAnios(anios: readonly number[]): Promise<Set<string>> {
-  const listas = await Promise.all([...new Set(anios)].map((anio) => feriadosDe(anio)));
-  return new Set(listas.flatMap(({ feriados }) => feriados.filter((item) => item.tipo !== "puente").map((item) => item.fecha)));
+export async function prepararFeriados(ahora = new Date()): Promise<void> {
+  const anio = fechaArgentina(ahora).anio;
+  const listas = await Promise.all([anio - 1, anio].map((cada) => feriadosDe(cada).catch(() => null)));
+  for (const lista of listas) if (lista) registrarFeriados(lista.feriados);
 }

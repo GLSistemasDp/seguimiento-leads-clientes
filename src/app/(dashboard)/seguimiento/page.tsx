@@ -12,17 +12,17 @@ import { AnalisisSeguimiento } from "@/components/seguimiento/AnalisisSeguimient
 import { CierreMasivo } from "@/components/seguimiento/CierreMasivo";
 import { Paginacion } from "@/components/solicitudes/Paginacion";
 import { EncabezadoPagina } from "@/components/ui/EncabezadoPagina";
-import { porConsulta, ultimasGestiones } from "@/lib/db/historial";
+import { porConsulta, ultimasGestiones, ultimasObservaciones } from "@/lib/db/historial";
 import { formulariosPorConsulta, getIndicaciones, idWhatsapp } from "@/lib/db/reclamos";
 import { avisoConfiguracion, backendSeguimiento, getAll, getParaTablero, getRespuestas } from "@/lib/db/seguimiento";
 import { herramientasDePrueba } from "@/lib/herramientas-prueba";
-import { calcularAnalisis, esPeriodoAnalisis } from "@/lib/seguimiento/analisis";
+import { PERIODO_ANALISIS_POR_DEFECTO, calcularAnalisis, esPeriodoAnalisis } from "@/lib/seguimiento/analisis";
 import { inicioDelMes, nombreMes, pendientesAnteriores } from "@/lib/seguimiento/cierre-masivo";
 import { claveCliente } from "@/lib/db/sheets/maestros";
 import { telegramConfigurado } from "@/lib/notificaciones/telegram";
 import { proximoEnvioCierre } from "@/lib/seguimiento/cierre-del-dia";
-import { TRIAJES, calcularTriaje, enTriaje, esTriaje, esperaHabil, type Triaje } from "@/lib/seguimiento/indicadores";
-import { feriadosDeAnios } from "@/lib/utils/feriados";
+import { TRIAJES, calcularTriaje, enTriaje, esTriaje, type Triaje } from "@/lib/seguimiento/indicadores";
+import { prepararFeriados } from "@/lib/utils/feriados";
 import {
   agruparPorChat,
   cierreMasFrecuente,
@@ -84,13 +84,15 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
     getRespuestas(),
     porConsulta(),
     ultimasGestiones(),
+    // Sin esto la tabla anda igual, solo sin la ultima observacion del cliente.
+    ultimasObservaciones().catch((): Record<string, EventoHistorial> => ({})),
     getIndicaciones(),
     // Sin los FOR-03 la tabla anda igual, solo sin la referencia al reclamo formal.
     formulariosPorConsulta().catch((): Record<string, string> => ({})),
     proximoEnvioCierre(ahora).catch(() => null),
     sincroniza ? ultimaSincronizacion().catch(() => null) : Promise.resolve(null),
-    // Sin la API de feriados se cuentan igual los dias habiles (lunes a viernes).
-    feriadosDeAnios([ahora.getFullYear() - 1, ahora.getFullYear()]).catch(() => new Set<string>()),
+    // Feriados de la API para los dias habiles; si no responde queda el respaldo.
+    prepararFeriados(ahora).catch(() => undefined),
   ]));
   if (lectura.error) {
     return (
@@ -100,7 +102,7 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
       </div>
     );
   }
-  const [todas, historico, catalogo, historial, gestiones, indicaciones, formulariosReclamo, proximo, ultimaSync, feriados] = lectura.datos;
+  const [todas, historico, catalogo, historial, gestiones, observaciones, indicaciones, formulariosReclamo, proximo, ultimaSync] = lectura.datos;
   // La bandeja principal siempre contiene solo pendientes, incluso si se abre
   // un enlace antiguo con vista=todas o vista=respondidas. El historial conserva los cierres.
   const pendientes = filtrarPorVista(todas, "pendientes");
@@ -111,15 +113,13 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
     (historial[consulta.id] ?? []).findLast((evento) => evento.tipo === "finalizada") ?? null;
   const relaciones = new Map(todas.map((consulta) => [consulta.id, relacionActual(consulta, cierreDe(consulta))]));
   const relacionDe = (consulta: Consulta) => relaciones.get(consulta.id)?.relacion ?? "BUENA";
-  // Dias habiles sin respuesta (solo hacen falta las pendientes).
-  const esperas = new Map<string, number | null>();
-  const esperaDe = (consulta: Consulta) => {
-    if (!esperas.has(consulta.id)) esperas.set(consulta.id, esperaHabil(consulta, ahora, feriados));
-    return esperas.get(consulta.id) ?? null;
+  const cerradaEn = (consulta: Consulta) => {
+    const cierre = cierreDe(consulta);
+    return cierre ? new Date(cierre.fecha) : null;
   };
 
   const enTarjeta = triaje
-    ? pendientes.filter((consulta) => enTriaje(triaje, consulta, relacionDe(consulta), esperaDe(consulta)))
+    ? pendientes.filter((consulta) => enTriaje(triaje, consulta, relacionDe(consulta), ahora))
     : pendientes;
   const filtradasPendientes = filtrar(enTarjeta, filtros).filter(
     (consulta) => !filtroRelacion || relacionDe(consulta) === filtroRelacion,
@@ -181,10 +181,10 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">{avisoConfiguracion()}</p>
       ) : null}
 
-      <TriajeSeguimiento datos={calcularTriaje(todas, relacionDe, esperaDe, ahora)} activo={triaje} enlaces={enlaces} />
+      <TriajeSeguimiento datos={calcularTriaje(todas, relacionDe, ahora, cerradaEn)} activo={triaje} enlaces={enlaces} />
 
       <AnalisisSeguimiento
-        analisis={calcularAnalisis(historico, ahora, esPeriodoAnalisis(params.periodoAnalisis) ? params.periodoAnalisis : "todo")}
+        analisis={calcularAnalisis(historico, ahora, esPeriodoAnalisis(params.periodoAnalisis) ? params.periodoAnalisis : PERIODO_ANALISIS_POR_DEFECTO)}
         abierto={params.analisis === "1"}
         parametros={Object.fromEntries(
           Object.entries(paramsActuales).filter(([clave]) => clave !== "analisis" && clave !== "periodoAnalisis"),
@@ -221,6 +221,7 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
             formularioReclamo: formulariosReclamo[consulta.id] ?? null,
             relacion: relaciones.get(consulta.id) ?? { relacion: "BUENA", origen: "reglas" },
             ultimaGestion: gestiones[claveCliente(consulta.cliente)] ?? null,
+            ultimaObservacion: observaciones[claveCliente(consulta.cliente)] ?? null,
           }))}
         />
         <Paginacion

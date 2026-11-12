@@ -234,13 +234,16 @@ export function AnalisisSeguimiento({
             >
               {analisis.semanas.length ? <Semanas semanas={analisis.semanas} /> : <SinDatos>Sin consultas con fecha en el período.</SinDatos>}
             </Panel>
-            <Panel titulo="¿De qué nos consultan?" descripcion='Total del período por motivo ("Hito a responder").'>
+            <Panel
+              titulo="¿De qué nos consultan?"
+              descripcion={`Hitos de consulta del período, sin reclamos: ${numero.format(analisis.totalMotivos)} consultas = 100%. Los reclamos se ven en Resumen.`}
+            >
               {analisis.motivos.length ? (
                 <BarrasHorizontales
                   filas={analisis.motivos.map((fila) => ({
                     etiqueta: fila.hito,
                     valor: fila.cantidad,
-                    detalle: `· ${porciento(fila.porcentaje)}`,
+                    detalle: `· ${fila.porcentaje}%`,
                     color: colorMotivo(fila.hito),
                   }))}
                 />
@@ -254,20 +257,6 @@ export function AnalisisSeguimiento({
         <section className="flex flex-col gap-4">
           <h3 className="text-base font-semibold text-slate-900">Reclamos</h3>
           <div className="grid gap-4 lg:grid-cols-2">
-            <Panel titulo="Tipos de reclamo" descripcion="Clasificación de cada reclamo según el texto del mensaje.">
-              {analisis.tiposReclamo.length ? (
-                <BarrasHorizontales
-                  filas={analisis.tiposReclamo.map((fila, indice) => ({
-                    etiqueta: fila.tipo,
-                    valor: fila.cantidad,
-                    detalle: `· ${porciento(fila.porcentaje)}`,
-                    color: indice === 0 ? ROJO : GRIS,
-                  }))}
-                />
-              ) : (
-                <SinDatos>Sin reclamos en el período.</SinDatos>
-              )}
-            </Panel>
             <Panel
               titulo="Reclamos cada 100 consultas, por grupo"
               descripcion={`Grupos con ${analisis.minimoPorGrupo} consultas o más.`}

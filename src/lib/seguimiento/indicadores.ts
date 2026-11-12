@@ -1,11 +1,14 @@
 import { diasAbierta } from "@/lib/seguimiento/presentacion";
-import { diaLocal } from "@/lib/seguimiento/tablero";
 import type { Consulta, Relacion } from "@/types/seguimiento";
 
 /**
  * Tarjetas de triaje del seguimiento: pendientes de respuesta, demora
  * promedio y clientes a cuidar. Cada una muestra un solo dato y es tambien un
  * filtro de la tabla. Funciones puras sobre las consultas.
+ *
+ * Toda demora es en DIAS HABILES (diasAbierta -> businessDaysSince): la
+ * tarjeta de pendientes, la de demora, el filtro y la columna de la tabla
+ * cuentan lo mismo.
  */
 
 /**
@@ -25,6 +28,10 @@ export const TRAMOS_DEMORA = [
   { etiqueta: "3–5 d", desde: 3, hasta: 5 },
   { etiqueta: "+5 d", desde: 6, hasta: Number.POSITIVE_INFINITY },
 ] as const;
+
+/** Contra cuantos dias atras se compara la cola de pendientes. */
+const DIAS_COMPARACION = 7;
+const DIA_MS = 86_400_000;
 
 export const TRIAJES = {
   pendientes: "Pendientes de respuesta",
@@ -46,43 +53,10 @@ export function esTriaje(valor: unknown): valor is Triaje {
 
 export type Tono = "verde" | "ambar" | "rojo";
 
-// --- Dias habiles ------------------------------------------------------------
-
-function diaSiguiente(dia: string): string {
-  const fecha = new Date(`${dia}T12:00:00Z`);
-  fecha.setUTCDate(fecha.getUTCDate() + 1);
-  return fecha.toISOString().slice(0, 10);
-}
-
-/**
- * Dias habiles (lunes a viernes, sin feriados) que pasaron desde el dia de
- * `desde` hasta hoy, en hora de Argentina. El mismo dia es 0; de viernes a
- * lunes, 1.
- */
-export function diasHabilesEntre(desde: Date, hasta: Date, feriados: ReadonlySet<string>): number {
-  const fin = diaLocal(hasta);
-  let dia = diaLocal(desde);
-  let habiles = 0;
-  while (dia < fin) {
-    dia = diaSiguiente(dia);
-    const semana = new Date(`${dia}T12:00:00Z`).getUTCDay();
-    if (semana !== 0 && semana !== 6 && !feriados.has(dia)) habiles += 1;
-  }
-  return habiles;
-}
-
-/** Dias habiles sin respuesta. Sin fecha, se usa la columna de dias de la planilla. */
-export function esperaHabil(consulta: Consulta, ahora: Date, feriados: ReadonlySet<string>): number | null {
-  if (consulta.fecha) return diasHabilesEntre(consulta.fecha, ahora, feriados);
-  return consulta.dias;
-}
-
-// --- Tarjetas ----------------------------------------------------------------
-
 /** Si la consulta entra en la tarjeta (todas son sobre lo pendiente). */
-export function enTriaje(triaje: Triaje, consulta: Consulta, relacion: Relacion, espera: number | null): boolean {
+export function enTriaje(triaje: Triaje, consulta: Consulta, relacion: Relacion, ahora = new Date()): boolean {
   if (consulta.respondida) return false;
-  if (triaje === "demora") return (espera ?? 0) > DEMORA.rojo;
+  if (triaje === "demora") return (diasAbierta(consulta, ahora) ?? 0) > DEMORA.rojo;
   if (triaje === "riesgo") return relacion !== "BUENA";
   return true;
 }
@@ -90,8 +64,10 @@ export function enTriaje(triaje: Triaje, consulta: Consulta, relacion: Relacion,
 export type DatosTriaje = {
   pendientes: {
     cantidad: number;
-    /** Dias corridos de la pendiente mas vieja. */
+    /** Dias habiles de la pendiente mas vieja. */
     masAntigua: number | null;
+    /** Cuantas estaban pendientes hace una semana (null si no se puede saber). */
+    semanaPasada: number | null;
     tono: Tono;
   };
   demora: {
@@ -110,11 +86,16 @@ export type DatosTriaje = {
   };
 };
 
+/**
+ * @param cerradaEn cuando se cerro cada consulta respondida (ultimo cierre del
+ *   historial). Sin dato se toma como cerrada el dia que entro: no suma a la
+ *   cola de la semana pasada.
+ */
 export function calcularTriaje(
   consultas: readonly Consulta[],
   relacionDe: (consulta: Consulta) => Relacion,
-  esperaDe: (consulta: Consulta) => number | null,
   ahora = new Date(),
+  cerradaEn?: (consulta: Consulta) => Date | null,
 ): DatosTriaje {
   let pendientes = 0;
   let masAntigua: number | null = null;
@@ -124,21 +105,27 @@ export function calcularTriaje(
   const tramos = TRAMOS_DEMORA.map((tramo) => ({ etiqueta: tramo.etiqueta, cantidad: 0 }));
   let enRiesgo = 0;
   let regular = 0;
+  // Cola de hace una semana: lo que ya habia entrado y seguia sin cerrar.
+  const corte = ahora.getTime() - DIAS_COMPARACION * DIA_MS;
+  let semanaPasada = 0;
 
   for (const consulta of consultas) {
+    if (consulta.fecha && consulta.fecha.getTime() <= corte) {
+      const cierre = consulta.respondida ? cerradaEn?.(consulta) ?? null : null;
+      if (!consulta.respondida || (cierre && cierre.getTime() > corte)) semanaPasada += 1;
+    }
     if (consulta.respondida) continue;
     pendientes += 1;
-    const corridos = diasAbierta(consulta, ahora);
-    if (corridos !== null) masAntigua = Math.max(masAntigua ?? 0, corridos);
 
-    const espera = esperaDe(consulta);
+    const espera = diasAbierta(consulta, ahora);
     if (espera !== null) {
+      masAntigua = Math.max(masAntigua ?? 0, espera);
       sumaEspera += espera;
       conEspera += 1;
       const tramo = TRAMOS_DEMORA.findIndex((item) => espera >= item.desde && espera <= item.hasta);
       if (tramo >= 0) tramos[tramo].cantidad += 1;
+      if (espera > DEMORA.rojo) demoradas += 1;
     }
-    if (enTriaje("demora", consulta, "BUENA", espera)) demoradas += 1;
 
     const relacion = relacionDe(consulta);
     if (relacion === "EN_RIESGO") enRiesgo += 1;
@@ -150,6 +137,7 @@ export function calcularTriaje(
     pendientes: {
       cantidad: pendientes,
       masAntigua,
+      semanaPasada: cerradaEn ? semanaPasada : null,
       tono: pendientes === 0 ? "verde" : (masAntigua ?? 0) > DEMORA.rojo ? "rojo" : "ambar",
     },
     demora: {

@@ -21,19 +21,22 @@ const ESTILO_RELACION: Record<Relacion, string> = {
   EN_RIESGO: "border-red-200 bg-red-50 text-red-700",
 };
 
-type ModalFinalizarProps = {
-  consulta: FilaConsulta | null;
+/** Lo que el modal necesita de la consulta (la tabla y la ficha del cliente se lo pasan). */
+export type ConsultaACerrar = Pick<FilaConsulta, "id" | "fecha" | "hito" | "consulta" | "cliente" | "relacion" | "formularioReclamo">;
+
+type ModalFinalizarProps<T extends ConsultaACerrar> = {
+  consulta: T | null;
   /** El cierre mas usado en el historial: se ofrece como boton de un click. */
   atajo: CierreFrecuente;
   onCancelar: () => void;
-  onFinalizar: (consulta: FilaConsulta, cierre: CierreConsulta) => void;
+  onFinalizar: (consulta: T, cierre: CierreConsulta) => void;
 };
 
 /**
  * Cierre de una conversacion: resultado, relacion y observacion. Tiene su
  * propio estado para que elegir o escribir no vuelva a dibujar la tabla.
  */
-export function ModalFinalizar({ consulta, atajo, onCancelar, onFinalizar }: ModalFinalizarProps) {
+export function ModalFinalizar<T extends ConsultaACerrar>({ consulta, atajo, onCancelar, onFinalizar }: ModalFinalizarProps<T>) {
   if (!consulta) return null;
   // Con key, cada apertura arranca de cero.
   return <Contenido key={consulta.id} consulta={consulta} atajo={atajo} onCancelar={onCancelar} onFinalizar={onFinalizar} />;
@@ -44,7 +47,7 @@ export function ModalFinalizar({ consulta, atajo, onCancelar, onFinalizar }: Mod
  * del modulo Reclamos): lo genera con el cliente y la consulta precargados, o
  * muestra el que ya existe.
  */
-function DerivarFor03({ consulta, onDerivar }: { consulta: FilaConsulta; onDerivar: () => void }) {
+function DerivarFor03({ consulta, onDerivar }: { consulta: ConsultaACerrar; onDerivar: () => void }) {
   if (consulta.formularioReclamo) {
     return (
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
@@ -75,7 +78,7 @@ function DerivarFor03({ consulta, onDerivar }: { consulta: FilaConsulta; onDeriv
   );
 }
 
-function Contenido({ consulta, atajo, onCancelar, onFinalizar }: ModalFinalizarProps & { consulta: FilaConsulta }) {
+function Contenido<T extends ConsultaACerrar>({ consulta, atajo, onCancelar, onFinalizar }: ModalFinalizarProps<T> & { consulta: T }) {
   const [nota, setNota] = useState("");
   const [resultado, setResultado] = useState<Resultado | "">("");
   // Pre-cargada con lo que sugirio el clasificador (IA o reglas); se puede cambiar.

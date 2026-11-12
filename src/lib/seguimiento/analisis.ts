@@ -19,6 +19,28 @@ export const PERIODOS_ANALISIS = {
 } as const;
 export type PeriodoAnalisis = keyof typeof PERIODOS_ANALISIS;
 
+/** Lo que se ve al abrir el panel: el ultimo mes, para que el historico no tape lo reciente. */
+export const PERIODO_ANALISIS_POR_DEFECTO: PeriodoAnalisis = "30";
+
+/**
+ * Porcentajes enteros que suman exactamente 100 (metodo del mayor resto):
+ * sin esto, redondear cada fila por separado puede dar 99% o 101%.
+ */
+export function porcentajesQueCierran(cantidades: readonly number[]): number[] {
+  const total = cantidades.reduce((suma, cantidad) => suma + cantidad, 0);
+  if (total === 0) return cantidades.map(() => 0);
+  const exactos = cantidades.map((cantidad) => (cantidad / total) * 100);
+  const enteros = exactos.map(Math.floor);
+  let faltan = 100 - enteros.reduce((suma, valor) => suma + valor, 0);
+  const porResto = exactos.map((valor, indice) => ({ indice, resto: valor - Math.floor(valor) })).sort((a, b) => b.resto - a.resto);
+  for (const { indice } of porResto) {
+    if (faltan <= 0) break;
+    enteros[indice] += 1;
+    faltan -= 1;
+  }
+  return enteros;
+}
+
 export function esPeriodoAnalisis(valor: unknown): valor is PeriodoAnalisis {
   return typeof valor === "string" && Object.hasOwn(PERIODOS_ANALISIS, valor);
 }
@@ -133,11 +155,19 @@ export function calcularAnalisis(todas: readonly Consulta[], ahoraFecha: Date, p
   }
 
   // --- Motivos (hito a responder) ---
+  // Solo los hitos de consulta: los reclamos tienen su propio seguimiento (Resumen y Reclamos).
+  // Los porcentajes son sobre estas consultas, asi la lista suma 100%.
   const motivos = new Map<string, number>();
   for (const consulta of consultas) {
+    if (esReclamo(consulta)) continue;
     const hito = consulta.hito.trim() || "Sin clasificar";
     motivos.set(hito, (motivos.get(hito) ?? 0) + 1);
   }
+  const filasMotivos = [...motivos.entries()]
+    .map(([hito, cantidad]) => ({ hito, cantidad }))
+    .sort((a, b) => b.cantidad - a.cantidad || a.hito.localeCompare(b.hito, "es"));
+  const totalMotivos = filasMotivos.reduce((suma, fila) => suma + fila.cantidad, 0);
+  const porcentajesMotivos = porcentajesQueCierran(filasMotivos.map((fila) => fila.cantidad));
 
   // --- Tipos de reclamo ---
   const tipos = new Map<string, number>();
@@ -171,9 +201,9 @@ export function calcularAnalisis(todas: readonly Consulta[], ahoraFecha: Date, p
     bot: { cantidad: delBot, porcentaje: porcentaje(delBot), desde: botDesde && botDesde !== serieSemanas[0]?.etiqueta ? botDesde : null },
     semanas: serieSemanas,
     semanasAtrasadas,
-    motivos: [...motivos.entries()]
-      .map(([hito, cantidad]) => ({ hito, cantidad, porcentaje: porcentaje(cantidad) }))
-      .sort((a, b) => b.cantidad - a.cantidad),
+    motivos: filasMotivos.map((fila, indice) => ({ ...fila, porcentaje: porcentajesMotivos[indice] })),
+    /** Consultas sobre las que se calculan los motivos (todas menos los reclamos). */
+    totalMotivos,
     tiposReclamo: [...tipos.entries()]
       .map(([tipo, cantidad]) => ({ tipo, cantidad, porcentaje: porcentaje(cantidad, reclamos.length) }))
       .sort((a, b) => b.cantidad - a.cantidad),
