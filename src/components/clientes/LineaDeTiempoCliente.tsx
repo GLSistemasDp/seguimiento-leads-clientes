@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { textoDiasHabiles } from "@/lib/utils/dias-habiles";
+import { formatearHoras, textoHorasHabiles } from "@/lib/utils/dias-habiles";
 import { ICONO_RELACION, RELACIONES, type EventoHistorial, type Relacion } from "@/types/seguimiento";
 
 /**
@@ -18,7 +18,7 @@ export type EventoLinea = EventoHistorial & {
   agente: string;
   /** Cierre masivo: no es una respuesta real (gris y fuera de los indicadores). */
   masivo?: boolean;
-  /** Dias habiles entre la consulta y el cierre, si se sabe. */
+  /** Horas habiles entre la consulta y el cierre, si se sabe. */
   tiempoRespuesta?: number | null;
   /** Fecha (ISO) de la consulta anterior que parece la misma. */
   duplicadoDe?: string | null;
@@ -29,7 +29,6 @@ function cierreReal(evento: EventoLinea): boolean {
   return evento.tipo === "finalizada" && !evento.masivo && evento.relacion !== null;
 }
 
-const decimal = new Intl.NumberFormat("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 type Episodio = { numero: number; eventos: EventoLinea[]; recuperacion: EventoLinea | null };
 type Bloque = { clase: "evento"; evento: EventoLinea } | { clase: "episodio"; episodio: Episodio };
@@ -171,7 +170,7 @@ function Nodo({ evento, visible, dentroDeEpisodio = false }: { evento: EventoLin
           {evento.observacion ? ` — ${evento.observacion}` : ""}
           {typeof evento.tiempoRespuesta === "number" ? (
             <span className="ml-1 text-xs text-slate-400">
-              · respondida {evento.tiempoRespuesta === 0 ? "en el día" : `en ${textoDiasHabiles(evento.tiempoRespuesta)}`}
+              · respondida en {textoHorasHabiles(evento.tiempoRespuesta)}
             </span>
           ) : null}
         </p>
@@ -268,8 +267,8 @@ export function LineaDeTiempoCliente({ eventos: crudos }: { eventos: EventoLinea
             <span className="text-slate-500">de los cierres en riesgo</span>
           </p>
           <p title={tiempos.length ? `Promedio de ${tiempos.length} ${tiempos.length === 1 ? "respuesta" : "respuestas"}, sin cierres masivos` : "Sin fechas para medir"}>
-            <span className="text-2xl font-medium text-slate-900 tabular-nums">{tiempoMedio === null ? "—" : decimal.format(tiempoMedio)}</span>{" "}
-            <span className="text-slate-500">días hábiles de tiempo medio de respuesta</span>
+            <span className="text-2xl font-medium text-slate-900 tabular-nums">{tiempoMedio === null ? "—" : formatearHoras(tiempoMedio)}</span>{" "}
+            <span className="text-slate-500">h hábiles de tiempo medio de respuesta</span>
           </p>
         </div>
         {masivos > 0 ? (

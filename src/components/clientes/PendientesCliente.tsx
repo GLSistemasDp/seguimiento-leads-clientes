@@ -10,14 +10,14 @@ import { DEMORA } from "@/lib/seguimiento/indicadores";
 import { guardarConsulta } from "@/lib/seguimiento/guardar-consulta";
 import type { CierreFrecuente } from "@/lib/seguimiento/presentacion";
 import type { RespuestaTipo } from "@/lib/seguimiento/respuestas";
-import { textoDiasHabiles } from "@/lib/utils/dias-habiles";
+import { textoHorasHabiles } from "@/lib/utils/dias-habiles";
 import { formatearDiaCorto, formatearHora } from "@/lib/utils/dates";
 
 /** Una consulta sin resolver del cliente, lista para mostrarse y cerrarse desde la ficha. */
 export type PendienteFicha = ConsultaACerrar & {
   tentativoRespuesta: string;
-  /** Dias habiles sin respuesta. */
-  diasHabiles: number | null;
+  /** Horas habiles sin respuesta. */
+  horasHabiles: number | null;
   /** Situacion / estado de cuenta, para la respuesta sugerida. */
   estadoCuenta: string;
   confianza?: number | null;
@@ -26,7 +26,7 @@ export type PendienteFicha = ConsultaACerrar & {
 /**
  * Banner de la ficha del cliente: lo que el cliente espera que le
  * respondan, antes que cualquier otro dato. Cada consulta trae la demora en
- * dias habiles, la respuesta sugerida (la misma de la tabla) y la casilla
+ * horas habiles, la respuesta sugerida (la misma de la tabla) y la casilla
  * "Resuelto", que abre el mismo cierre que el seguimiento.
  */
 export function PendientesCliente({
@@ -47,7 +47,7 @@ export function PendientesCliente({
 
   const visibles = pendientes.filter((pendiente) => !cerradas.has(pendiente.id));
   if (visibles.length === 0) return null;
-  const demorada = visibles.some((pendiente) => (pendiente.diasHabiles ?? 0) > DEMORA.rojo);
+  const demorada = visibles.some((pendiente) => (pendiente.horasHabiles ?? 0) > DEMORA.rojo);
 
   async function finalizar(pendiente: PendienteFicha, cierre: CierreConsulta) {
     setFinalizando(null);
@@ -76,7 +76,7 @@ export function PendientesCliente({
 
       <ul className="mt-3 flex flex-col divide-y divide-slate-100">
         {visibles.map((pendiente) => {
-          const vencida = (pendiente.diasHabiles ?? 0) > DEMORA.rojo;
+          const vencida = (pendiente.horasHabiles ?? 0) > DEMORA.rojo;
           const hora = formatearHora(pendiente.fecha);
           return (
             <li key={pendiente.id} className="grid gap-3 py-3 first:pt-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_auto]">
@@ -91,14 +91,14 @@ export function PendientesCliente({
                       {pendiente.hito}
                     </span>
                   ) : null}
-                  {pendiente.diasHabiles !== null ? (
+                  {pendiente.horasHabiles !== null ? (
                     <span
-                      title="Días hábiles sin respuesta (sin fines de semana ni feriados)"
+                      title="Horas hábiles sin respuesta (lunes a viernes de 8 a 17 h, sin feriados)"
                       className={`rounded-md px-1.5 py-0.5 text-[11px] font-medium ring-1 ring-inset tabular-nums ${
                         vencida ? "bg-red-50 text-red-700 ring-red-200" : "bg-slate-50 text-slate-600 ring-slate-200"
                       }`}
                     >
-                      Demora: {textoDiasHabiles(pendiente.diasHabiles)}
+                      Demora: {textoHorasHabiles(pendiente.horasHabiles)}
                     </span>
                   ) : null}
                 </div>
@@ -106,7 +106,7 @@ export function PendientesCliente({
                 <RecomendacionRespuesta
                   consulta={pendiente}
                   relacion={pendiente.relacion.relacion}
-                  diasHabiles={pendiente.diasHabiles}
+                  horasHabiles={pendiente.horasHabiles}
                   estadoCuenta={pendiente.estadoCuenta}
                   confianza={pendiente.confianza}
                   catalogo={catalogo}

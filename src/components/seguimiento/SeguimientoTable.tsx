@@ -15,7 +15,7 @@ import { claveChat, estadoCliente, explicarEstado, rutaPerfil, separarCliente } 
 import type { CierreFrecuente, Prioridad, ResumenChat } from "@/lib/seguimiento/presentacion";
 import type { RespuestaTipo } from "@/lib/seguimiento/respuestas";
 import { guardarConsulta, type CambiosConsulta } from "@/lib/seguimiento/guardar-consulta";
-import { textoDiasHabiles } from "@/lib/utils/dias-habiles";
+import { textoHorasHabiles } from "@/lib/utils/dias-habiles";
 import { formatearDiaCorto, formatearHora } from "@/lib/utils/dates";
 import { normalizarEncabezado } from "@/lib/utils/strings";
 import { ACCIONES } from "@/types/reclamo";
@@ -24,7 +24,7 @@ import { ICONO_RELACION, RELACIONES } from "@/types/seguimiento";
 import type { Consulta, EventoHistorial, Relacion } from "@/types/seguimiento";
 
 export type FilaConsulta = Consulta & {
-  diasAbierta: number | null;
+  horasAbierta: number | null;
   prioridad: Prioridad;
   /** Por que tiene esa prioridad ("Reclamo", "Cliente A"…), para el tooltip. */
   motivosPrioridad: string[];
@@ -280,14 +280,14 @@ const FilaSeguimiento = memo(function FilaSeguimiento({
           </Pista>
         {respondida ? null : (
         <div>
-          {consulta.diasAbierta !== null ? (
+          {consulta.horasAbierta !== null ? (
             <span
               title="Días hábiles que lleva sin resolverse (sin fines de semana ni feriados)"
               className={`${ETIQUETA} tabular-nums ${
                 consulta.vencida ? "bg-red-50 text-red-700 ring-red-200" : "bg-slate-50 text-slate-600 ring-slate-200"
               }`}
             >
-              Demora: {textoDiasHabiles(consulta.diasAbierta)}
+              Demora: {textoHorasHabiles(consulta.horasAbierta)}
             </span>
           ) : (
             <span className="text-xs text-slate-400">Demora: —</span>
@@ -315,7 +315,7 @@ const FilaSeguimiento = memo(function FilaSeguimiento({
           <RecomendacionRespuesta
             consulta={consulta}
             relacion={consulta.relacion.relacion}
-            diasHabiles={consulta.diasAbierta}
+            horasHabiles={consulta.horasAbierta}
             estadoCuenta={estados.join(" · ")}
             confianza={consulta.ia?.confianza}
             apagada={respondida}

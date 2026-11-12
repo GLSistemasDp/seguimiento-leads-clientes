@@ -1,4 +1,4 @@
-import { businessDaysSince } from "@/lib/utils/dias-habiles";
+import { businessDaysSince, businessHoursSince } from "@/lib/utils/dias-habiles";
 import { normalizarEncabezado } from "@/lib/utils/strings";
 import type { EventoHistorial } from "@/types/seguimiento";
 
@@ -40,7 +40,7 @@ export type EventoAnalizable = Pick<EventoHistorial, "id" | "consultaId" | "tipo
 export type LecturaEvento = {
   /** Cierre masivo: se muestra en gris y no cuenta en los indicadores. */
   masivo: boolean;
-  /** Dias habiles entre la consulta y el cierre (solo cierres reales con ambas fechas). */
+  /** Horas habiles entre la consulta y el cierre (solo cierres reales con ambas fechas). */
   tiempoRespuesta: number | null;
   /** Fecha (ISO) de la consulta anterior que parece la misma, si la hay. */
   duplicadoDe: string | null;
@@ -56,7 +56,7 @@ export function leerHistorial(eventos: readonly EventoAnalizable[]): Map<string,
     const masivo = esCierreMasivo(evento);
     const tiempoRespuesta =
       evento.tipo === "finalizada" && !masivo && evento.fechaConsulta
-        ? businessDaysSince(new Date(evento.fechaConsulta), new Date(evento.fecha))
+        ? businessHoursSince(new Date(evento.fechaConsulta), new Date(evento.fecha))
         : null;
     lecturas.set(evento.id, { masivo, tiempoRespuesta, duplicadoDe: null });
   }
@@ -81,7 +81,7 @@ export function leerHistorial(eventos: readonly EventoAnalizable[]): Map<string,
   return lecturas;
 }
 
-/** Tiempo medio de respuesta en dias habiles, sin los cierres masivos (null si no hay datos). */
+/** Tiempo medio de respuesta en horas habiles, sin los cierres masivos (null si no hay datos). */
 export function tiempoMedioRespuesta(lecturas: Iterable<LecturaEvento>): number | null {
   const tiempos = [...lecturas].flatMap((lectura) => (lectura.masivo || lectura.tiempoRespuesta === null ? [] : [lectura.tiempoRespuesta]));
   return tiempos.length ? tiempos.reduce((suma, valor) => suma + valor, 0) / tiempos.length : null;

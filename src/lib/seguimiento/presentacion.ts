@@ -1,6 +1,6 @@
 import { normalizarEncabezado } from "@/lib/utils/strings";
 import { estadoCuentaUnificado } from "@/lib/clientes/ficha";
-import { businessDaysSince } from "@/lib/utils/dias-habiles";
+import { businessHoursSince, HORAS_POR_DIA, textoHorasHabiles, UMBRALES_DEMORA_HORAS } from "@/lib/utils/dias-habiles";
 import type { Consulta, EventoHistorial, Relacion, Resultado } from "@/types/seguimiento";
 
 /**
@@ -11,12 +11,13 @@ import type { Consulta, EventoHistorial, Relacion, Resultado } from "@/types/seg
 const DIA_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Dias HABILES desde que entro la consulta: la demora de todo el CRM (tarjetas,
- * tabla, prioridad, ficha). Sin fecha, la columna DEMORA de la planilla.
+ * HORAS HABILES desde que entro la consulta (lunes a viernes, horario laboral,
+ * sin feriados): la demora de todo el CRM (tarjetas, tabla, prioridad, ficha).
+ * Sin fecha, la columna DEMORA de la planilla (dias) pasada a horas habiles.
  */
-export function diasAbierta(consulta: Consulta, ahora = new Date()): number | null {
-  if (consulta.fecha) return businessDaysSince(consulta.fecha, ahora);
-  return consulta.dias;
+export function horasAbierta(consulta: Consulta, ahora = new Date()): number | null {
+  if (consulta.fecha) return businessHoursSince(consulta.fecha, ahora);
+  return consulta.dias === null ? null : consulta.dias * HORAS_POR_DIA;
 }
 
 /**
@@ -61,7 +62,8 @@ export function puntajePrioridad(consulta: Consulta, ahora = new Date()): number
   if (consulta.respondida) return -1;
   const hito = PESO_HITO[normalizarEncabezado(consulta.hito)] ?? 10;
   const clasificacion = PESO_CLASIFICACION[consulta.clasificacion.trim().toUpperCase()] ?? 0;
-  const dias = Math.min(diasAbierta(consulta, ahora) ?? 0, 10);
+  // 5 puntos por cada dia laboral de demora, hasta 10 dias.
+  const dias = Math.min((horasAbierta(consulta, ahora) ?? 0) / HORAS_POR_DIA, 10);
   return hito + clasificacion + dias * 5;
 }
 
@@ -74,8 +76,7 @@ export type Prioridad = "ALTA" | "MEDIA" | "BAJA" | "RESUELTA";
 const URGENCIA =
   /\b(urgen\w*|ya mismo|cuanto antes|lo antes posible|asap|para hoy|necesito hoy|parad[oa]s?|sin stock|no (me |nos )?(llego|llegaron|llega)|sigo esperando|seguimos esperando|todavia no|cancel\w*|dar de baja|devolucion\w*|rot[oa]s?|fallad[oa]s?|defectuos[oa]s?)\b/;
 
-/** Dias habiles sin respuesta desde los que la demora cuenta como señal. */
-const DIAS_DEMORA = 3;
+
 
 export type SenalPrioridad = { etiqueta: string; puntos: number };
 
@@ -92,8 +93,8 @@ export function senalesPrioridad(consulta: Consulta, ahora = new Date()): SenalP
     senales.push({ etiqueta: "Cliente A", puntos: 1 });
   }
   if (URGENCIA.test(normalizarEncabezado(consulta.consulta))) senales.push({ etiqueta: "Pide urgencia", puntos: 1 });
-  const dias = diasAbierta(consulta, ahora) ?? 0;
-  if (dias >= DIAS_DEMORA) senales.push({ etiqueta: `${dias} días hábiles sin respuesta`, puntos: 1 });
+  const horas = horasAbierta(consulta, ahora) ?? 0;
+  if (horas > UMBRALES_DEMORA_HORAS.rojo) senales.push({ etiqueta: `${textoHorasHabiles(horas)} sin respuesta`, puntos: 1 });
   return senales;
 }
 
@@ -119,9 +120,9 @@ function compararPrioridad(a: Consulta, b: Consulta, ahora: Date): number {
   );
 }
 
-/** Sin respuesta hace 2 dias habiles o mas. */
+/** Sin respuesta hace mas horas habiles que el umbral rojo de demora. */
 export function vencida(consulta: Consulta, ahora = new Date()): boolean {
-  return !consulta.respondida && (diasAbierta(consulta, ahora) ?? 0) >= 2;
+  return !consulta.respondida && (horasAbierta(consulta, ahora) ?? 0) > UMBRALES_DEMORA_HORAS.rojo;
 }
 
 // --- Filtros ---------------------------------------------------------------
@@ -239,7 +240,7 @@ export function compararPorPrioridad(a: Consulta, b: Consulta, ahora = new Date(
     Number(!importante(a)) - Number(!importante(b)) ||
     rangoHito(a.hito) - rangoHito(b.hito) ||
     rangoClasificacion(a) - rangoClasificacion(b) ||
-    (diasAbierta(b, ahora) ?? 0) - (diasAbierta(a, ahora) ?? 0)
+    (horasAbierta(b, ahora) ?? 0) - (horasAbierta(a, ahora) ?? 0)
   );
 }
 
@@ -291,7 +292,7 @@ export type MetricasSeguimiento = {
   reclamosAbiertos: number;
   vencidas: number;
   respondidas: number;
-  /** Dias promedio que llevan esperando las que siguen sin respuesta. */
+  /** Horas habiles promedio que llevan esperando las que siguen sin respuesta. */
   esperaPromedio: number | null;
 };
 
@@ -314,9 +315,9 @@ export function calcularMetricas(
     sinResponder += 1;
     if (esReclamo(consulta)) reclamosAbiertos += 1;
     if (vencida(consulta, ahora)) vencidas += 1;
-    const dias = diasAbierta(consulta, ahora);
-    if (dias !== null) {
-      diasTotales += dias;
+    const horas = horasAbierta(consulta, ahora);
+    if (horas !== null) {
+      diasTotales += horas;
       conFecha += 1;
     }
   }

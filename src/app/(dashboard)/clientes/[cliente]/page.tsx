@@ -12,9 +12,9 @@ import { fichaDeCliente, getParaTablero, getRespuestas } from "@/lib/db/seguimie
 import { claveCliente } from "@/lib/db/sheets/maestros";
 import { herramientasDePrueba } from "@/lib/herramientas-prueba";
 import { historialSimulado } from "@/lib/seguimiento/historial-simulado";
-import { cierreMasFrecuente, diasAbierta, estadoCliente, explicarEstado, separarCliente } from "@/lib/seguimiento/presentacion";
+import { cierreMasFrecuente, horasAbierta, estadoCliente, explicarEstado, separarCliente } from "@/lib/seguimiento/presentacion";
 import { relacionActual } from "@/lib/seguimiento/relacion";
-import { textoDiasHabiles } from "@/lib/utils/dias-habiles";
+import { textoHorasHabiles } from "@/lib/utils/dias-habiles";
 import { formatearDiaCorto } from "@/lib/utils/dates";
 import { prepararFeriados } from "@/lib/utils/feriados";
 import { normalizarEncabezado } from "@/lib/utils/strings";
@@ -120,10 +120,10 @@ export default async function PerfilClientePage({ params, searchParams }: PagePr
   let relacionHoy: { relacion: Relacion; motivo: string } | null = null;
   if (ultimoPendiente && !simulacion) {
     const vigente = relacionActual(ultimoPendiente, null);
-    const espera = diasAbierta(ultimoPendiente, ahora);
+    const espera = horasAbierta(ultimoPendiente, ahora);
     relacionHoy = {
       relacion: vigente.relacion,
-      motivo: `${vigente.motivo}${espera !== null ? ` · consulta sin respuesta ${espera === 0 ? "desde hoy" : `hace ${textoDiasHabiles(espera)}`}` : ""}`,
+      motivo: `${vigente.motivo}${espera !== null ? ` · consulta sin respuesta hace ${textoHorasHabiles(espera)}` : ""}`,
     };
   } else if (ultimoCierre?.relacion) {
     relacionHoy = {
@@ -144,7 +144,7 @@ export default async function PerfilClientePage({ params, searchParams }: PagePr
     tentativoRespuesta: consulta.tentativoRespuesta,
     relacion: relacionActual(consulta, null),
     formularioReclamo: formularioDe.get(consulta.id) ?? null,
-    diasHabiles: diasAbierta(consulta, ahora),
+    horasHabiles: horasAbierta(consulta, ahora),
     estadoCuenta,
     confianza: consulta.ia?.confianza ?? null,
   }));
@@ -255,8 +255,8 @@ export default async function PerfilClientePage({ params, searchParams }: PagePr
                   <span className="block font-medium text-amber-800">
                     {pendientes.length === 1 ? "1 consulta abierta" : `${pendientes.length} consultas abiertas`}: {ultimoPendiente.hito || "consulta"}
                     {(() => {
-                      const espera = diasAbierta(pendientes[0], ahora);
-                      return espera !== null ? ` · la más antigua sin respuesta ${espera === 0 ? "desde hoy" : `hace ${textoDiasHabiles(espera)}`}` : "";
+                      const espera = horasAbierta(pendientes[0], ahora);
+                      return espera !== null ? ` · la más antigua sin respuesta hace ${textoHorasHabiles(espera)}` : "";
                     })()}
                   </span>
                 ) : null}

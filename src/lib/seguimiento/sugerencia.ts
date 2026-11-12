@@ -1,4 +1,5 @@
 import { avisoEstado, recomendar, RESPUESTAS, type RespuestaTipo } from "@/lib/seguimiento/respuestas";
+import { UMBRALES_DEMORA_HORAS } from "@/lib/utils/dias-habiles";
 import { normalizarEncabezado } from "@/lib/utils/strings";
 import type { Consulta, Relacion } from "@/types/seguimiento";
 
@@ -31,14 +32,14 @@ export const REGLAS_SUGERENCIA = {
   estadoDeudor: "revisar deudora",
   /** Por debajo de esto la clasificacion del bot se revisa a mano (0 a 1). */
   confianzaMinima: 0.6,
-  /** Mas de estos dias habiles sin respuesta: pedir disculpas por la demora. */
-  diasParaDisculpa: 3,
+  /** Mas de estas horas habiles sin respuesta: pedir disculpas por la demora (el umbral rojo). */
+  horasParaDisculpa: UMBRALES_DEMORA_HORAS.rojo,
 } as const;
 
 export type ContextoSugerencia = {
   relacion: Relacion;
-  /** Dias habiles que lleva sin respuesta. */
-  diasHabiles: number | null;
+  /** Horas habiles que lleva sin respuesta. */
+  horasHabiles: number | null;
   /** Situacion / estado de cuenta del cliente ("OK", "REVISAR DEUDORA"...). */
   estadoCuenta: string;
   /** Confianza del bot en su clasificacion (0 a 1), si la informa. */
@@ -112,7 +113,7 @@ export function sugerirRespuesta(consulta: Pick<Consulta, "hito" | "consulta">, 
 
   // Paso 3: avisos que acompanan a cualquier respuesta.
   const flags: string[] = [];
-  if ((contexto.diasHabiles ?? 0) > REGLAS_SUGERENCIA.diasParaDisculpa) flags.push("Agregar disculpa por la demora");
+  if ((contexto.horasHabiles ?? 0) > REGLAS_SUGERENCIA.horasParaDisculpa) flags.push("Agregar disculpa por la demora");
   const aviso = avisoEstado(contexto.estadoCuenta);
 
   // Paso 2: reglas de contexto, en orden; gana la primera.

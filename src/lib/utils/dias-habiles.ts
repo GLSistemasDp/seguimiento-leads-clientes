@@ -1,7 +1,8 @@
 /**
- * Dias habiles en Argentina (lunes a viernes, sin feriados nacionales). Es la
- * UNICA cuenta de demora del CRM: tarjetas, columna "demora" de la tabla,
- * prioridad y ficha del cliente usan `businessDaysSince`.
+ * Dias y horas habiles en Argentina (lunes a viernes, sin feriados
+ * nacionales). La demora de todo el CRM es en HORAS HABILES
+ * (`businessHoursSince`, horario laboral HORARIO_LABORAL): tarjetas, columna
+ * "demora" de la tabla, prioridad y ficha del cliente.
  *
  * Es sincronica y sirve en el servidor y en el navegador: arranca con la
  * lista de respaldo y el servidor le suma los feriados que trae de la API
@@ -93,4 +94,72 @@ export function businessDaysSince(
 export function textoDiasHabiles(dias: number): string {
   if (dias === 0) return "hoy";
   return `${dias} ${dias === 1 ? "día hábil" : "días hábiles"}`;
+}
+
+// --- Horas habiles ------------------------------------------------------------
+
+/**
+ * Horario laboral (hora de Argentina) para contar la demora en horas habiles.
+ * Ajustarlo solo aca.
+ */
+export const HORARIO_LABORAL = { inicio: 8, fin: 17 } as const;
+/** Horas habiles de un dia completo. */
+export const HORAS_POR_DIA = HORARIO_LABORAL.fin - HORARIO_LABORAL.inicio;
+
+/**
+ * Umbrales de demora en horas habiles: verde por debajo de `ambar`, ambar
+ * hasta `rojo`, rojo por encima (y lo que filtra la tarjeta de demora).
+ */
+export const UMBRALES_DEMORA_HORAS = { ambar: 8, rojo: 24 } as const;
+
+/** Argentina no tiene horario de verano: siempre UTC-3. */
+const DESFASE_ARGENTINA = 3;
+const HORA_MS = 3_600_000;
+
+function esHabil(dia: string, feriados: ReadonlySet<string>): boolean {
+  const semana = new Date(`${dia}T12:00:00Z`).getUTCDay();
+  return semana !== 0 && semana !== 6 && !feriados.has(dia);
+}
+
+/**
+ * Horas habiles entre dos momentos: solo el horario laboral de lunes a
+ * viernes, sin feriados. Un mensaje del viernes a las 16 respondido el lunes
+ * a las 9 son 2 h. Con decimales; nunca negativo.
+ */
+export function businessHoursSince(
+  desde: Date,
+  hasta: Date = new Date(),
+  feriados: ReadonlySet<string> = conocidos,
+): number {
+  if (hasta.getTime() <= desde.getTime()) return 0;
+  const fin = diaArgentina(hasta);
+  let dia = diaArgentina(desde);
+  let total = 0;
+  for (;;) {
+    if (esHabil(dia, feriados)) {
+      const [anio, mes, numero] = dia.split("-").map(Number);
+      const apertura = Date.UTC(anio, mes - 1, numero, HORARIO_LABORAL.inicio + DESFASE_ARGENTINA);
+      const cierre = Date.UTC(anio, mes - 1, numero, HORARIO_LABORAL.fin + DESFASE_ARGENTINA);
+      const tramo = Math.min(cierre, hasta.getTime()) - Math.max(apertura, desde.getTime());
+      if (tramo > 0) total += tramo;
+    }
+    if (dia >= fin) break;
+    dia = diaSiguiente(dia);
+  }
+  return total / HORA_MS;
+}
+
+const ENTERO = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 });
+const UN_DECIMAL = new Intl.NumberFormat("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+/** Numero de horas para mostrar: con un decimal por debajo de 10, entero (con miles) desde ahi. */
+export function formatearHoras(horas: number): string {
+  return horas < 10 ? UN_DECIMAL.format(horas) : ENTERO.format(Math.round(horas));
+}
+
+/** "menos de 1 h hábil", "1 h hábil", "26 h hábiles", "1.650 h hábiles". */
+export function textoHorasHabiles(horas: number): string {
+  if (horas < 1) return "menos de 1 h hábil";
+  const redondeadas = Math.round(horas);
+  return `${ENTERO.format(redondeadas)} h ${redondeadas === 1 ? "hábil" : "hábiles"}`;
 }

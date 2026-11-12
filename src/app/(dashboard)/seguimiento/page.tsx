@@ -27,7 +27,7 @@ import {
   agruparPorChat,
   cierreMasFrecuente,
   claveChat,
-  diasAbierta,
+  horasAbierta,
   ORDEN_CONSULTA_POR_DEFECTO,
   type OrdenConsulta,
   esOrdenConsulta,
@@ -212,7 +212,7 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
           catalogo={catalogo}
           consultas={visibles.map((consulta) => ({
             ...consulta,
-            diasAbierta: diasAbierta(consulta, ahora),
+            horasAbierta: horasAbierta(consulta, ahora),
             prioridad: prioridad(consulta, ahora),
             motivosPrioridad: senalesPrioridad(consulta, ahora).map((senal) => senal.etiqueta),
             vencida: vencida(consulta, ahora),

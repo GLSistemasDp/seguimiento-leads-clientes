@@ -24,8 +24,8 @@ import type { Consulta, Relacion } from "@/types/seguimiento";
 type Props = {
   consulta: Pick<Consulta, "hito" | "consulta" | "tentativoRespuesta" | "cliente">;
   relacion: Relacion;
-  /** Dias habiles sin respuesta. */
-  diasHabiles: number | null;
+  /** Horas habiles sin respuesta. */
+  horasHabiles: number | null;
   /** Situacion / estado de cuenta del cliente ("OK", "REVISAR DEUDORA"...). */
   estadoCuenta: string;
   confianza?: number | null;
@@ -87,11 +87,11 @@ function ConTextoCompleto({ texto, children }: { texto: string; children: React.
   );
 }
 
-export function RecomendacionRespuesta({ consulta, relacion, diasHabiles, estadoCuenta, confianza, apagada = false, catalogo }: Props) {
+export function RecomendacionRespuesta({ consulta, relacion, horasHabiles, estadoCuenta, confianza, apagada = false, catalogo }: Props) {
   const { mostrar } = useToast();
   const sugerencia = useMemo(
-    () => sugerirRespuesta(consulta, { relacion, diasHabiles, estadoCuenta, confianza, catalogo }),
-    [consulta, relacion, diasHabiles, estadoCuenta, confianza, catalogo],
+    () => sugerirRespuesta(consulta, { relacion, horasHabiles, estadoCuenta, confianza, catalogo }),
+    [consulta, relacion, horasHabiles, estadoCuenta, confianza, catalogo],
   );
   // Para el detalle: la sugerida (o la de despues de revisar) primero y las alternativas del catalogo.
   const opciones = useMemo(() => {

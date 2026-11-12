@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { FILTRO_TRIAJE, TRIAJES, type DatosTriaje, type Tono, type Triaje } from "@/lib/seguimiento/indicadores";
-import { textoDiasHabiles } from "@/lib/utils/dias-habiles";
+import { formatearHoras, textoHorasHabiles } from "@/lib/utils/dias-habiles";
 
 /**
  * Tarjetas de triaje: un dato por tarjeta, sin graficos. El numero toma el
@@ -18,12 +18,6 @@ export const COLOR_TONO: Record<Tono, string> = {
 
 const PUNTO = { rojo: "bg-red-600", ambar: "bg-amber-500" } as const;
 
-const decimal = new Intl.NumberFormat("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-
-/** "4,2" con un decimal, como se escribe en Argentina. */
-export function formatearDias(dias: number): string {
-  return decimal.format(dias);
-}
 
 /** "+18 vs. semana pasada": rojo si la cola crecio, verde si bajo. */
 function Variacion({ actual, anterior }: { actual: number; anterior: number | null }) {
@@ -119,9 +113,7 @@ export function TriajeSeguimiento({
                 ? "No hay consultas sin responder."
                 : pendientes.masAntigua === null
                   ? "Sin fecha de la más antigua"
-                  : pendientes.masAntigua === 0
-                    ? "La más antigua: de hoy"
-                    : `La más antigua: hace ${textoDiasHabiles(pendientes.masAntigua)}`}
+                  : `La más antigua: hace ${textoHorasHabiles(pendientes.masAntigua)}`}
             </span>
           </>
         }
@@ -132,15 +124,15 @@ export function TriajeSeguimiento({
         activa={activo === "demora"}
         href={enlaces.demora}
         tono={demora.tono}
-        valor={pendientes.cantidad === 0 || demora.promedio === null ? null : formatearDias(demora.promedio)}
-        unidad={demora.promedio !== null && formatearDias(demora.promedio) === "1,0" ? "día hábil" : "días hábiles"}
+        valor={pendientes.cantidad === 0 || demora.promedio === null ? null : formatearHoras(demora.promedio)}
+        unidad="h hábiles"
         contexto={
           pendientes.cantidad === 0 ? (
             "Ninguna consulta esperando respuesta."
           ) : (
             <>
               <span className="tabular-nums">{demora.tramos.map((tramo) => `${tramo.etiqueta}: ${tramo.cantidad}`).join(" · ")}</span>
-              <span className="block text-slate-400">días hábiles sin respuesta, por tramo</span>
+              <span className="block text-slate-400">horas hábiles sin respuesta (lun a vie, 8 a 17 h)</span>
             </>
           )
         }

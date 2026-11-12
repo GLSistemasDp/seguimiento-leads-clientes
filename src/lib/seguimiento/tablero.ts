@@ -1,7 +1,7 @@
 import {
   alertasCliente,
   claveChat,
-  diasAbierta,
+  horasAbierta,
   esReclamo,
   separarCliente,
   vencida,
@@ -56,7 +56,8 @@ export type FilaReclamo = {
   encargado: string;
   consulta: string;
   respondida: boolean;
-  dias: number | null;
+  /** Horas habiles sin respuesta (null si ya se respondio). */
+  horas: number | null;
   observaciones: string;
 };
 
@@ -67,7 +68,7 @@ export type FilaChat = {
   grupoWhatsapp: string;
   pendientes: number;
   total: number;
-  /** Dias que lleva esperando la consulta pendiente mas vieja. */
+  /** Horas habiles que lleva esperando la consulta pendiente mas vieja. */
   esperaMaxima: number | null;
   hitos: string[];
   reclamo: boolean;
@@ -189,7 +190,7 @@ export function calcularTablero(
   let diasTotales = 0;
   let conDias = 0;
   for (const consulta of pendientes) {
-    const dias = diasAbierta(consulta, ahora);
+    const dias = horasAbierta(consulta, ahora);
     if (dias !== null) {
       diasTotales += dias;
       conDias += 1;
@@ -218,7 +219,7 @@ export function calcularTablero(
     chat.total += 1;
     if (consulta.respondida) continue;
     chat.pendientes += 1;
-    const dias = diasAbierta(consulta, ahora);
+    const dias = horasAbierta(consulta, ahora);
     if (dias !== null) chat.esperaMaxima = Math.max(chat.esperaMaxima ?? 0, dias);
     if (consulta.hito && !chat.hitos.includes(consulta.hito)) chat.hitos.push(consulta.hito);
     if (esReclamo(consulta)) chat.reclamo = true;
@@ -251,7 +252,7 @@ export function calcularTablero(
       delicados.set(clave, fila);
     }
     fila.pendientes += 1;
-    const dias = diasAbierta(consulta, ahora);
+    const dias = horasAbierta(consulta, ahora);
     if (dias !== null) fila.esperaMaxima = Math.max(fila.esperaMaxima ?? 0, dias);
   }
 
@@ -295,7 +296,7 @@ export function calcularTablero(
         encargado: consulta.encargado,
         consulta: consulta.consulta,
         respondida: consulta.respondida,
-        dias: consulta.respondida ? null : diasAbierta(consulta, ahora),
+        horas: consulta.respondida ? null : horasAbierta(consulta, ahora),
         observaciones: consulta.observaciones,
       };
     });

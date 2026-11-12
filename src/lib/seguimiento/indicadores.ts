@@ -1,4 +1,5 @@
-import { diasAbierta } from "@/lib/seguimiento/presentacion";
+import { horasAbierta } from "@/lib/seguimiento/presentacion";
+import { UMBRALES_DEMORA_HORAS } from "@/lib/utils/dias-habiles";
 import type { Consulta, Relacion } from "@/types/seguimiento";
 
 /**
@@ -6,27 +7,23 @@ import type { Consulta, Relacion } from "@/types/seguimiento";
  * promedio y clientes a cuidar. Cada una muestra un solo dato y es tambien un
  * filtro de la tabla. Funciones puras sobre las consultas.
  *
- * Toda demora es en DIAS HABILES (diasAbierta -> businessDaysSince): la
+ * Toda demora es en HORAS HABILES (horasAbierta -> businessHoursSince): la
  * tarjeta de pendientes, la de demora, el filtro y la columna de la tabla
  * cuentan lo mismo.
  */
 
 /**
- * Umbrales de demora, en dias habiles. Se usan en la tarjeta de demora
- * (color y filtro) y en el rojo de la de pendientes. Ajustarlos solo aca.
+ * Umbrales de demora, en horas habiles (se definen en lib/utils/dias-habiles):
+ * verde por debajo de `ambar`, ambar hasta `rojo`, rojo por encima. El filtro
+ * de la tarjeta de demora muestra las de mas de `rojo`.
  */
-export const DEMORA = {
-  /** Desde aca la demora deja de estar "al dia" (ambar). */
-  ambar: 1,
-  /** Mas de esto ya es demora para atender (rojo y filtro de la tarjeta). */
-  rojo: 3,
-} as const;
+export const DEMORA = UMBRALES_DEMORA_HORAS;
 
-/** Tramos del desglose de la tarjeta de demora (dias habiles, inclusive). */
+/** Tramos del desglose de la tarjeta de demora (horas habiles; `hasta` inclusive). */
 export const TRAMOS_DEMORA = [
-  { etiqueta: "1–2 d", desde: 1, hasta: 2 },
-  { etiqueta: "3–5 d", desde: 3, hasta: 5 },
-  { etiqueta: "+5 d", desde: 6, hasta: Number.POSITIVE_INFINITY },
+  { etiqueta: `hasta ${DEMORA.ambar} h`, hasta: DEMORA.ambar },
+  { etiqueta: `${DEMORA.ambar}–${DEMORA.rojo} h`, hasta: DEMORA.rojo },
+  { etiqueta: `+${DEMORA.rojo} h`, hasta: Number.POSITIVE_INFINITY },
 ] as const;
 
 /** Contra cuantos dias atras se compara la cola de pendientes. */
@@ -43,7 +40,7 @@ export type Triaje = keyof typeof TRIAJES;
 /** Que muestra la tabla al filtrar por cada tarjeta. */
 export const FILTRO_TRIAJE: Record<Triaje, string> = {
   pendientes: "pendientes, de la más antigua a la más reciente",
-  demora: `pendientes con más de ${DEMORA.rojo} días hábiles`,
+  demora: `pendientes con más de ${DEMORA.rojo} h hábiles`,
   riesgo: "pendientes en riesgo o regular, las rojas primero",
 };
 
@@ -56,7 +53,7 @@ export type Tono = "verde" | "ambar" | "rojo";
 /** Si la consulta entra en la tarjeta (todas son sobre lo pendiente). */
 export function enTriaje(triaje: Triaje, consulta: Consulta, relacion: Relacion, ahora = new Date()): boolean {
   if (consulta.respondida) return false;
-  if (triaje === "demora") return (diasAbierta(consulta, ahora) ?? 0) > DEMORA.rojo;
+  if (triaje === "demora") return (horasAbierta(consulta, ahora) ?? 0) > DEMORA.rojo;
   if (triaje === "riesgo") return relacion !== "BUENA";
   return true;
 }
@@ -64,17 +61,17 @@ export function enTriaje(triaje: Triaje, consulta: Consulta, relacion: Relacion,
 export type DatosTriaje = {
   pendientes: {
     cantidad: number;
-    /** Dias habiles de la pendiente mas vieja. */
+    /** Horas habiles de la pendiente mas vieja. */
     masAntigua: number | null;
     /** Cuantas estaban pendientes hace una semana (null si no se puede saber). */
     semanaPasada: number | null;
     tono: Tono;
   };
   demora: {
-    /** Promedio de dias habiles sin respuesta de las pendientes. */
+    /** Promedio de horas habiles sin respuesta de las pendientes. */
     promedio: number | null;
     tramos: { etiqueta: string; cantidad: number }[];
-    /** Pendientes con mas de DEMORA.rojo dias habiles (lo que muestra el filtro). */
+    /** Pendientes con mas de DEMORA.rojo horas habiles (lo que muestra el filtro). */
     demoradas: number;
     tono: Tono;
   };
@@ -117,12 +114,12 @@ export function calcularTriaje(
     if (consulta.respondida) continue;
     pendientes += 1;
 
-    const espera = diasAbierta(consulta, ahora);
+    const espera = horasAbierta(consulta, ahora);
     if (espera !== null) {
       masAntigua = Math.max(masAntigua ?? 0, espera);
       sumaEspera += espera;
       conEspera += 1;
-      const tramo = TRAMOS_DEMORA.findIndex((item) => espera >= item.desde && espera <= item.hasta);
+      const tramo = TRAMOS_DEMORA.findIndex((item) => espera <= item.hasta);
       if (tramo >= 0) tramos[tramo].cantidad += 1;
       if (espera > DEMORA.rojo) demoradas += 1;
     }

@@ -12,7 +12,8 @@ import { getPanel } from "@/lib/db/reclamos";
 import { getParaTablero } from "@/lib/db/seguimiento";
 import { getAll as getSolicitudes } from "@/lib/db/solicitudes";
 import { CATEGORIAS, evaluarPorReglas } from "@/lib/solicitudes/evaluacion";
-import { COLOR_TONO, formatearDias } from "@/components/seguimiento/TriajeSeguimiento";
+import { COLOR_TONO } from "@/components/seguimiento/TriajeSeguimiento";
+import { formatearHoras, textoHorasHabiles } from "@/lib/utils/dias-habiles";
 import { DEMORA, calcularTriaje } from "@/lib/seguimiento/indicadores";
 import { relacionActual } from "@/lib/seguimiento/relacion";
 import { prepararFeriados } from "@/lib/utils/feriados";
@@ -118,6 +119,20 @@ function Pendiente({
         <Icono nombre="flecha" className="size-4 text-slate-400 transition-transform group-hover:translate-x-1 group-hover:text-blue-700" />
       </p>
     </Link>
+  );
+}
+
+/** Espera de un chat en horas habiles; en rojo pasado el umbral de demora. */
+function Horas({ horas }: { horas: number | null }) {
+  if (horas === null) return <span className="text-slate-400">—</span>;
+  return (
+    <span
+      className={`inline-flex rounded-md px-2 py-0.5 text-xs font-semibold whitespace-nowrap tabular-nums ${
+        horas > DEMORA.rojo ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-700"
+      }`}
+    >
+      {textoHorasHabiles(horas)}
+    </span>
   );
 }
 
@@ -237,9 +252,9 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
           {!seguimiento.error ? <Pendiente
             href="/seguimiento?triaje=demora"
             titulo="Demora promedio"
-            valor={triaje.demora.promedio === null ? "Al día" : `${formatearDias(triaje.demora.promedio)} d`}
+            valor={triaje.demora.promedio === null ? "Al día" : `${formatearHoras(triaje.demora.promedio)} h`}
             colorValor={COLOR_TONO[triaje.demora.tono]}
-            detalle={`${triaje.demora.demoradas} con más de ${DEMORA.rojo} días hábiles`}
+            detalle={`${triaje.demora.demoradas} con más de ${DEMORA.rojo} h hábiles`}
             icono="reloj"
             tono="ambar"
           /> : null}
@@ -394,14 +409,14 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
         <Indicador
           titulo="Con demora"
           valor={String(triajeFiltrado.demora.demoradas)}
-          detalle={`más de ${DEMORA.rojo} días hábiles sin respuesta`}
+          detalle={`más de ${DEMORA.rojo} h hábiles sin respuesta`}
           icono="reloj"
           colorIcono="bg-amber-100 text-amber-700"
         />
         <Indicador
           titulo="Demora promedio"
-          valor={triajeFiltrado.demora.promedio === null ? "—" : `${formatearDias(triajeFiltrado.demora.promedio)} d`}
-          detalle="días hábiles, de las que siguen sin respuesta"
+          valor={triajeFiltrado.demora.promedio === null ? "—" : `${formatearHoras(triajeFiltrado.demora.promedio)} h`}
+          detalle="horas hábiles, de las que siguen sin respuesta"
           icono="calendario"
           colorIcono="bg-slate-100 text-slate-700"
         />
@@ -459,7 +474,7 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
                       <span className="font-normal text-slate-400">/{chat.total}</span>
                     </td>
                     <td className="py-2 text-right">
-                      <Dias dias={chat.esperaMaxima} />
+                      <Horas horas={chat.esperaMaxima} />
                     </td>
                   </tr>
                 ))}
@@ -510,7 +525,7 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
                     </td>
                     <td className="py-2 text-right font-semibold tabular-nums">{fila.pendientes}</td>
                     <td className="py-2 text-right">
-                      <Dias dias={fila.esperaMaxima} />
+                      <Horas horas={fila.esperaMaxima} />
                     </td>
                   </tr>
                 ))}

@@ -21,7 +21,7 @@ function cargar(nombre, cache = new Map()) {
 
 const { sugerirRespuesta, REGLAS_SUGERENCIA } = cargar("@/lib/seguimiento/sugerencia");
 
-const contexto = (extra = {}) => ({ relacion: "BUENA", diasHabiles: 0, estadoCuenta: "OK", ...extra });
+const contexto = (extra = {}) => ({ relacion: "BUENA", horasHabiles: 0, estadoCuenta: "OK", ...extra });
 const sugerir = (hito, consulta = "Hola", extra = {}) => sugerirRespuesta({ hito, consulta }, contexto(extra));
 
 // --- Paso 1: respuesta base segun el hito ------------------------------------------
@@ -108,10 +108,11 @@ test("orden de las reglas: gana la primera que se cumple", () => {
 
 // --- Paso 3: avisos -----------------------------------------------------------------
 
-test("mas de 3 dias habiles: disculpa por la demora, sin cambiar la respuesta", () => {
-  const demorada = sugerir("Pedido nuevo", "OC", { diasHabiles: 4 });
+test("mas de 24 h habiles: disculpa por la demora, sin cambiar la respuesta", () => {
+  assert.equal(REGLAS_SUGERENCIA.horasParaDisculpa, 24);
+  const demorada = sugerir("Pedido nuevo", "OC", { horasHabiles: 25 });
   assert.equal(demorada.atajo, "/PedidoRecibido");
   assert.deepEqual(Array.from(demorada.flags), ["Agregar disculpa por la demora"]);
-  assert.equal(sugerir("Pedido nuevo", "OC", { diasHabiles: 3 }).flags.length, 0, "3 todavia no");
-  assert.ok(sugerir("Pedido nuevo", "OC", { diasHabiles: 9, relacion: "EN_RIESGO" }).flags.includes("Agregar disculpa por la demora"), "tambien al revisar");
+  assert.equal(sugerir("Pedido nuevo", "OC", { horasHabiles: 24 }).flags.length, 0, "24 h todavia no");
+  assert.ok(sugerir("Pedido nuevo", "OC", { horasHabiles: 60, relacion: "EN_RIESGO" }).flags.includes("Agregar disculpa por la demora"), "tambien al revisar");
 });

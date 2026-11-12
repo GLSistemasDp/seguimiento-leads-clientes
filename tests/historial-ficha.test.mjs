@@ -35,18 +35,20 @@ test("el cierre masivo se reconoce por su observacion", () => {
   assert.equal(esCierreMasivo({ tipo: "nota", observacion: "Cierre masivo: x" }), false);
 });
 
-test("tiempo de respuesta en dias habiles, sin cierres masivos", () => {
-  const real = evento({ fechaConsulta: "2026-11-05T13:00:00Z", fecha: "2026-11-10T15:00:00Z" }); // jue -> mar (lunes 9 feriado): 2
+test("tiempo de respuesta en horas habiles, sin cierres masivos", () => {
+  // jue 5 a las 10 -> mar 10 a las 12: jue 7 h + vie 9 h + (lun 9 feriado) + mar 4 h = 20 h.
+  const real = evento({ fechaConsulta: "2026-11-05T13:00:00Z", fecha: "2026-11-10T15:00:00Z" });
+  // mar 10 de 9 a 15 = 6 h.
   const delDia = evento({ fechaConsulta: "2026-11-10T12:00:00Z", fecha: "2026-11-10T18:00:00Z" });
   const masivo = evento({ fechaConsulta: "2026-10-01T12:00:00Z", fecha: "2026-11-10T18:00:00Z", observacion: "Cierre masivo: consulta anterior a noviembre." });
   const sinFecha = evento({ fecha: "2026-11-10T18:00:00Z" });
   const lecturas = leerHistorial([real, delDia, masivo, sinFecha]);
-  assert.equal(lecturas.get(real.id).tiempoRespuesta, 2);
-  assert.equal(lecturas.get(delDia.id).tiempoRespuesta, 0);
+  assert.equal(lecturas.get(real.id).tiempoRespuesta, 20);
+  assert.equal(lecturas.get(delDia.id).tiempoRespuesta, 6);
   assert.equal(lecturas.get(masivo.id).masivo, true);
   assert.equal(lecturas.get(masivo.id).tiempoRespuesta, null, "el masivo no mide respuesta");
   assert.equal(lecturas.get(sinFecha.id).tiempoRespuesta, null);
-  assert.equal(tiempoMedioRespuesta(lecturas.values()), 1, "promedio de 2 y 0; el masivo no cuenta");
+  assert.equal(tiempoMedioRespuesta(lecturas.values()), 13, "promedio de 20 y 6; el masivo no cuenta");
   assert.equal(tiempoMedioRespuesta([]), null);
 });
 
