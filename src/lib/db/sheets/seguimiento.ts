@@ -165,7 +165,9 @@ function ubicarColumnas(encabezados: FilaSheet): Columnas {
     const alias: readonly string[] = ALIAS[campo];
     // Primero coincidencia exacta; despues "empieza con", para encabezados
     // largos como "Tentativo respuesta cliente".
-    let indice = claves.findIndex((texto) => alias.includes(texto));
+    // "Respondido" es el estado de la fila, aunque antes haya otra columna "Respuesta".
+    let indice = campo === "respondida" ? claves.indexOf("respondido") : -1;
+    if (indice === -1) indice = claves.findIndex((texto) => alias.includes(texto));
     if (indice === -1) {
       indice = claves.findIndex((texto) =>
         alias.some((opcion) => opcion.length >= 5 && texto.startsWith(`${opcion} `)),
@@ -339,7 +341,8 @@ async function consultasCompletas(): Promise<Consulta[]> {
     const conCambios = cambio
       ? {
           ...consulta,
-          respondida: cambio.respondida ?? consulta.respondida,
+          // Una fila realizada en la planilla no vuelve a pendientes por un cambio local.
+          respondida: consulta.respondida || cambio.respondida === true,
           observaciones: cambio.observaciones ?? consulta.observaciones,
         }
       : consulta;

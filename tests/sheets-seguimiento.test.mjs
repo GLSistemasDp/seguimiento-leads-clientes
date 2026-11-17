@@ -5,7 +5,7 @@ import vm from "node:vm";
 import ts from "typescript";
 
 // Ejecuta el adaptador real con Sheets y las escrituras sustituidos por fuentes controladas.
-function adaptador(filas, errorLectura, { hojas = {}, entorno = {} } = {}) {
+function adaptador(filas, errorLectura, { hojas = {}, entorno = {}, cambios = {} } = {}) {
   const escrituras = [];
   const lecturas = [];
   const datos = { Seguimiento: filas, MaestroCliente: [["CLIENTE"]], Desplegable: [["CLIENTE"]], ...hojas };
@@ -27,7 +27,7 @@ function adaptador(filas, errorLectura, { hojas = {}, entorno = {} } = {}) {
       escribirRangos: async (rangos) => escrituras.push(...rangos),
       letraColumna: (indice) => String.fromCharCode(65 + indice),
     },
-    "@/lib/db/sheets/cambios-locales": { leerCambios: async () => ({}), guardarCambio: async () => {} },
+    "@/lib/db/sheets/cambios-locales": { leerCambios: async () => cambios, guardarCambio: async () => {} },
   };
   function cargar(nombre) {
     if (mocks[nombre]) return mocks[nombre];
@@ -47,7 +47,7 @@ function adaptador(filas, errorLectura, { hojas = {}, entorno = {} } = {}) {
     return modulo.exports;
   }
   mocks["@/lib/db/sheets/publica"] = { leerHojasPublicas: async () => datos };
-  return { repo: cargar("@/lib/db/sheets/seguimiento"), escrituras, lecturas, env };
+  return { repo: cargar("@/lib/db/sheets/seguimiento"), escrituras, lecturas, env, cargar };
 }
 
 test("integra el encabezado grillo, fechas mixtas y casillas de la planilla modificada", async () => {
@@ -94,6 +94,56 @@ test("conserva los encabezados anteriores y localiza columnas reordenadas al esc
     assert.equal(escrituras[0].rango, "'Seguimiento'!B2");
     assert.equal(escrituras[0].valores[0][0], "TRUE");
   }
+});
+
+test("Respondido determina las realizadas aunque haya otras columnas de respuesta", async () => {
+  for (const encabezados of [
+    ["Respuesta", "Respondida", "Respondido"],
+    ["Respondido", "Respuesta", "Respondida"],
+  ]) {
+    const fila = (consulta, respondido, otraRespuesta) => [
+      "100 - Cliente", consulta,
+      ...encabezados.map((encabezado) => encabezado === "Respondido" ? respondido : otraRespuesta),
+    ];
+    const { repo, cargar, escrituras } = adaptador([
+      ["grillo", "Consulta", ...encabezados],
+      fila("Realizada", " TRUE ", "FALSE"),
+      fila("Pendiente", "FALSE", "TRUE"),
+    ]);
+    const consultas = await repo.getAll();
+    assert.equal(consultas[0].respondida, true);
+    assert.equal(consultas[1].respondida, false);
+    const { filtrarPorVista, contarClientesPendientes } = cargar("@/lib/seguimiento/presentacion");
+    assert.deepEqual(Array.from(filtrarPorVista(consultas, "pendientes"), (consulta) => consulta.consulta), ["Pendiente"]);
+    assert.deepEqual(Array.from(filtrarPorVista(consultas, "respondidas"), (consulta) => consulta.consulta), ["Realizada"]);
+    assert.equal(contarClientesPendientes([consultas[0]]), 0);
+    const planilla = await repo.leerPlanilla();
+    assert.equal(planilla.consultas[0].respondida, true, "la sincronizacion recibe el mismo estado");
+    assert.equal(planilla.consultas[1].respondida, false);
+
+    await repo.update(consultas[1].id, { respondida: true });
+    assert.equal(escrituras[0].rango, `'Seguimiento'!${String.fromCharCode(67 + encabezados.indexOf("Respondido"))}3`);
+    assert.equal(escrituras[0].valores[0][0], "TRUE");
+  }
+});
+
+test("un cambio local no devuelve a pendientes una fila con Respondido=TRUE", async () => {
+  const cambios = {};
+  const { repo, cargar } = adaptador([
+    ["grillo", "Consulta", "Respondido"],
+    ["100 - Cliente", "Realizada en la planilla", "TRUE"],
+    ["100 - Cliente", "Realizada en la app", "FALSE"],
+  ], undefined, { entorno: { SEGUIMIENTO_ACCESO: "publico" }, cambios });
+  const iniciales = await repo.getAll();
+  cambios[iniciales[0].id] = { respondida: false, observaciones: "Nota local" };
+  cambios[iniciales[1].id] = { respondida: true };
+  const consultas = await repo.getAll();
+  assert.equal(consultas[0].respondida, true);
+  assert.equal(consultas[0].observaciones, "Nota local");
+  assert.equal(consultas[1].respondida, true, "se conserva el cierre local cuando la hoja sigue en FALSE");
+  const { filtrarPorVista, contarClientesPendientes } = cargar("@/lib/seguimiento/presentacion");
+  assert.equal(filtrarPorVista(consultas, "pendientes").length, 0);
+  assert.equal(contarClientesPendientes(consultas), 0);
 });
 
 test("un formato incompatible o un fallo de Sheets no se convierten en una lista vacia", async () => {

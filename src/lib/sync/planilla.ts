@@ -16,7 +16,7 @@ import type { ClasificacionMensaje, Consulta } from "@/types/seguimiento";
  *    fila>", asi nunca se duplican aunque la sincronizacion corra mil veces.
  *    Las pendientes se clasifican con IA (con tope por corrida); las que ya
  *    vienen tildadas pasan directo al historial con la fecha de la consulta.
- * 3. Tildes: si en la planilla se tildo RESPUESTA de una consulta que en el
+ * 3. Tildes: si en la planilla se tildo Respondido de una consulta que en el
  *    CRM seguia pendiente, se finaliza (el trigger la archiva en el historial).
  *
  * Nunca escribe en la planilla. Un lock de Postgres evita dos corridas a la vez.
@@ -139,15 +139,12 @@ async function ejecutarSincronizacion(): Promise<ResultadoSync> {
       "SELECT id, respondida FROM consultas_seguimiento WHERE id = ANY($1)",
       [ids],
     );
-    const { rows: enHistorial } = await db.query<{ consulta_id: string; finalizada: boolean }>(
-      `SELECT consulta_id, bool_or(tipo = 'finalizada') AS finalizada FROM chat_interacciones
-        WHERE consulta_id = ANY($1) GROUP BY consulta_id`,
+    const { rows: enHistorial } = await db.query<{ consulta_id: string }>(
+      "SELECT DISTINCT consulta_id FROM chat_interacciones WHERE consulta_id = ANY($1)",
       [ids],
     );
     const cola = new Map(enCola.map((fila) => [fila.id, fila.respondida]));
     const conocidas = new Set([...cola.keys(), ...enHistorial.map((fila) => fila.consulta_id)]);
-    // Las que alguna vez se cerraron: si en el CRM se reabrieron, la tilde de la planilla no las vuelve a cerrar.
-    const yaCerradas = new Set(enHistorial.filter((fila) => fila.finalizada).map((fila) => fila.consulta_id));
 
     const nuevas = consultas.filter((consulta) => !conocidas.has(`${PREFIJO}${consulta.id}`));
     const pendientesNuevas = nuevas.filter((consulta) => !consulta.respondida);
@@ -201,7 +198,8 @@ async function ejecutarSincronizacion(): Promise<ResultadoSync> {
     const yaRespondidas = nuevas.filter((consulta) => consulta.respondida).map((consulta) => `${PREFIJO}${consulta.id}`);
     const tildadas = consultas
       .map((consulta) => ({ consulta, id: `${PREFIJO}${consulta.id}` }))
-      .filter(({ consulta, id }) => consulta.respondida && cola.get(id) === false && !yaCerradas.has(id))
+      // Respondido=TRUE prevalece tambien cuando la consulta se reabrio en el CRM.
+      .filter(({ consulta, id }) => consulta.respondida && cola.get(id) === false)
       .map(({ id }) => id);
     const aFinalizar = [...yaRespondidas, ...tildadas];
     if (aFinalizar.length > 0) {
