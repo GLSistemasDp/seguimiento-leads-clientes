@@ -236,7 +236,7 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {!seguimiento.error ? <Pendiente
             href="/seguimiento?triaje=pendientes"
-            titulo="Pendientes de respuesta"
+            titulo="Clientes con pendientes"
             valor={triaje.pendientes.cantidad === 0 ? "Al día" : triaje.pendientes.cantidad}
             colorValor={COLOR_TONO[triaje.pendientes.tono]}
             detalle={

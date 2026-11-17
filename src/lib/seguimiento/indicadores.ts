@@ -1,3 +1,4 @@
+import { claveCliente } from "@/lib/clientes/ficha";
 import { horasAbierta } from "@/lib/seguimiento/presentacion";
 import { UMBRALES_DEMORA_HORAS } from "@/lib/utils/dias-habiles";
 import type { Consulta, Relacion } from "@/types/seguimiento";
@@ -60,10 +61,11 @@ export function enTriaje(triaje: Triaje, consulta: Consulta, relacion: Relacion,
 
 export type DatosTriaje = {
   pendientes: {
+    /** Clientes con al menos una consulta pendiente, sin duplicar por chat. */
     cantidad: number;
     /** Horas habiles de la pendiente mas vieja. */
     masAntigua: number | null;
-    /** Cuantas estaban pendientes hace una semana (null si no se puede saber). */
+    /** Clientes con pendientes hace una semana (null si no se puede saber). */
     semanaPasada: number | null;
     tono: Tono;
   };
@@ -94,7 +96,7 @@ export function calcularTriaje(
   ahora = new Date(),
   cerradaEn?: (consulta: Consulta) => Date | null,
 ): DatosTriaje {
-  let pendientes = 0;
+  const clientesPendientes = new Set<string>();
   let masAntigua: number | null = null;
   let sumaEspera = 0;
   let conEspera = 0;
@@ -104,15 +106,16 @@ export function calcularTriaje(
   let regular = 0;
   // Cola de hace una semana: lo que ya habia entrado y seguia sin cerrar.
   const corte = ahora.getTime() - DIAS_COMPARACION * DIA_MS;
-  let semanaPasada = 0;
+  const clientesSemanaPasada = new Set<string>();
 
   for (const consulta of consultas) {
+    const cliente = claveCliente(consulta.cliente);
     if (consulta.fecha && consulta.fecha.getTime() <= corte) {
       const cierre = consulta.respondida ? cerradaEn?.(consulta) ?? null : null;
-      if (!consulta.respondida || (cierre && cierre.getTime() > corte)) semanaPasada += 1;
+      if (!consulta.respondida || (cierre && cierre.getTime() > corte)) clientesSemanaPasada.add(cliente);
     }
     if (consulta.respondida) continue;
-    pendientes += 1;
+    clientesPendientes.add(cliente);
 
     const espera = horasAbierta(consulta, ahora);
     if (espera !== null) {
@@ -132,10 +135,10 @@ export function calcularTriaje(
   const promedio = conEspera > 0 ? sumaEspera / conEspera : null;
   return {
     pendientes: {
-      cantidad: pendientes,
+      cantidad: clientesPendientes.size,
       masAntigua,
-      semanaPasada: cerradaEn ? semanaPasada : null,
-      tono: pendientes === 0 ? "verde" : (masAntigua ?? 0) > DEMORA.rojo ? "rojo" : "ambar",
+      semanaPasada: cerradaEn ? clientesSemanaPasada.size : null,
+      tono: clientesPendientes.size === 0 ? "verde" : (masAntigua ?? 0) > DEMORA.rojo ? "rojo" : "ambar",
     },
     demora: {
       promedio,

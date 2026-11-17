@@ -1,5 +1,5 @@
 import "server-only";
-import { estadoCuentaUnificado } from "@/lib/clientes/ficha";
+import { claveCliente, estadoCuentaUnificado } from "@/lib/clientes/ficha";
 import type { FilaSheet } from "@/lib/db/sheets/cliente";
 import type { RespuestaTipo } from "@/lib/seguimiento/respuestas";
 import { normalizarEncabezado } from "@/lib/utils/strings";
@@ -44,11 +44,7 @@ function tabla<A extends Alias>(
   return null;
 }
 
-/** "1877 - BULONERIA BELGRANO" -> "1877"; sin codigo, el nombre normalizado. */
-export function claveCliente(cliente: string): string {
-  const codigo = cliente.match(/^\s*(\d+)\s*(?:[-–—]|$)/);
-  return codigo ? codigo[1] : normalizarEncabezado(cliente);
-}
+export { claveCliente };
 
 /** Valores que la planilla usa como "vacio". */
 function limpio(valor: string): string {

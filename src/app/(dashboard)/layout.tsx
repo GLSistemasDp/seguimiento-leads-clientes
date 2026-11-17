@@ -6,6 +6,7 @@ import { getPanel } from "@/lib/db/reclamos";
 import { backendActivo } from "@/lib/db/repositorio";
 import { getAll as getConsultas, backendSeguimiento } from "@/lib/db/seguimiento";
 import { getAll as getSolicitudes } from "@/lib/db/solicitudes";
+import { contarClientesPendientes } from "@/lib/seguimiento/presentacion";
 import { formatearFecha } from "@/lib/utils/dates";
 
 const MOTORES = {
@@ -26,7 +27,7 @@ const contarPendientes = cache(async (): Promise<Pendientes> => {
   ]);
   return {
     seguimiento:
-      consultas.status === "fulfilled" ? consultas.value.filter((consulta) => !consulta.respondida).length : undefined,
+      consultas.status === "fulfilled" ? contarClientesPendientes(consultas.value) : undefined,
     solicitudes: solicitudes.status === "fulfilled" ? solicitudes.value.length : undefined,
     reclamos:
       reclamos.status === "fulfilled"

@@ -27,6 +27,7 @@ import {
   agruparPorChat,
   cierreMasFrecuente,
   claveChat,
+  contarClientesPendientes,
   horasAbierta,
   ORDEN_CONSULTA_POR_DEFECTO,
   type OrdenConsulta,
@@ -197,7 +198,7 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
           ordenPorDefecto={ordenPorDefecto}
           agrupado={agrupado}
           filtros={{ ...filtros, relacion: filtroRelacion ?? "" }}
-          pendientes={filtradasPendientes.length}
+          pendientes={contarClientesPendientes(filtradasPendientes)}
           opciones={{
             hito: opciones(pendientes, "hito"),
             grupoVendedor: opciones(pendientes, "grupoVendedor"),

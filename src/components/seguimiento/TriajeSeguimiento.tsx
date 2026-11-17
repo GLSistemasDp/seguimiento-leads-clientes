@@ -105,6 +105,7 @@ export function TriajeSeguimiento({
         href={enlaces.pendientes}
         tono={pendientes.tono}
         valor={pendientes.cantidad === 0 ? null : String(pendientes.cantidad)}
+        unidad={pendientes.cantidad === 1 ? "cliente" : "clientes"}
         contexto={
           <>
             <Variacion actual={pendientes.cantidad} anterior={pendientes.semanaPasada} />

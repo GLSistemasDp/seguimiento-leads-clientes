@@ -1,5 +1,5 @@
 import { normalizarEncabezado } from "@/lib/utils/strings";
-import { estadoCuentaUnificado } from "@/lib/clientes/ficha";
+import { claveCliente, estadoCuentaUnificado } from "@/lib/clientes/ficha";
 import { businessHoursSince, HORAS_POR_DIA, textoHorasHabiles, UMBRALES_DEMORA_HORAS } from "@/lib/utils/dias-habiles";
 import type { Consulta, EventoHistorial, Relacion, Resultado } from "@/types/seguimiento";
 
@@ -286,6 +286,11 @@ export function ordenar(
 }
 
 // --- Metricas --------------------------------------------------------------
+
+/** Cada cliente con una o mas consultas sin responder suma un solo pendiente. */
+export function contarClientesPendientes(consultas: readonly Pick<Consulta, "cliente" | "respondida">[]): number {
+  return new Set(consultas.filter((consulta) => !consulta.respondida).map((consulta) => claveCliente(consulta.cliente))).size;
+}
 
 export type MetricasSeguimiento = {
   sinResponder: number;

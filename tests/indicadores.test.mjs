@@ -27,7 +27,7 @@ function cargador() {
 const cargar = cargador();
 const { calcularTriaje, enTriaje, DEMORA } = cargar("@/lib/seguimiento/indicadores");
 const { businessDaysSince, businessHoursSince, textoHorasHabiles, formatearHoras } = cargar("@/lib/utils/dias-habiles");
-const { horasAbierta, diasCorridos } = cargar("@/lib/seguimiento/presentacion");
+const { contarClientesPendientes, horasAbierta, diasCorridos } = cargar("@/lib/seguimiento/presentacion");
 
 // Martes 10/11/2026, 15 h en Argentina. El lunes 9/11 fue feriado (esta en el respaldo).
 const AHORA = new Date("2026-11-10T18:00:00Z");
@@ -85,6 +85,55 @@ test("sin pendientes las tres tarjetas quedan al dia y en verde", () => {
   assert.equal(datos.riesgo.tono, "verde");
 });
 
+test("cada cliente suma un pendiente aunque tenga varias consultas y grupos de WhatsApp", () => {
+  const consultas = [
+    consulta("cerrada", "2026-10-01", { cliente: "1877 - Cliente", respondida: true }),
+    consulta("primera", "2026-11-10", { cliente: "1877 - Cliente", grupoWhatsapp: "Ventas" }),
+    consulta("segunda", "2026-11-06", { cliente: "1877 - Cliente", grupoWhatsapp: "Ventas" }),
+    consulta("otroGrupo", "2026-11-04", { cliente: "1877 - Nombre actualizado", grupoWhatsapp: "Cobranzas" }),
+    consulta("otroCliente", "2026-11-10", { cliente: "2000 - Cliente", grupoWhatsapp: "Ventas" }),
+    consulta("resuelta", "2026-10-01", { cliente: "3000 - Resuelto", respondida: true }),
+  ];
+  const datos = calcularTriaje(consultas, () => "BUENA", AHORA);
+  assert.equal(contarClientesPendientes(consultas), 2);
+  assert.equal(datos.pendientes.cantidad, 2);
+  assert.equal(datos.pendientes.masAntigua, 32, "se conserva la consulta mas antigua del cliente");
+  assert.equal(datos.demora.promedio, (5 + 14 + 32 + 5) / 4, "las demoras siguen midiendo todas las consultas");
+});
+
+test("un cliente deja de contar solo cuando se responde su ultima consulta pendiente", () => {
+  const consultas = [
+    consulta("primera", "2026-11-06", { cliente: "1877 - Cliente", grupoWhatsapp: "Ventas" }),
+    consulta("segunda", "2026-11-10", { cliente: "1877 - Cliente", grupoWhatsapp: "Cobranzas" }),
+  ];
+  const comprobar = (cantidad) => {
+    assert.equal(contarClientesPendientes(consultas), cantidad);
+    assert.equal(calcularTriaje(consultas, () => "BUENA", AHORA).pendientes.cantidad, cantidad);
+  };
+  comprobar(1);
+  consultas[0].respondida = true;
+  comprobar(1);
+  consultas[1].respondida = true;
+  comprobar(0);
+  consultas[0].respondida = false;
+  comprobar(1);
+  assert.equal(contarClientesPendientes([]), 0);
+});
+
+test("el conteo usa el codigo o el nombre normalizado, incluso sin fecha", () => {
+  const consultas = [
+    consulta("a", null, { cliente: "1877" }),
+    consulta("b", null, { cliente: "1877 – Cliente", grupoWhatsapp: "Otro grupo" }),
+    consulta("c", null, { cliente: "1877 — Nombre actualizado" }),
+    consulta("d", null, { cliente: " ÁCME   S.R.L. " }),
+    consulta("e", null, { cliente: "acme srl", grupoWhatsapp: "Cobranzas" }),
+  ];
+  assert.equal(contarClientesPendientes(consultas), 2);
+  const datos = calcularTriaje(consultas, () => "BUENA", AHORA);
+  assert.equal(datos.pendientes.cantidad, 2);
+  assert.equal(datos.pendientes.masAntigua, null);
+});
+
 test("las tres tarjetas usan la misma cuenta y coinciden con su filtro", () => {
   const relacion = { a: "EN_RIESGO", b: "REGULAR", c: "BUENA", d: "REGULAR" };
   const consultas = [
@@ -131,6 +180,22 @@ test("la cola de la semana pasada cuenta lo que ya habia entrado y seguia abiert
   assert.equal(datos.pendientes.cantidad, 2);
   assert.equal(datos.pendientes.semanaPasada, 2);
   assert.equal(calcularTriaje(consultas, () => "BUENA", AHORA).pendientes.semanaPasada, null, "sin historial no se compara");
+});
+
+test("la comparacion semanal tambien cuenta una sola vez a cada cliente", () => {
+  const consultas = [
+    consulta("vieja", "2026-10-20", { cliente: "1877 - Cliente" }),
+    consulta("otraVieja", "2026-10-25", { cliente: "1877 - Nombre actualizado", grupoWhatsapp: "Cobranzas" }),
+    consulta("cerrada", "2026-10-25", { cliente: "1877 - Cliente", respondida: true }),
+    consulta("resuelta", "2026-10-25", { cliente: "2000 - Otro", respondida: true }),
+    consulta("otraResuelta", "2026-10-25", { cliente: "2000 - Otro", respondida: true }),
+    consulta("cerradaAntes", "2026-10-15", { cliente: "3000 - Nuevo", respondida: true }),
+    consulta("nueva", "2026-11-10", { cliente: "3000 - Nuevo" }),
+  ];
+  const cerradaEn = (item) => new Date(item.id === "cerradaAntes" ? "2026-10-20T15:00:00Z" : "2026-11-09T15:00:00Z");
+  const datos = calcularTriaje(consultas, () => "BUENA", AHORA, cerradaEn);
+  assert.equal(datos.pendientes.cantidad, 2);
+  assert.equal(datos.pendientes.semanaPasada, 2, "incluye clientes resueltos despues del corte sin duplicarlos");
 });
 
 test("los colores siguen los umbrales de 8 y 24 h", () => {

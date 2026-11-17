@@ -90,7 +90,7 @@ export function FiltrosSeguimiento({
     <section className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-slate-900">Consultas pendientes <span className="ml-1 rounded-md bg-blue-50 px-2 py-1 text-xs text-blue-800 tabular-nums">{pendientes}</span></p>
+          <p className="text-sm font-semibold text-slate-900">Clientes con pendientes <span className="ml-1 rounded-md bg-blue-50 px-2 py-1 text-xs text-blue-800 tabular-nums">{pendientes}</span></p>
           <p className="mt-1 text-xs text-slate-500">Las realizadas se consultan en el historial de cada cliente.</p>
         </div>
 

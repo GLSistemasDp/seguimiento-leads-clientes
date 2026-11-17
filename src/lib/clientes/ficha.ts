@@ -1,6 +1,12 @@
 import { normalizarEncabezado } from "@/lib/utils/strings";
 import type { EventoHistorial, FichaCliente } from "@/types/seguimiento";
 
+/** "1877 - BULONERIA BELGRANO" -> "1877"; sin codigo, el nombre normalizado. */
+export function claveCliente(cliente: string): string {
+  const codigo = cliente.match(/^\s*(\d+)\s*(?:[-–—]|$)/);
+  return codigo ? codigo[1] : normalizarEncabezado(cliente);
+}
+
 /** Situación, deuda y estado de cuenta son un único dato. Conserva las alertas de ambas fuentes. */
 export function estadoCuentaUnificado(situacion: string, deuda: string): string {
   const estados = new Map<string, string>();
