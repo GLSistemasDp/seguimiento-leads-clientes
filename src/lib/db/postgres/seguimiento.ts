@@ -107,7 +107,10 @@ function aConsulta(fila: FilaConsulta): Consulta {
 // --- Cola -----------------------------------------------------------------------------
 
 export async function getAll(): Promise<Consulta[]> {
-  return (await consultar<FilaConsulta>(`${SELECT_CONSULTA} ORDER BY c.fecha`)).map(aConsulta);
+  // Las versiones antiguas de filas editadas quedan guardadas, fuera de la bandeja.
+  return (await consultar<FilaConsulta>(`${SELECT_CONSULTA}
+    WHERE c.origen <> 'planilla' OR c.vigente_en_planilla
+    ORDER BY c.fecha`)).map(aConsulta);
 }
 
 export async function getById(id: string): Promise<Consulta | null> {

@@ -116,6 +116,8 @@ export interface ConsultaSeguimientoRow {
   respondida_en: Date | null;
   archivada_en: Date | null;
   origen: string;
+  /** Si la fila importada sigue presente en la ultima lectura completa de Sheets. */
+  vigente_en_planilla: boolean;
   mensaje_id: string | null;
   ingresada_en: Date;
   /** Clasificacion del mensaje al entrar (migracion 2). */

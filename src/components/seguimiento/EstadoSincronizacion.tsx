@@ -17,7 +17,15 @@ function hace(fecha: string, ahora: number): string {
 /** Cada cuanto se fija si el bot cargo algo nuevo mientras la pantalla esta abierta. */
 const INTERVALO_MS = 2 * 60_000;
 
-type RespuestaSync = { error?: string; motivo?: string; nuevas?: number; finalizadas?: number; estado?: string };
+type RespuestaSync = {
+  error?: string;
+  motivo?: string;
+  nuevas?: number;
+  finalizadas?: number;
+  retiradas?: number;
+  restauradas?: number;
+  estado?: string;
+};
 
 /**
  * Cuando se sincronizo la planilla de la empresa con la base y un boton para
@@ -50,7 +58,8 @@ export function EstadoSincronizacion({
         });
         const cuerpo = (await respuesta.json().catch(() => ({}))) as RespuestaSync;
         const nuevas = cuerpo.nuevas ?? 0;
-        if (respuesta.ok && cuerpo.estado === "ok" && (nuevas > 0 || (cuerpo.finalizadas ?? 0) > 0)) {
+        const cambios = nuevas + (cuerpo.finalizadas ?? 0) + (cuerpo.retiradas ?? 0) + (cuerpo.restauradas ?? 0);
+        if (respuesta.ok && cuerpo.estado === "ok" && cambios > 0) {
           if (nuevas > 0) mostrar(`Llegaron ${nuevas} consulta${nuevas === 1 ? "" : "s"} nueva${nuevas === 1 ? "" : "s"} del bot.`, "info");
           startTransition(() => router.refresh());
         }

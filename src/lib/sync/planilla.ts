@@ -18,6 +18,8 @@ import type { ClasificacionMensaje, Consulta } from "@/types/seguimiento";
  *    vienen tildadas pasan directo al historial con la fecha de la consulta.
  * 3. Tildes: si en la planilla se tildo Respondido de una consulta que en el
  *    CRM seguia pendiente, se finaliza (el trigger la archiva en el historial).
+ * 4. Vigencia: las filas importadas que ya no estan en la lectura actual
+ *    salen de la bandeja, conservando su contenido e historial sin cerrarlas.
  *
  * Nunca escribe en la planilla. Un lock de Postgres evita dos corridas a la vez.
  */
@@ -34,6 +36,8 @@ export type ResultadoSync = {
   nuevas: number;
   nuevasYaRespondidas: number;
   finalizadas: number;
+  retiradas: number;
+  restauradas: number;
   clasificadasConIa: number;
   filasLeidas: number;
   duracionMs: number;
@@ -51,6 +55,8 @@ const vacio = (inicio: number, estado: ResultadoSync["estado"], motivo?: string)
   nuevas: 0,
   nuevasYaRespondidas: 0,
   finalizadas: 0,
+  retiradas: 0,
+  restauradas: 0,
   clasificadasConIa: 0,
   filasLeidas: 0,
   duracionMs: Date.now() - inicio,
@@ -223,12 +229,28 @@ async function ejecutarSincronizacion(): Promise<ResultadoSync> {
       );
     }
 
+    // La huella cambia si se edita el cliente, el mensaje o la fecha. Solo la
+    // version que sigue en Sheets pertenece a la cola. Nunca se borran filas
+    // ni se registran respuestas para retirar una version anterior.
+    const { rows: vigencias } = await db.query<{ id: string; vigente_en_planilla: boolean }>(
+      `UPDATE consultas_seguimiento
+          SET vigente_en_planilla = (id = ANY($1::text[]))
+        WHERE origen = 'planilla'
+          AND vigente_en_planilla IS DISTINCT FROM (id = ANY($1::text[]))
+        RETURNING id, vigente_en_planilla`,
+      [ids],
+    );
+    const retiradas = vigencias.filter((fila) => !fila.vigente_en_planilla).length;
+    const restauradas = vigencias.length - retiradas;
+
     const resultado: ResultadoSync = {
       estado: "ok",
       clientes: clientes.length,
       nuevas: nuevas.length,
       nuevasYaRespondidas: yaRespondidas.length,
       finalizadas: tildadas.length,
+      retiradas,
+      restauradas,
       clasificadasConIa: clasificadas.filter((item) => item.origen === "ia").length,
       filasLeidas: consultas.length,
       duracionMs: Date.now() - inicio,
@@ -239,8 +261,8 @@ async function ejecutarSincronizacion(): Promise<ResultadoSync> {
        ON CONFLICT (coleccion, clave) DO UPDATE SET datos = EXCLUDED.datos, actualizado = now()`,
       [...MARCA, JSON.stringify(resultado)],
     );
-    if (nuevas.length > 0 || aFinalizar.length > 0) {
-      console.info(`[sync-planilla] ${nuevas.length} nuevas (${yaRespondidas.length} ya respondidas), ${tildadas.length} tildadas en la planilla`);
+    if (nuevas.length > 0 || aFinalizar.length > 0 || vigencias.length > 0) {
+      console.info(`[sync-planilla] ${nuevas.length} nuevas (${yaRespondidas.length} ya respondidas), ${tildadas.length} tildadas, ${retiradas} retiradas y ${restauradas} restauradas`);
     }
     return resultado;
   } finally {

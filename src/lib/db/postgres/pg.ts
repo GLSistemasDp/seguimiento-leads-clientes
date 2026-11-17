@@ -27,6 +27,7 @@ const MIGRACIONES: readonly { version: number; nombre: string; archivo: string }
   { version: 2, nombre: "clasificacion de mensajes y relacion al cerrar", archivo: "db/migraciones/002_relacion_ia.sql" },
   { version: 3, nombre: "ficha unificada y observacion del ultimo cierre", archivo: "db/migraciones/003_ficha_clientes.sql" },
   { version: 4, nombre: "conservar clasificacion comercial de Sheets", archivo: "db/migraciones/004_clasificacion_clientes.sql" },
+  { version: 5, nombre: "vigencia de las consultas importadas de Sheets", archivo: "db/migraciones/005_vigencia_planilla.sql" },
 ];
 
 const global = globalThis as typeof globalThis & { crmPool?: Promise<Pool> };

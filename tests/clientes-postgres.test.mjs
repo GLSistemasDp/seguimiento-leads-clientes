@@ -31,6 +31,7 @@ test("Postgres migra fichas, registra el último cierre y lo conserva al sincron
     await db.query("UPDATE chat_interacciones SET registrado_en = '2026-10-01T12:00:00Z'");
     await db.query(fs.readFileSync("db/migraciones/003_ficha_clientes.sql", "utf8"));
     await db.query(fs.readFileSync("db/migraciones/004_clasificacion_clientes.sql", "utf8"));
+    await db.query(fs.readFileSync("db/migraciones/005_vigencia_planilla.sql", "utf8"));
     const ficha = async () => (await db.query("SELECT * FROM clientes WHERE codigo = '100'")).rows[0];
     assert.equal((await ficha()).situacion, "REVISAR DEUDORA");
     assert.equal((await ficha()).deuda, "REVISAR DEUDORA");
@@ -51,6 +52,7 @@ test("Postgres migra fichas, registra el último cierre y lo conserva al sincron
     const base = { listaPrecio: "D03W", clasificacion: "A", grupoVendedor: "Grupo nuevo", grupoWhatsapp: "Grupo WhatsApp",
       grupoWhatsapp2: "", linkWhatsapp: "", situacion: "OK", deuda: "OK", observacion: "Nota antigua de Sheets",
       actividad: "Industria", categoria: "Fabricante", condicionPago: "30 días", limiteCredito: "Hasta USD 1000" };
+    let consultasFuente = [];
     const mocks = {
       "server-only": {},
       // React.cache memoriza por pedido; fuera de React se usa la funcion tal cual.
@@ -58,8 +60,8 @@ test("Postgres migra fichas, registra el último cierre y lo conserva al sincron
       "next/server": { after: () => {} },
       "@/lib/db/postgres/pg": { postgresConfigurado: () => true, pool: async () => ({ connect: async () => ({
         query: (...args) => db.query(...args), release() {},
-      }) }) },
-      "@/lib/db/sheets/seguimiento": { leerPlanilla: async () => ({ consultas: [], fichas: [
+      }) }), consultar: async (...args) => (await db.query(...args)).rows },
+      "@/lib/db/sheets/seguimiento": { leerPlanilla: async () => ({ consultas: consultasFuente, fichas: [
         { ...base, codigo: "100", nombre: "Cliente actualizado", clasificacion: "N" }, { ...base, codigo: "200", nombre: "Cliente sin cierres" },
       ] }) },
       "@/lib/ia/clasificador": { iaConfigurada: () => false, clasificarVarios: async () => [] },
@@ -85,6 +87,51 @@ test("Postgres migra fichas, registra el último cierre y lo conserva al sincron
     assert.equal(actualizada.observacion, "Resuelto · Factura enviada");
     const sinCierres = (await db.query("SELECT observacion FROM clientes WHERE codigo = '200'")).rows[0];
     assert.equal(sinCierres.observacion, "Nota antigua de Sheets");
+
+    // Una fila editada cambia de huella: la anterior sale de la bandeja sin
+    // marcar una respuesta ni alterar las consultas cargadas por el bot.
+    await db.query(`INSERT INTO consultas_seguimiento (id, cliente_id, cliente_texto, consulta, origen)
+      SELECT x.id, c.id, '100 - Cliente actualizado', x.consulta, x.origen
+        FROM clientes c CROSS JOIN (VALUES
+          ('pl-anterior', 'Version anterior', 'planilla'),
+          ('pl-vigente', 'Version actual', 'planilla'),
+          ('bot-manual', 'Mensaje del bot', 'bot')
+        ) AS x(id, consulta, origen) WHERE c.codigo = '100'`);
+    consultasFuente = [{ id: "vigente", respondida: false }];
+    const eventosAntes = (await db.query("SELECT count(*) AS cantidad FROM chat_interacciones")).rows[0].cantidad;
+    const reconciliada = await modulo.exports.sincronizarPlanilla();
+    assert.equal(reconciliada.retiradas, 1);
+    assert.equal(reconciliada.restauradas, 0);
+    const retirada = (await db.query("SELECT respondida, vigente_en_planilla FROM consultas_seguimiento WHERE id = 'pl-anterior'")).rows[0];
+    assert.deepEqual(retirada, { respondida: false, vigente_en_planilla: false });
+    assert.equal((await db.query("SELECT count(*) AS cantidad FROM chat_interacciones")).rows[0].cantidad, eventosAntes);
+    assert.equal((await ficha()).observacion, "Resuelto · Factura enviada");
+
+    const repo = { exports: {} };
+    const codigoRepo = ts.transpileModule(fs.readFileSync("src/lib/db/postgres/seguimiento.ts", "utf8"), {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    }).outputText;
+    vm.runInNewContext(codigoRepo, {
+      module: repo, exports: repo.exports, require: (nombre) => {
+        if (!(nombre in mocks)) throw new Error(`Dependencia sin controlar: ${nombre}`);
+        return mocks[nombre];
+      }, Date, Map, Set, console,
+    });
+    let idsVisibles = Array.from(await repo.exports.getAll(), (consulta) => consulta.id);
+    assert.ok(idsVisibles.includes("pl-vigente"));
+    assert.ok(idsVisibles.includes("bot-manual"));
+    assert.ok(!idsVisibles.includes("pl-anterior"));
+    assert.equal((await repo.exports.kpis()).pendientes, "3", "la vista SQL tampoco cuenta versiones retiradas");
+
+    assert.equal((await modulo.exports.sincronizarPlanilla()).retiradas, 0, "repetir no modifica las vigencias");
+    consultasFuente = [{ id: "anterior", respondida: false }];
+    const restaurada = await modulo.exports.sincronizarPlanilla();
+    assert.equal(restaurada.retiradas, 1);
+    assert.equal(restaurada.restauradas, 1);
+    idsVisibles = Array.from(await repo.exports.getAll(), (consulta) => consulta.id);
+    assert.ok(idsVisibles.includes("pl-anterior"), "si la fila reaparece vuelve a la bandeja");
+    assert.ok(!idsVisibles.includes("pl-vigente"));
+    assert.ok(idsVisibles.includes("bot-manual"));
 
     await db.query(`UPDATE consultas_seguimiento SET respondida = true, resultado = 'Resuelto', observaciones = '' WHERE id = 'primera'`);
     assert.equal((await ficha()).observacion, "Resuelto");

@@ -41,7 +41,7 @@ test("Respondido=TRUE finaliza filas nuevas, pendientes y reabiertas sin duplica
           historial.add(id);
           cierres.push(id);
         }
-      } else if (!sql.includes("UPDATE chat_interacciones") && !sql.includes("SET respondida_en = fecha") &&
+      } else if (!sql.includes("SET vigente_en_planilla") && !sql.includes("UPDATE chat_interacciones") && !sql.includes("SET respondida_en = fecha") &&
         !sql.includes("INSERT INTO almacen_registros") && !sql.includes("pg_advisory_unlock")) {
         throw new Error(`Consulta sin controlar: ${sql}`);
       }
