@@ -1,4 +1,5 @@
 import { CuentasClave } from "@/components/usuarios/CuentasClave";
+import { getPlantillas } from "@/lib/db/mailing";
 import { getUsuarios } from "@/lib/db/usuarios";
 import { hoyArgentina } from "@/lib/usuarios/analisis";
 
@@ -12,6 +13,6 @@ export const dynamic = "force-dynamic";
  */
 export default async function UsuariosPage({ searchParams }: PageProps<"/usuarios">) {
   const cliente = (await searchParams).cliente;
-  const fichas = await getUsuarios();
-  return <CuentasClave fichas={fichas} hoy={hoyArgentina()} inicial={typeof cliente === "string" ? cliente : undefined} />;
+  const [fichas, plantillas] = await Promise.all([getUsuarios(), getPlantillas()]);
+  return <CuentasClave fichas={fichas} plantillas={plantillas} hoy={hoyArgentina()} inicial={typeof cliente === "string" ? cliente : undefined} />;
 }

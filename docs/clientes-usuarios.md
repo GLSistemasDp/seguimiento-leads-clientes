@@ -6,12 +6,17 @@ La sección `/usuarios` es el CRM de las grandes cuentas. Arriba hay un menú de
 
 **Resumen de la cartera** (antes de elegir un cliente). Totales: saldo, deuda vencida, crédito disponible, pedidos pendientes y cuentas que requieren seguimiento. Debajo, una tabla con cada cliente: estado de cuenta (deuda vencida, crédito excedido, con saldo en plazo o al día), saldo, deuda vencida, crédito disponible, pedidos pendientes, cotizaciones abiertas y último contacto. Primero aparecen los que hay que atender; tiene filtros por alerta y un buscador. Tocar una fila abre el cliente.
 
-**Ficha del cliente.** Encabezado fijo con nombre, actividad, CUIT, ejecutivo y las acciones rápidas: nuevo parte, cargar pedido, registrar pago y nueva cotización. Seis indicadores: estado de cuenta, crédito disponible, pedidos pendientes, facturación acumulada del año, cotizaciones pendientes y días desde el último contacto. Cuatro pestañas:
+**Plantillas de mail.** En la pantalla principal hay una biblioteca con las nueve plantillas de clientes USUARIOS del módulo de Mailing, incluyendo las modificaciones guardadas allí. Se pueden consultar, editar para ese borrador y copiar sin elegir un cliente ni tener un email cargado.
+
+**Ficha del cliente.** Encabezado fijo con nombre, actividad, CUIT, ejecutivo y las acciones rápidas: nuevo parte, cargar pedido, registrar pago, nueva cotización y plantillas de mail. Seis indicadores: estado de cuenta, crédito disponible, pedidos pendientes, facturación acumulada del año, cotizaciones pendientes y días desde el último contacto. Cinco pestañas:
 
 1. **Resumen & Seguimiento.** Alerta de inactividad, bitácora de partes (llamadas, reuniones, visitas, correos, WhatsApp), pedidos pendientes, contactos por área con copia rápida de teléfono y email, y ficha técnica (datos fiscales, condiciones comerciales y direcciones de entrega).
 2. **Estado de cuenta & Facturación.** Facturas con saldo (emisión, vencimiento, días de mora y pendiente), facturación de los últimos 12 meses y cuenta corriente con saldo acumulado.
 3. **Cotizaciones.** Número, fechas, ítems, total y estado. El estado se cambia desde la tabla.
 4. **Historial de productos & Brechas.** Productos habituales ausentes en el último pedido, comparación completa e historial de pedidos con sus artículos y precios.
+5. **Plantillas de mail.** Las mismas nueve plantillas, completadas con la ficha del cliente y el contacto de Compras o Pagos según el tipo de mail. Se puede elegir qué cotización, pedido o factura incluir. La cobranza usa los saldos pendientes después de pagos y notas de crédito. Los datos desconocidos quedan entre corchetes para completar; no se inventan entregas, transportes ni datos bancarios.
+
+Al pie de la carga de pedidos y cotizaciones aparece el mail con los productos, códigos, cantidades, precios, moneda y total. Se actualiza con los artículos cargados. Después de guardar se abre el correo con el número del documento asignado. Desde el detalle de un pedido o cotización del historial también se puede volver a preparar su correo. **Copiar mail para pegar** copia el mensaje con formato para pegarlo en el cuerpo de Outlook o Gmail; **Copiar asunto** copia el asunto por separado. Las ediciones pertenecen al borrador y no modifican la plantilla compartida.
 
 ## Reglas
 
@@ -58,3 +63,5 @@ El contacto, el email y la actividad editados en la ficha se reflejan también e
 ## Verificación
 
 `node --test tests/usuarios-gestion.test.mjs` cubre los escenarios de ejemplo, el resumen de la cartera (estado de cuenta, filtros, orden, totales y buscador), los pedidos pendientes, la cuenta corriente, la imputación de pagos, el rechazo de cotizaciones, los partes, los pedidos, la inactividad y los productos habituales.
+
+`node --test tests/usuarios-plantillas.test.mjs tests/mailing-usuarios.test.mjs` verifica las nueve plantillas, la personalización por cliente y área de contacto, los productos del documento elegido, las monedas, los saldos después de pagos parciales, la factura con su pedido asociado y el escape de datos al copiar el correo como HTML.

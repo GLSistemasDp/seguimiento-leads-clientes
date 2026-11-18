@@ -49,6 +49,7 @@ export function PestanaCotizaciones({
   guardando,
   onNueva,
   onCambiarEstado,
+  onPrepararMail,
 }: {
   ficha: FichaUsuario;
   hoy: string;
@@ -56,6 +57,7 @@ export function PestanaCotizaciones({
   onNueva: () => void;
   /** Para "Rechazada" abre el formulario de motivo; el resto se guarda directo. */
   onCambiarEstado: (cotizacion: CotizacionUsuario, estado: EstadoCotizacion) => void;
+  onPrepararMail: (cotizacion: CotizacionUsuario) => void;
 }) {
   const [abierta, setAbierta] = useState<string | null>(null);
   const cotizaciones = [...ficha.cotizaciones].sort((a, b) => b.fecha.localeCompare(a.fecha) || b.numero.localeCompare(a.numero));
@@ -144,6 +146,10 @@ export function PestanaCotizaciones({
                         <td colSpan={6} className="!pt-0">
                           <div className="rounded-lg bg-slate-50 px-3 py-2">
                             <TablaItems items={cotizacion.items} moneda={ficha.moneda} />
+                            <Button tamano="sm" variante="secundario" className="mt-3" onClick={() => onPrepararMail(cotizacion)}>
+                              <Icono nombre="mail" className="size-3.5" />
+                              Plantilla de mail de esta cotización
+                            </Button>
                           </div>
                         </td>
                       </tr>

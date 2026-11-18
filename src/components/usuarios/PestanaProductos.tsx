@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Icono } from "@/components/ui/Icono";
 import { MESES_HABITUALES, MIN_PEDIDOS_HABITUAL, dineroUsuario, fechaUsuario, productosHabituales, totalItems } from "@/lib/usuarios/analisis";
 import { ESTADOS_PEDIDO_USUARIO } from "@/types/usuarios";
-import type { EstadoPedido, FichaUsuario } from "@/types/usuarios";
+import type { EstadoPedido, FichaUsuario, PedidoUsuario } from "@/types/usuarios";
 
 const TONO_PEDIDO: Record<EstadoPedido, TonoBadge> = { RECIBIDO: "azul", EN_PREPARACION: "ambar", DESPACHADO: "ambar", ENTREGADO: "verde", CANCELADO: "neutro" };
 
@@ -17,7 +17,7 @@ const TONO_PEDIDO: Record<EstadoPedido, TonoBadge> = { RECIBIDO: "azul", EN_PREP
  * ofrecer en el proximo llamado), la comparacion completa y el historial de
  * pedidos con sus articulos y precios de cada momento.
  */
-export function PestanaProductos({ ficha, hoy, onCargarPedido }: { ficha: FichaUsuario; hoy: string; onCargarPedido: () => void }) {
+export function PestanaProductos({ ficha, hoy, onCargarPedido, onPrepararMail }: { ficha: FichaUsuario; hoy: string; onCargarPedido: () => void; onPrepararMail: (pedido: PedidoUsuario) => void }) {
   const [abierto, setAbierto] = useState<string | null>(null);
   const analisis = productosHabituales(ficha, hoy);
   const dinero = (valor: number) => dineroUsuario(valor, ficha.moneda);
@@ -171,6 +171,10 @@ export function PestanaProductos({ ficha, hoy, onCargarPedido }: { ficha: FichaU
                           <td colSpan={6} className="!pt-0">
                             <div className="rounded-lg bg-slate-50 px-3 py-2">
                               <TablaItems items={pedido.items} moneda={ficha.moneda} />
+                              <Button tamano="sm" variante="secundario" className="mt-3" onClick={() => onPrepararMail(pedido)}>
+                                <Icono nombre="mail" className="size-3.5" />
+                                Plantilla de mail de este pedido
+                              </Button>
                             </div>
                           </td>
                         </tr>

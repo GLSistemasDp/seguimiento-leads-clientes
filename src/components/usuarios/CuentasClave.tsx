@@ -11,8 +11,10 @@ import { PestanaCotizaciones } from "@/components/usuarios/PestanaCotizaciones";
 import { PestanaCuenta } from "@/components/usuarios/PestanaCuenta";
 import { PestanaProductos } from "@/components/usuarios/PestanaProductos";
 import { PestanaSeguimiento } from "@/components/usuarios/PestanaSeguimiento";
+import { MailDocumentoUsuario, PlantillasMailUsuario } from "@/components/usuarios/PlantillasMailUsuario";
 import { Button } from "@/components/ui/Button";
 import { Icono } from "@/components/ui/Icono";
+import { Modal } from "@/components/ui/Modal";
 import type { NombreIcono } from "@/components/ui/Icono";
 import { Tabs } from "@/components/ui/Tabs";
 import { useToast } from "@/components/ui/Toast";
@@ -20,9 +22,10 @@ import { dineroUsuario, fechaUsuario, productosHabituales, resumenUsuario } from
 import type { ResumenUsuario } from "@/lib/usuarios/analisis";
 import { ESTADOS_CUENTA } from "@/lib/usuarios/cartera";
 import type { FiltroCartera } from "@/lib/usuarios/cartera";
+import type { ContextoMailUsuario, PlantillasUsuarios } from "@/lib/usuarios/plantillas";
 import type { CambioUsuario, CotizacionUsuario, EstadoCotizacion, FichaUsuario } from "@/types/usuarios";
 
-type Pestana = "seguimiento" | "cuenta" | "cotizaciones" | "productos";
+type Pestana = "seguimiento" | "cuenta" | "cotizaciones" | "productos" | "plantillas";
 /** Formulario abierto (uno a la vez). */
 type Accion = { tipo: "parte" | "pago" | "pedido" | "cotizacion" | "perfil" } | { tipo: "rechazo"; cotizacion: CotizacionUsuario };
 
@@ -52,6 +55,7 @@ function Indicador({ etiqueta, valor, detalle, tono = "neutro", icono }: { etiqu
 /** Encabezado fijo, indicadores y pestanas de la cuenta elegida. */
 function EspacioCuenta({
   ficha,
+  plantillas,
   resumen,
   hoy,
   pestana,
@@ -59,8 +63,10 @@ function EspacioCuenta({
   onPestana,
   onAccion,
   onCambiarEstado,
+  onPrepararMail,
 }: {
   ficha: FichaUsuario;
+  plantillas: PlantillasUsuarios;
   resumen: ResumenUsuario;
   hoy: string;
   pestana: Pestana;
@@ -68,6 +74,7 @@ function EspacioCuenta({
   onPestana: (pestana: Pestana) => void;
   onAccion: (accion: Accion) => void;
   onCambiarEstado: (cotizacion: CotizacionUsuario, estado: EstadoCotizacion) => void;
+  onPrepararMail: (contexto: ContextoMailUsuario) => void;
 }) {
   const dinero = (valor: number) => dineroUsuario(valor, ficha.moneda);
   const ausentes = productosHabituales(ficha, hoy).ausentes.length;
@@ -111,7 +118,11 @@ function EspacioCuenta({
                 {accion.etiqueta}
               </Button>
             ))}
-            {/* Sin email cargado no hay a quien escribirle. */}
+            <Button tamano="sm" variante="secundario" onClick={() => onPestana("plantillas")}>
+              <Icono nombre="mail" className="size-3.5" />
+              Plantillas de mail
+            </Button>
+            {/* El centro de mailing necesita un email; las plantillas se pueden copiar sin él. */}
             {ficha.email ? (
               <Link
                 href={`/mailing?categoria=usuarios&cliente=${encodeURIComponent(ficha.codigo)}`}
@@ -216,6 +227,7 @@ function EspacioCuenta({
                   </span>
                 ),
               },
+              { id: "plantillas", etiqueta: <span className="whitespace-nowrap">Plantillas de mail</span> },
             ]}
           />
         </div>
@@ -226,9 +238,11 @@ function EspacioCuenta({
           ) : pestana === "cuenta" ? (
             <PestanaCuenta ficha={ficha} resumen={resumen} hoy={hoy} onRegistrarPago={() => onAccion({ tipo: "pago" })} />
           ) : pestana === "cotizaciones" ? (
-            <PestanaCotizaciones ficha={ficha} hoy={hoy} guardando={guardando} onNueva={() => onAccion({ tipo: "cotizacion" })} onCambiarEstado={onCambiarEstado} />
+            <PestanaCotizaciones ficha={ficha} hoy={hoy} guardando={guardando} onNueva={() => onAccion({ tipo: "cotizacion" })} onCambiarEstado={onCambiarEstado} onPrepararMail={(cotizacion) => onPrepararMail({ cotizacion })} />
+          ) : pestana === "productos" ? (
+            <PestanaProductos ficha={ficha} hoy={hoy} onCargarPedido={() => onAccion({ tipo: "pedido" })} onPrepararMail={(pedido) => onPrepararMail({ pedido })} />
           ) : (
-            <PestanaProductos ficha={ficha} hoy={hoy} onCargarPedido={() => onAccion({ tipo: "pedido" })} />
+            <PlantillasMailUsuario key={ficha.codigo} ficha={ficha} plantillas={plantillas} hoy={hoy} />
           )}
         </div>
       </div>
@@ -242,7 +256,7 @@ function EspacioCuenta({
  * de la cartera; con uno elegido, su ficha completa. Todas las cuentas llegan
  * cargadas, asi que cambiar de una a otra es inmediato.
  */
-export function CuentasClave({ fichas, hoy, inicial }: { fichas: FichaUsuario[]; hoy: string; inicial?: string }) {
+export function CuentasClave({ fichas, plantillas, hoy, inicial }: { fichas: FichaUsuario[]; plantillas: PlantillasUsuarios; hoy: string; inicial?: string }) {
   const { mostrar } = useToast();
   const [cuentas, setCuentas] = useState(fichas);
   const [seleccion, setSeleccion] = useState<string | null>(() => (inicial && fichas.some((ficha) => ficha.codigo === inicial) ? inicial : null));
@@ -251,6 +265,7 @@ export function CuentasClave({ fichas, hoy, inicial }: { fichas: FichaUsuario[];
   const [pestana, setPestana] = useState<Pestana>("seguimiento");
   const [accion, setAccion] = useState<Accion | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [correo, setCorreo] = useState<{ ficha: FichaUsuario; contexto: ContextoMailUsuario } | null>(null);
 
   const resumenes = useMemo(() => new Map(cuentas.map((ficha) => [ficha.codigo, resumenUsuario(ficha, hoy)])), [cuentas, hoy]);
   // En el menu, en orden alfabetico: es lo que se espera al buscar en una lista larga.
@@ -261,6 +276,7 @@ export function CuentasClave({ fichas, hoy, inicial }: { fichas: FichaUsuario[];
   function seleccionar(codigo: string | null) {
     setSeleccion(codigo);
     setAccion(null);
+    setCorreo(null);
     window.history.replaceState(null, "", codigo ? `/usuarios?cliente=${encodeURIComponent(codigo)}` : "/usuarios");
     window.scrollTo({ top: 0 });
   }
@@ -282,6 +298,13 @@ export function CuentasClave({ fichas, hoy, inicial }: { fichas: FichaUsuario[];
       const actualizada = cuerpo.ficha;
       setCuentas((previas) => previas.map((cuenta) => (cuenta.codigo === actualizada.codigo ? actualizada : cuenta)));
       setAccion(null);
+      if (cambio.accion === "pedido") {
+        const pedido = actualizada.pedidos.find((item) => !ficha.pedidos.some((anterior) => anterior.id === item.id));
+        if (pedido) setCorreo({ ficha: actualizada, contexto: { pedido } });
+      } else if (cambio.accion === "cotizacion") {
+        const cotizacion = actualizada.cotizaciones.find((item) => !ficha.cotizaciones.some((anterior) => anterior.id === item.id));
+        if (cotizacion) setCorreo({ ficha: actualizada, contexto: { cotizacion } });
+      }
       mostrar(EXITO[cambio.accion], "exito");
     } catch {
       mostrar("No se pudo guardar: revisá la conexión y probá de nuevo.", "error");
@@ -320,11 +343,14 @@ export function CuentasClave({ fichas, hoy, inicial }: { fichas: FichaUsuario[];
         facturas son de prueba. Lo que registres acá (partes, pagos, pedidos y cotizaciones) sí se guarda.
       </p>
 
+      {!ficha ? <PlantillasMailUsuario plantillas={plantillas} hoy={hoy} /> : null}
+
       {cuentas.length === 0 ? (
         <p className="rounded-xl border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500">Todavía no hay cuentas clave cargadas.</p>
       ) : ficha ? (
         <EspacioCuenta
           ficha={ficha}
+          plantillas={plantillas}
           resumen={resumenes.get(ficha.codigo)!}
           hoy={hoy}
           pestana={pestana}
@@ -332,6 +358,7 @@ export function CuentasClave({ fichas, hoy, inicial }: { fichas: FichaUsuario[];
           onPestana={setPestana}
           onAccion={setAccion}
           onCambiarEstado={cambiarEstado}
+          onPrepararMail={(contexto) => setCorreo({ ficha, contexto })}
         />
       ) : (
         <ResumenCartera
@@ -350,7 +377,13 @@ export function CuentasClave({ fichas, hoy, inicial }: { fichas: FichaUsuario[];
         : accion.tipo === "parte" ? <FormParte key={formulario.ficha.codigo} {...formulario} />
         : accion.tipo === "pago" ? <FormPago key={formulario.ficha.codigo} {...formulario} />
         : accion.tipo === "perfil" ? <FormPerfil key={formulario.ficha.codigo} {...formulario} />
-        : <FormDocumento key={`${formulario.ficha.codigo}-${accion.tipo}`} tipo={accion.tipo} {...formulario} />
+        : <FormDocumento key={`${formulario.ficha.codigo}-${accion.tipo}`} tipo={accion.tipo} plantillas={plantillas} {...formulario} />
+      ) : null}
+
+      {correo ? (
+        <Modal abierto ancho="xl" titulo={`Mail del ${correo.contexto.pedido ? "pedido" : "presupuesto"} · ${correo.ficha.nombre}`} onCerrar={() => setCorreo(null)} acciones={<Button variante="secundario" onClick={() => setCorreo(null)}>Cerrar</Button>}>
+          <MailDocumentoUsuario ficha={correo.ficha} hoy={hoy} plantilla={plantillas.usuario_respuesta_cotizacion} contexto={correo.contexto} />
+        </Modal>
       ) : null}
     </div>
   );

@@ -3,11 +3,13 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { campoUsuario } from "@/components/usuarios/Compartidos";
+import { MailDocumentoUsuario } from "@/components/usuarios/PlantillasMailUsuario";
 import { Button } from "@/components/ui/Button";
 import { Icono } from "@/components/ui/Icono";
 import { Modal } from "@/components/ui/Modal";
 import { dineroUsuario, facturasConEstado, fechaUsuario, productosHabituales, redondear, sumarDias } from "@/lib/usuarios/analisis";
 import { CATALOGO_USUARIOS, productoDelCatalogo } from "@/lib/usuarios/catalogo";
+import type { PlantillasUsuarios } from "@/lib/usuarios/plantillas";
 import { MEDIOS_PAGO, MOTIVOS_RECHAZO, TIPOS_PARTE } from "@/types/usuarios";
 import type { CambioUsuario, CotizacionUsuario, FichaUsuario, ItemNuevo, MedioPago, MotivoRechazo, TipoParte } from "@/types/usuarios";
 
@@ -323,7 +325,7 @@ function leerRenglones(renglones: Renglon[]): ItemNuevo[] | null {
   return items.every((item) => item.sku && Number.isInteger(item.cantidad) && item.cantidad > 0 && item.precioUnitario > 0) ? items : null;
 }
 
-export function FormDocumento({ tipo, ficha, hoy, guardando, onGuardar, onCerrar }: PropsFormulario & { tipo: "pedido" | "cotizacion" }) {
+export function FormDocumento({ tipo, ficha, plantillas, hoy, guardando, onGuardar, onCerrar }: PropsFormulario & { tipo: "pedido" | "cotizacion"; plantillas: PlantillasUsuarios }) {
   const habituales = productosHabituales(ficha, hoy);
   const [renglones, setRenglones] = useState<Renglon[]>([renglonVacio()]);
   const [ordenCompra, setOrdenCompra] = useState("");
@@ -333,6 +335,10 @@ export function FormDocumento({ tipo, ficha, hoy, guardando, onGuardar, onCerrar
   const total = items ? redondear(items.reduce((suma, item) => suma + item.cantidad * item.precioUnitario, 0)) : 0;
   const esPedido = tipo === "pedido";
   const listo = items !== null && (esPedido || validez >= hoy);
+  const articulos = items?.flatMap((item) => {
+    const producto = productoDelCatalogo(item.sku);
+    return producto ? [{ ...producto, ...item }] : [];
+  });
 
   /** Carga rapida: los productos de siempre, con su cantidad y ultimo precio. */
   const cargarHabituales = (soloAusentes: boolean) =>
@@ -404,6 +410,16 @@ export function FormDocumento({ tipo, ficha, hoy, guardando, onGuardar, onCerrar
           <span className="text-base font-semibold text-slate-900 tabular-nums">Total {dineroUsuario(total, ficha.moneda)}</span>
         </p>
         {esPedido ? <p className="text-xs text-slate-500">El pedido queda como Recibido. La factura se genera en el sistema de gestión, no desde acá.</p> : null}
+        {listo && articulos ? (
+          <MailDocumentoUsuario
+            ficha={ficha}
+            hoy={hoy}
+            plantilla={plantillas.usuario_respuesta_cotizacion}
+            contexto={esPedido
+              ? { pedido: { id: "borrador", numero: "[N° PEDIDO]", fecha: hoy, ordenCompra: ordenCompra.trim(), estado: "RECIBIDO", items: articulos } }
+              : { cotizacion: { id: "borrador", numero: "[N° COTIZACIÓN]", fecha: hoy, validez, estado: enviada ? "ENVIADA" : "BORRADOR", items: articulos, motivoRechazo: null, observacionRechazo: "" } }}
+          />
+        ) : <p className="rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-900">Al completar los productos vas a ver acá la plantilla de mail con sus cantidades y precios. Al guardar también se completa el número del documento.</p>}
       </div>
     </Modal>
   );
