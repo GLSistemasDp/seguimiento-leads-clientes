@@ -112,20 +112,19 @@ export function PlantillasMailUsuario({ plantillas, hoy, ficha }: { plantillas: 
   return (
     <PanelUsuario titulo="Plantillas de mail" detalle={ficha ? `Se completan con los datos de ${ficha.nombre}. Elegí la plantilla que necesitás.` : "Elegí una plantilla para verla y copiarla. Al abrir un cliente se completa con los datos de su ficha."}>
       <div className="flex flex-col gap-4 p-4">
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          {(Object.keys(TIPOS_MAIL_USUARIOS) as TipoMailUsuario[]).map((opcion) => (
-            <button
-              key={opcion}
-              type="button"
-              aria-pressed={tipo === opcion}
-              onClick={() => setTipo(opcion)}
-              className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${tipo === opcion ? "border-blue-300 bg-blue-50 text-blue-900" : "border-slate-200 text-slate-700 hover:border-blue-200 hover:bg-slate-50"}`}
-            >
-              <Icono nombre="mail" className="size-3.5 shrink-0" />
-              {TIPOS_MAIL_USUARIOS[opcion].etiqueta}
-            </button>
-          ))}
-        </div>
+        <label className="flex w-full flex-col gap-1 text-sm font-medium text-slate-700 sm:max-w-md">
+          Plantilla de mail
+          <select
+            value={tipo ?? ""}
+            onChange={(evento) => setTipo((evento.target.value as TipoMailUsuario) || null)}
+            className={campoUsuario}
+          >
+            <option value="">Elegir una plantilla…</option>
+            {(Object.keys(TIPOS_MAIL_USUARIOS) as TipoMailUsuario[]).map((opcion) => (
+              <option key={opcion} value={opcion}>{TIPOS_MAIL_USUARIOS[opcion].etiqueta}</option>
+            ))}
+          </select>
+        </label>
         {tipo && borrador ? (
           <div className="flex flex-col gap-4 border-t border-slate-100 pt-4">
             <div className="flex items-center justify-between gap-3">
