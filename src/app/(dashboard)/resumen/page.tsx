@@ -10,6 +10,8 @@ import type { NombreIcono } from "@/components/ui/Icono";
 import { delDia, porConsulta } from "@/lib/db/historial";
 import { getPanel } from "@/lib/db/reclamos";
 import { getParaTablero } from "@/lib/db/seguimiento";
+import { getUsuarios } from "@/lib/db/usuarios";
+import { hoyArgentina, resumenUsuario } from "@/lib/usuarios/analisis";
 import { getAll as getSolicitudes } from "@/lib/db/solicitudes";
 import { CATEGORIAS, evaluarPorReglas } from "@/lib/solicitudes/evaluacion";
 import { COLOR_TONO } from "@/components/seguimiento/TriajeSeguimiento";
@@ -162,7 +164,7 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
   const vendedor = texto(params.vendedor);
 
   const ahora = new Date();
-  const [seguimiento, reclamos, solicitudes, historial, proximo, base, cierres] = await Promise.all([
+  const [seguimiento, reclamos, solicitudes, historial, proximo, base, cierres, , cuentasClave] = await Promise.all([
     leerDatos("seguimiento", getParaTablero),
     leerDatos("reclamos", () => getPanel(ahora)),
     leerDatos("solicitudes", () => getSolicitudes({ estado: "PENDIENTE" })),
@@ -172,12 +174,21 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
     // Para la relacion de las ya respondidas; sin esto se usa la que sugiere el mensaje.
     porConsulta().catch((): Awaited<ReturnType<typeof porConsulta>> => ({})),
     prepararFeriados(ahora).catch(() => undefined),
+    // Sin las cuentas clave el resumen anda igual, solo sin ese aviso.
+    getUsuarios().catch(() => []),
   ]);
   const todas = seguimiento.datos ?? [];
   const panel = reclamos.datos ?? { reclamos: [], error: null };
   const pendientesAlta = solicitudes.datos ?? [];
   const eventosHoy = historial.datos ?? [];
   const resumenDisponible = !seguimiento.error && !reclamos.error && !historial.error;
+
+  // Cuentas clave que pasaron su umbral de dias sin partes ni pedidos.
+  const hoyComercial = hoyArgentina(ahora);
+  const sinSeguimiento = cuentasClave
+    .map((cuenta) => ({ cuenta, resumen: resumenUsuario(cuenta, hoyComercial) }))
+    .filter(({ resumen }) => resumen.requiereSeguimiento)
+    .sort((a, b) => (b.resumen.contacto.dias ?? Infinity) - (a.resumen.contacto.dias ?? Infinity));
 
   // --- Para resolver hoy (no dependen de los filtros) ---
   const reclamosGerencia = panel.reclamos.filter((reclamo) => reclamo.estado === "SIN_DEFINIR");
@@ -284,6 +295,24 @@ export default async function ResumenPage({ searchParams }: PageProps<"/resumen"
             tono="verde"
           /> : null}
         </div>
+        {sinSeguimiento.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <span className="flex items-center gap-2 font-semibold">
+              <Icono nombre="alerta" className="size-4" />
+              {sinSeguimiento.length === 1 ? "1 cuenta clave requiere seguimiento" : `${sinSeguimiento.length} cuentas clave requieren seguimiento`}
+            </span>
+            {sinSeguimiento.slice(0, MAX_LISTA).map(({ cuenta, resumen: estado }) => (
+              <Link
+                key={cuenta.codigo}
+                href={`/usuarios?cliente=${encodeURIComponent(cuenta.codigo)}`}
+                className="rounded-md bg-white px-2 py-1 text-xs font-medium text-amber-900 ring-1 ring-amber-200 ring-inset hover:bg-amber-100"
+              >
+                {cuenta.fantasia || cuenta.nombre} ·{" "}
+                {estado.contacto.dias === null ? "sin contacto" : `${estado.contacto.dias} días sin contacto`} (umbral {cuenta.umbralSeguimientoDias})
+              </Link>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       <div className="grid gap-5 xl:grid-cols-3">

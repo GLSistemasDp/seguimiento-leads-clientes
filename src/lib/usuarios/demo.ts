@@ -1,76 +1,221 @@
-import { clientesDemo } from "@/lib/mailing/clientes-demo";
-import { vendedorDe } from "@/lib/mailing/contactos";
-import { hoyArgentina, redondear, totalProductos } from "@/lib/usuarios/analisis";
-import type { FichaUsuario, ProductoUsuario } from "@/types/usuarios";
+import { CATALOGO_USUARIOS } from "@/lib/usuarios/catalogo";
+import { hoyArgentina, redondear, sumarDias, totalItems } from "@/lib/usuarios/analisis";
+import type {
+  ContactoUsuario,
+  CotizacionUsuario,
+  EstadoPedido,
+  FichaUsuario,
+  ItemUsuario,
+  MedioPago,
+  ParteUsuario,
+  TipoParte,
+} from "@/types/usuarios";
 
-/** Operaciones ficticias para revisar la gestión interna antes de conectar el ERP/BD. */
-const PRODUCTOS = [
-  ["172226X", "Guante americano de vaqueta con refuerzo antiimpacto", "DPS", 11.6],
-  ["DPS11255X", "Guante de nitrilo con protección TPR", "DPS", 9.1],
-  ["122225X", "Guante de vaqueta puño corto", "DPS", 8.4],
-  ["DPS11855X", "Guante de nitrilo medio baño", "DPS", 7.3],
-  ["222025X", "Guante Lincoln reforzado", "DP", 6.2],
-  ["322125", "Guante de descarne largo", "DP", 5.1],
-  ["221024X", "Guante de protección mecánica", "DP", 4.7],
-  ["DPT300075605", "Eslinga de 3 toneladas, 3 metros", "NUBUS", 26.3],
-  ["DPT200060605", "Eslinga de 2 toneladas, 3 metros", "NUBUS", 18.1],
-  ["DPT100030605", "Eslinga de 1 tonelada, 3 metros", "NUBUS", 13.2],
-] as const;
+/**
+ * Cuentas clave (clientes USUARIOS) con datos comerciales de EJEMPLO, hasta
+ * conectar el sistema de gestion. Los nombres son los clientes reales; los
+ * importes, pedidos, facturas y partes son inventados para probar el CRM, y
+ * cada cuenta tiene un escenario distinto. Las fechas se calculan desde hoy:
+ * el escenario se ve igual cualquier dia que se abra.
+ *
+ * CUIT, contactos, direcciones y ejecutivo quedan vacios a proposito: no se
+ * inventan datos de empresas reales (y sin email, el mailing no les escribe).
+ */
 
-function productos(semilla: number): ProductoUsuario[] {
-  return [0, 1, 2].map((posicion) => {
-    const [codigo, descripcion, linea, precioUnitario] = PRODUCTOS[(semilla + posicion * 3) % PRODUCTOS.length];
-    return { codigo, descripcion, linea, precioUnitario, cantidad: (4 + (semilla * 7 + posicion * 13) % 32) * 24 };
-  });
-}
-const fecha = (anio: number, mes: number, dia: number) => `${anio}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
-const sumarDias = (dia: string, cantidad: number) => new Date(Date.parse(`${dia}T12:00:00Z`) + cantidad * 86_400_000).toISOString().slice(0, 10);
+type Escenario = "DEUDA" | "AL_DIA" | "BRECHA" | "SIN_CONTACTO" | "RECHAZO";
+
+const CUENTAS: readonly {
+  codigo: string;
+  nombre: string;
+  actividad: string;
+  escenario: Escenario;
+  limiteCredito: number;
+  /** Posiciones del catalogo que la cuenta compra siempre. */
+  canasta: number[];
+  /** Pedidos todavia sin entregar: [dias atras, estado]. */
+  enCurso: [number, EstadoPedido][];
+  /** Cotizacion abierta extra (en negociacion), para cuentas con oportunidades. */
+  negociacion?: number[];
+}[] = [
+  { codigo: "TOYOTA", nombre: "Toyota", actividad: "Industria automotriz", escenario: "DEUDA", limiteCredito: 90_000, canasta: [0, 1, 7, 8], enCurso: [[2, "DESPACHADO"]] },
+  { codigo: "HONDA", nombre: "Honda", actividad: "Industria automotriz", escenario: "AL_DIA", limiteCredito: 120_000, canasta: [1, 3, 5, 9], enCurso: [[1, "RECIBIDO"], [3, "EN_PREPARACION"]] },
+  { codigo: "ARCOR", nombre: "Arcor", actividad: "Industria alimenticia", escenario: "BRECHA", limiteCredito: 60_000, canasta: [0, 1, 7, 8], enCurso: [] },
+  { codigo: "ROWING", nombre: "Rowing", actividad: "", escenario: "SIN_CONTACTO", limiteCredito: 75_000, canasta: [1, 3, 5, 9], enCurso: [] },
+  { codigo: "TERNIUM", nombre: "Ternium", actividad: "Siderurgia", escenario: "RECHAZO", limiteCredito: 150_000, canasta: [0, 2, 3, 8], enCurso: [[4, "EN_PREPARACION"]] },
+  { codigo: "TECHINT", nombre: "Techint", actividad: "Ingeniería y construcción", escenario: "AL_DIA", limiteCredito: 140_000, canasta: [4, 5, 6, 9], enCurso: [[5, "DESPACHADO"]], negociacion: [7, 8, 9] },
+  { codigo: "EMOVA", nombre: "Emova", actividad: "Transporte (subterráneos)", escenario: "AL_DIA", limiteCredito: 50_000, canasta: [2, 4, 6, 9], enCurso: [] },
+];
+
+const AUTOR_DEMO = "Ejemplo · Equipo comercial";
+/** Pedidos mensuales hacia atras. */
+const PEDIDOS = 9;
+const PLAZO_DIAS = 30;
+
+/** Los partes de cada escenario: [dias atras, tipo, resumen, proximo contacto en dias (o null)]. */
+const PARTES: Record<Escenario, readonly [number, TipoParte, string, number | null][]> = {
+  DEUDA: [
+    [4, "LLAMADA", "Pagos informó que la factura vencida está en circuito de aprobación. Compromiso de pago para la próxima semana; el saldo de la anterior se cancela con e-cheq.", 3],
+    [15, "WHATSAPP", "Recordatorio del vencimiento enviado al responsable de Pagos.", null],
+    [33, "VISITA", "Visita a planta: prevén reponer guantes y eslingas el mes próximo.", null],
+  ],
+  AL_DIA: [
+    [5, "LLAMADA", "Contacto de rutina con Compras. Sin novedades; reponen en la primera semana del mes.", 25],
+    [34, "CORREO", "Se envió el estado de cuenta: todo cancelado en término.", null],
+  ],
+  BRECHA: [
+    [3, "LLAMADA", "Compras confirmó la recepción del último pedido. No mencionó las eslingas que suele reponer todos los meses: consultar si cambiaron de proveedor o si tienen stock.", 4],
+    [19, "CORREO", "Se envió la lista de precios vigente y el plan de entregas del trimestre.", null],
+    [41, "VISITA", "Visita con Seguridad e Higiene. Relevamos consumo de guantes por turno; piden mantener stock de seguridad.", null],
+  ],
+  SIN_CONTACTO: [
+    [20, "LLAMADA", "Compras pidió revisar el plazo de entrega de la cotización enviada. Quedaron en responder al cerrar el presupuesto mensual.", -6],
+    [48, "REUNION", "Reunión por videollamada con Compras y Almacenes para ordenar el calendario de reposición.", null],
+  ],
+  RECHAZO: [
+    [2, "REUNION", "Reunión con Compras por la cotización rechazada: la competencia ofreció 8% menos en guantes de vaqueta. Evaluar una mejora por volumen anual.", 5],
+    [12, "LLAMADA", "Seguimiento de la cotización de eslingas: está en negociación, esperan la aprobación de Gerencia.", null],
+    [37, "CORREO", "Envío de fichas técnicas y certificados solicitados por Seguridad e Higiene.", null],
+  ],
+};
+
+const numero = (valor: number, largo = 3) => String(valor).padStart(largo, "0");
 
 export function clientesUsuariosDemo(hoy = hoyArgentina()): FichaUsuario[] {
-  const anioActual = Number(hoy.slice(0, 4));
-  const mesActual = Number(hoy.slice(5, 7));
-  return clientesDemo(Date.parse(`${hoy}T15:00:00Z`)).filter((d) => d.tipoCliente === "USUARIO").map((d, indice) => {
-    const ficha: FichaUsuario = {
-      codigo: d.codigo, nombre: d.nombre, provincia: d.provincia, cuit: "",
-      actividad: d.rubro, vendedor: vendedorDe(d.grupoVendedor).nombre, contacto: d.contacto,
-      email: d.email, telefono: "", moneda: "USD", limiteCredito: 240_000 + indice * 30_000,
-      condicionPago: "Cuenta corriente · 30 días fecha de factura",
-      pedidos: [], cotizaciones: [], facturas: [], observaciones: [], cobranzas: {}, eventos: [], origen: "demo",
-    };
-    for (const anio of [anioActual - 1, anioActual]) {
-      for (let mes = 1; mes <= 12; mes += 1) {
-        const dia = fecha(anio, mes, 3);
-        if (dia > hoy) continue;
-        const id = `${anio}-${String(mes).padStart(2, "0")}`;
-        const articulos = productos(mes + indice * 3 + (anio === anioActual ? 4 : 0));
-        const pedido = {
-          id, numero: `PED-${d.codigo}-${id}`, fecha: dia, ordenCompra: `OC-${anio}-${mes * 113 + indice}`,
-          estado: "ENTREGADO" as const, entregaEstimada: sumarDias(dia, 4), productos: articulos,
-        };
-        ficha.pedidos.push(pedido);
-        const importe = totalProductos(articulos);
-        const antiguedad = (anioActual - anio) * 12 + mesActual - mes;
-        const saldo = antiguedad < 3 && (indice + mes) % 3 !== 0 ? redondear(importe * (antiguedad === 2 ? 0.5 : 1)) : 0;
-        ficha.facturas.push({ id: `fac-${id}`, numero: `A-0003-${anio}${String(mes).padStart(2, "0")}${indice}0`, fecha: dia, vencimiento: sumarDias(dia, 30), pedidoId: id, importe, saldo });
-      }
-    }
-    ficha.pedidos.push({ id: "pedido-en-curso", numero: `PED-${d.codigo}-EN-CURSO`, fecha: fecha(anioActual, mesActual, 1), ordenCompra: `OC-${anioActual}-NUEVA-${indice}`, estado: indice % 2 ? "DESPACHADO" : "EN_PREPARACION", entregaEstimada: sumarDias(hoy, 5), productos: productos(indice + 6) });
-    ficha.cotizaciones = [
-      { id: "cot-ganada", numero: `COT-${d.codigo}-101`, fecha: sumarDias(hoy, -65), validez: sumarDias(hoy, -35), estado: "GANADA", motivoNoGanada: "", productos: productos(indice + 1) },
-      { id: "cot-no-ganada", numero: `COT-${d.codigo}-102`, fecha: sumarDias(hoy, -40), validez: sumarDias(hoy, -10), estado: "NO_GANADA", motivoNoGanada: "El cliente indicó que eligió otra propuesta por precio y plazo de entrega.", productos: productos(indice + 2) },
-      { id: "cot-negociacion", numero: `COT-${d.codigo}-103`, fecha: sumarDias(hoy, -10), validez: sumarDias(hoy, 20), estado: "EN_NEGOCIACION", motivoNoGanada: "", productos: productos(indice + 3) },
-      { id: "cot-pendiente", numero: `COT-${d.codigo}-104`, fecha: sumarDias(hoy, -3), validez: sumarDias(hoy, 27), estado: "PENDIENTE", motivoNoGanada: "", productos: productos(indice + 4) },
-      { id: "cot-vencida", numero: `COT-${d.codigo}-105`, fecha: sumarDias(hoy, -50), validez: sumarDias(hoy, -20), estado: "VENCIDA", motivoNoGanada: "", productos: productos(indice + 5) },
+  const dia = (atras: number) => sumarDias(hoy, -atras);
+  return CUENTAS.map((cuenta, indice) => {
+    const { codigo, escenario } = cuenta;
+    // Contactos por area, a completar con los datos reales.
+    const contactos: ContactoUsuario[] = [
+      { id: "compras", nombre: "", rol: "COMPRAS", email: "", telefono: "" },
+      { id: "pagos", nombre: "", rol: "PAGOS", email: "", telefono: "" },
+      { id: "gerencia", nombre: "", rol: "GERENCIA", email: "", telefono: "" },
     ];
-    ficha.observaciones = [{
-      id: `observacion-demo-${d.codigo}`, fecha: `${sumarDias(hoy, -4)}T15:00:00Z`, autor: "Ejemplo · Equipo comercial",
-      relacion: indice === 2 ? "EN_RIESGO" : indice === 1 ? "REGULAR" : "BUENA",
-      texto: indice === 2 ? "Compras manifestó disconformidad con los plazos de entrega. Retomar contacto y acordar una alternativa antes de la próxima compra." : indice === 1 ? "El contacto está comparando proveedores. Solicita revisar las condiciones de la próxima cotización." : "Contacto fluido con Compras y buena respuesta a las propuestas. Relevar nuevas necesidades del área de Seguridad e Higiene.",
-      proximoContacto: sumarDias(hoy, indice === 2 ? -1 : indice),
-      proximaAccion: indice === 2 ? "Llamar a Compras y confirmar el plan de entregas" : "Consultar necesidades de reposición y seguir la cotización abierta",
-    }];
-    const vencida = [...ficha.facturas].reverse().find((f) => f.saldo > 0 && f.vencimiento < hoy);
-    if (vencida) ficha.cobranzas[vencida.id] = [{ id: `cobranza-demo-${d.codigo}`, fecha: `${sumarDias(hoy, -2)}T15:00:00Z`, autor: "Ejemplo · Administración", comentario: "Administración del cliente informó que el comprobante está en su circuito de aprobación.", fechaPrometida: sumarDias(hoy, indice === 2 ? -1 : 3) }];
+    const ficha: FichaUsuario = {
+      codigo,
+      nombre: cuenta.nombre,
+      fantasia: "",
+      cuit: "",
+      condicionIva: "",
+      provincia: "",
+      actividad: cuenta.actividad,
+      vendedor: "",
+      contacto: "",
+      email: "",
+      telefono: "",
+      umbralSeguimientoDias: 15,
+      moneda: "USD",
+      limiteCredito: cuenta.limiteCredito,
+      plazoPagoDias: PLAZO_DIAS,
+      listaPrecios: "Lista USUARIOS · USD",
+      direccionesEntrega: [],
+      contactos,
+      partes: [], pedidos: [], facturas: [], notasCredito: [], pagos: [], cotizaciones: [],
+      origen: "demo",
+    };
+
+    const items = (posiciones: readonly number[], vuelta: number): ItemUsuario[] =>
+      posiciones.map((posicion, orden) => ({
+        ...CATALOGO_USUARIOS[posicion],
+        cantidad: (6 + ((indice * 5 + orden * 7 + vuelta * 3) % 9)) * 24,
+      }));
+
+    // Pedidos mensuales entregados y facturados. El mas reciente: hace 26 dias
+    // en la cuenta sin contacto, hace 6 en el resto.
+    const ultimoPedidoHace = escenario === "SIN_CONTACTO" ? 26 : 6;
+    for (let atras = PEDIDOS - 1; atras >= 0; atras -= 1) {
+      const fecha = dia(ultimoPedidoHace + atras * 30);
+      // Cada tres pedidos suma un producto ocasional (no llega a ser habitual).
+      const ocasional = atras % 3 === 2 ? [(cuenta.canasta[0] + 5) % CATALOGO_USUARIOS.length] : [];
+      // BRECHA: el ultimo pedido viene sin dos de los productos de siempre.
+      const canasta = escenario === "BRECHA" && atras === 0 ? cuenta.canasta.slice(0, 2) : cuenta.canasta;
+      const pedido = {
+        id: `ped-${atras}`,
+        numero: `PED-${codigo}-${numero(PEDIDOS - atras)}`,
+        fecha,
+        ordenCompra: `OC-${4200 + indice * 310 + (PEDIDOS - atras)}`,
+        estado: "ENTREGADO" as const,
+        items: items([...canasta, ...ocasional], atras),
+      };
+      ficha.pedidos.push(pedido);
+
+      const emitida = sumarDias(fecha, 2);
+      const vencimiento = sumarDias(emitida, PLAZO_DIAS);
+      const total = totalItems(pedido.items);
+      const factura = { id: `fac-${atras}`, numero: `A-0003-${codigo}-${numero(PEDIDOS - atras)}`, fecha: emitida, vencimiento, pedidoId: pedido.id, total };
+      ficha.facturas.push(factura);
+      if (vencimiento >= hoy) continue; // todavia no vence: queda pendiente
+
+      // DEUDA: la penultima queda impaga y la anterior con la mitad pagada.
+      if (escenario === "DEUDA" && atras === 1) continue;
+      const parcial = escenario === "DEUDA" && atras === 2;
+      // Una nota de credito de ejemplo, por diferencia de precio.
+      const acreditado = (escenario === "RECHAZO" || codigo === "EMOVA") && atras === 3 ? redondear(total * 0.05) : 0;
+      if (acreditado) {
+        ficha.notasCredito.push({ id: `nc-${atras}`, numero: `NC-0003-${codigo}-${numero(PEDIDOS - atras)}`, fecha: sumarDias(emitida, 9), facturaId: factura.id, importe: acreditado, motivo: "Diferencia de precio" });
+      }
+      const importe = redondear((total - acreditado) * (parcial ? 0.5 : 1));
+      const medio: MedioPago = atras % 4 === 0 ? "CHEQUE" : atras % 4 === 3 ? "RETENCIONES" : "TRANSFERENCIA";
+      ficha.pagos.push({
+        id: `pago-${atras}`,
+        numero: `REC-${codigo}-${numero(PEDIDOS - atras)}`,
+        fecha: sumarDias(vencimiento, parcial ? 6 : -3),
+        importe,
+        medio,
+        referencia: medio === "CHEQUE" ? `E-cheq ${88_000 + indice * 97 + atras}` : medio === "RETENCIONES" ? "Certificado de retención IIBB" : `Transferencia ${510_000 + indice * 613 + atras}`,
+        imputaciones: [{ facturaId: factura.id, importe }],
+        autor: "Ejemplo · Administración",
+      });
+    }
+
+    // Pedidos en curso: todavia sin entregar ni facturar.
+    cuenta.enCurso.forEach(([hace, estado], orden) => {
+      ficha.pedidos.push({
+        id: `ped-curso-${orden}`,
+        numero: `PED-${codigo}-${numero(PEDIDOS + 1 + orden)}`,
+        fecha: dia(hace),
+        ordenCompra: `OC-${4200 + indice * 310 + PEDIDOS + 1 + orden}`,
+        estado,
+        items: items(cuenta.canasta, 20 + orden),
+      });
+    });
+
+    const cotizacion = (clave: string, orden: number, hace: number, estado: CotizacionUsuario["estado"], posiciones: number[], extra: Partial<CotizacionUsuario> = {}): CotizacionUsuario => ({
+      id: `cot-${clave}`,
+      numero: `COT-${codigo}-${numero(100 + orden)}`,
+      fecha: dia(hace),
+      validez: sumarDias(dia(hace), 30),
+      estado,
+      items: items(posiciones, orden + 2),
+      motivoRechazo: null,
+      observacionRechazo: "",
+      ...extra,
+    });
+    ficha.cotizaciones = [cotizacion("aprobada", 1, 55, "APROBADA", cuenta.canasta.slice(0, 3))];
+    if (escenario === "RECHAZO") {
+      ficha.cotizaciones.push(
+        cotizacion("rechazada", 2, 16, "RECHAZADA", [0, 2, 4], {
+          motivoRechazo: "PRECIO",
+          observacionRechazo: "Compras informó que otro proveedor cotizó 8% menos en guantes de vaqueta para el mismo volumen. Piden revisar el precio por contrato anual.",
+        }),
+        cotizacion("negociacion", 3, 12, "EN_NEGOCIACION", [7, 8, 9]),
+      );
+    } else if (escenario === "SIN_CONTACTO") {
+      ficha.cotizaciones.push(cotizacion("enviada", 2, 22, "ENVIADA", [1, 3, 7]));
+    } else if (escenario === "DEUDA") {
+      ficha.cotizaciones.push(cotizacion("borrador", 2, 1, "BORRADOR", [4, 5]));
+    } else {
+      ficha.cotizaciones.push(cotizacion("enviada", 2, 5, "ENVIADA", escenario === "BRECHA" ? [7, 8, 9] : [2, 6]));
+    }
+    if (cuenta.negociacion) ficha.cotizaciones.push(cotizacion("oportunidad", 4, 8, "EN_NEGOCIACION", cuenta.negociacion));
+
+    ficha.partes = PARTES[escenario].map(([hace, tipo, resumen, proximo], orden): ParteUsuario => ({
+      id: `parte-${orden}`,
+      fecha: `${dia(hace)}T${numero(13 + orden, 2)}:30:00Z`,
+      tipo,
+      resumen,
+      proximoContacto: proximo === null ? "" : sumarDias(hoy, proximo),
+      autor: AUTOR_DEMO,
+    }));
     return ficha;
   });
 }
