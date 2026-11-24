@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { ProximoEnvio } from "@/components/resumen/ProximoEnvio";
 import { BotonTelegram } from "@/components/ui/BotonTelegram";
 import { Button } from "@/components/ui/Button";
 import { Icono } from "@/components/ui/Icono";
@@ -68,7 +67,11 @@ export function ResumenDiario({
       </dl>
 
       <div className="flex flex-wrap gap-2">
-        <BotonTelegram tipo="seguimiento" listo={telegramListo} />
+        <BotonTelegram
+          tipo="seguimiento"
+          listo={telegramListo}
+          programacion={{ proximo, ahora, compacto: true }}
+        />
         <Button variante="secundario" onClick={() => setAbierto(true)}>
           <Icono nombre="ojo" className="size-4" />
           Ver mensajes
@@ -78,7 +81,6 @@ export function ResumenDiario({
           Copiar
         </Button>
       </div>
-      <ProximoEnvio proximo={proximo} ahora={ahora} telegramListo={telegramListo} compacto />
 
       <Modal
         abierto={abierto}

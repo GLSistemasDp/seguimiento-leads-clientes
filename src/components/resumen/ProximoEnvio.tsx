@@ -29,12 +29,14 @@ export function ProximoEnvio({
   proximo,
   ahora: ahoraInicial,
   telegramListo,
+  pausado = false,
   compacto = false,
 }: {
   /** ISO del proximo envio, o null si no hay uno programado. */
   proximo: string | null;
   ahora: number;
   telegramListo: boolean;
+  pausado?: boolean;
   compacto?: boolean;
 }) {
   const [ahora, setAhora] = useState(ahoraInicial);
@@ -44,6 +46,14 @@ export function ProximoEnvio({
     return () => clearInterval(intervalo);
   }, []);
 
+  if (pausado) {
+    return (
+      <p role="status" className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+        <Icono nombre="pausa" className="size-4" />
+        Bot pausado · envíos a Telegram detenidos.
+      </p>
+    );
+  }
   if (!telegramListo) {
     return <p className="text-xs text-slate-400">Envío automático a Telegram: sin configurar.</p>;
   }

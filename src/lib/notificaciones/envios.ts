@@ -13,6 +13,7 @@ import {
 } from "@/lib/notificaciones/mensajes";
 import { ErrorTelegram, enviarTelegram } from "@/lib/notificaciones/telegram";
 import type { CanalTelegram } from "@/lib/notificaciones/telegram";
+import { botPausado } from "@/lib/notificaciones/estado-bot";
 import { evaluarPorReglas } from "@/lib/solicitudes/evaluacion";
 import type { Reclamo } from "@/types/reclamo";
 
@@ -27,7 +28,7 @@ export type Origen = "manual" | "cron" | "evento";
 
 export type ResultadoEnvio =
   | { ok: true; mensajes: number; pendientes: number | null }
-  | { ok: false; error: string; sinConfigurar: boolean };
+  | { ok: false; error: string; sinConfigurar: boolean; pausado?: boolean };
 
 /**
  * URL de la intranet para los links: APP_URL, o el dominio desde el que llego
@@ -58,8 +59,19 @@ async function enviarYRegistrar(
 ): Promise<ResultadoEnvio> {
   let pendientes: number | null = null;
   try {
+    const omitirSiPausado = async (): Promise<ResultadoEnvio | null> => {
+      if (!await botPausado(canal)) return null;
+      const error = "El bot de Telegram está pausado. Reanudalo para volver a enviar.";
+      await registrarAutomatizacion({ automatizacion, origen, estado: "omitido", mensajes: 0, pendientes, detalle: error });
+      return { ok: false, error, sinConfigurar: false, pausado: true };
+    };
+    const omitido = await omitirSiPausado();
+    if (omitido) return omitido;
     const armado = await armar();
     pendientes = armado.pendientes;
+    // Puede haberse pausado mientras se consultaban los datos del resumen.
+    const pausadoAlEnviar = await omitirSiPausado();
+    if (pausadoAlEnviar) return pausadoAlEnviar;
     const mensajes = await enviarTelegram(armado.textos, canal);
     await registrarAutomatizacion({ automatizacion, origen, estado: "ok", mensajes, pendientes, detalle: null });
     return { ok: true, mensajes, pendientes };

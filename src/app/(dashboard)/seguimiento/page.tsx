@@ -1,7 +1,6 @@
 import { leerDatos } from "@/lib/db/lectura";
 import { ProblemaDatos } from "@/components/ui/ProblemaDatos";
 import { Suspense } from "react";
-import { ProximoEnvio } from "@/components/resumen/ProximoEnvio";
 import { BotonTelegram } from "@/components/ui/BotonTelegram";
 import { FiltrosSeguimiento } from "@/components/seguimiento/FiltrosSeguimiento";
 import { EstadoSincronizacion } from "@/components/seguimiento/EstadoSincronizacion";
@@ -169,8 +168,11 @@ export default async function SeguimientoPage({ searchParams }: PageProps<"/segu
         descripcion="Solo consultas pendientes de los grupos de WhatsApp, ordenadas por clasificación del cliente (A, B, C) y prioridad. Al finalizar una conversación con su resultado y relación, desaparece de esta bandeja y queda en el historial del cliente."
         acciones={
           <>
-            <ProximoEnvio proximo={proximo?.toISOString() ?? null} ahora={ahora.getTime()} telegramListo={telegramConfigurado()} />
-            <BotonTelegram tipo="seguimiento" listo={telegramConfigurado()} />
+            <BotonTelegram
+              tipo="seguimiento"
+              listo={telegramConfigurado()}
+              programacion={{ proximo: proximo?.toISOString() ?? null, ahora: ahora.getTime() }}
+            />
             <CierreMasivo cantidad={anteriores} corte={corteMes.toISOString()} mes={nombreMes(corteMes)} />
             {sincroniza ? <EstadoSincronizacion ultima={ultimaSync} ahora={ahora.getTime()} /> : null}
             {backendSeguimiento() === "postgres" && !sincroniza && herramientasDePrueba() ? <SimularBot /> : null}

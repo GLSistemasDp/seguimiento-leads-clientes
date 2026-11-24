@@ -1,6 +1,5 @@
 import { PanelReclamos } from "@/components/reclamos/PanelReclamos";
 import { InformeReclamos } from "@/components/reclamos/informe/InformeReclamos";
-import { ProximoEnvio } from "@/components/resumen/ProximoEnvio";
 import { BotonTelegram } from "@/components/ui/BotonTelegram";
 import { CopiarLink } from "@/components/ui/CopiarLink";
 import { EncabezadoPagina } from "@/components/ui/EncabezadoPagina";
@@ -64,8 +63,11 @@ export default async function ReclamosPage({ searchParams }: PageProps<"/reclamo
         descripcion="Reclamos que los clientes cargan con el formulario FOR-03. En cada uno indicá cómo sigue el vendedor y completá la gestión para el informe."
         acciones={
           <>
-            <ProximoEnvio proximo={proximo?.toISOString() ?? null} ahora={ahora.getTime()} telegramListo={telegramListo} />
-            <BotonTelegram tipo="reclamos" listo={telegramListo} />
+            <BotonTelegram
+              tipo="reclamos"
+              listo={telegramListo}
+              programacion={{ proximo: proximo?.toISOString() ?? null, ahora: ahora.getTime() }}
+            />
             <CopiarLink ruta="/formularios/reclamo" etiqueta="Link del formulario para el cliente" />
           </>
         }

@@ -40,6 +40,9 @@ export async function ejecutarCron(
   }
 
   const resultado = await enviar(ahora);
+  if (!resultado.ok && resultado.pausado) {
+    return NextResponse.json({ status: "skipped", dia: hoy.dia, motivo: resultado.error });
+  }
   return resultado.ok
     ? NextResponse.json({ status: "sent", dia: hoy.dia, mensajes: resultado.mensajes, pendientes: resultado.pendientes, feriados: hoy.fuente })
     : NextResponse.json({ status: "error", dia: hoy.dia, error: resultado.error }, { status: 500 });
